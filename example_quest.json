@@ -1,0 +1,27 @@
+{
+  "mod_name": "MyFirstQuest",
+  "quests": [
+    {
+      "id": "auto",
+      "title": "Der Prüfstein",
+      "journal_take": "Ein Fremder bat dich, 500 Goldstücke zu sammeln.",
+      "journal_close": "Du hast das Gold gebracht.",
+      "enable_level": 1,
+      "group": 105,
+      "add_to_log": true,
+      "giver": {
+        "npc": 145,
+        "type": "PASSIVE",
+        "type_ex": "BACK_TO_GIVER_MAP_SIGN",
+        "remove_time": "NONE"
+      },
+      "objectives": [
+        { "fc": "BRING_GOLD", "args": [500] }
+      ],
+      "rewards": [
+        { "type": "GLD", "time": "CLOSE", "args": ["MEDIUM"] },
+        { "type": "EXP", "time": "SOLVE", "args": ["MEDIUM"] }
+      ]
+    }
+  ]
+}

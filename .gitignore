@@ -1,0 +1,10 @@
+# Extracted/derived game data - never distribute (copyright)
+base/
+out/
+clean_lhc.bin
+*.wd
+*.wd.new
+
+# Python
+__pycache__/
+*.pyc

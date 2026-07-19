@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuestForge — Neue Quests für Two Worlds 1</title>
+<style>
+  :root{
+    --bg:#14161a; --panel:#1c1f26; --panel2:#232732; --ink:#dfe3ea; --dim:#9aa3b2;
+    --acc:#e0a94e; --acc2:#5db3a6; --good:#4caf6d; --warn:#e0704b; --line:#2c313c;
+    --code:#0f1116; --link:#6bb7d6;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 "Segoe UI",system-ui,sans-serif}
+  a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px 90px}
+  header.hero{padding:52px 0 30px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  header.hero h1{font-size:2.5rem;margin:0 0 6px;letter-spacing:-.5px}
+  header.hero h1 .fg{color:var(--acc)}
+  header.hero p.sub{color:var(--dim);font-size:1.15rem;margin:0}
+  .banner{display:flex;gap:14px;flex-wrap:wrap;margin:26px 0 6px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+    padding:10px 14px;flex:1 1 200px;min-width:180px}
+  .chip .k{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+  .chip .v{font-size:1.05rem;font-weight:600;margin-top:2px}
+  .chip.ok .v{color:var(--good)} .chip.pend .v{color:var(--acc)}
+  h2{font-size:1.6rem;margin:52px 0 4px;padding-top:14px;letter-spacing:-.3px}
+  h2 .num{color:var(--acc);font-variant-numeric:tabular-nums;margin-right:10px}
+  h3{font-size:1.2rem;margin:30px 0 6px;color:#eef1f6}
+  h2+.lead,h3+.lead{color:var(--dim);margin-top:2px}
+  p{margin:12px 0}
+  code{background:var(--code);border:1px solid var(--line);border-radius:4px;
+    padding:1px 6px;font:.86em "Cascadia Code",Consolas,monospace;color:#e6d9b8}
+  pre{background:var(--code);border:1px solid var(--line);border-left:3px solid var(--acc);
+    border-radius:8px;padding:16px 18px;overflow:auto;margin:16px 0}
+  pre code{background:none;border:none;padding:0;color:#d7dbe2;font-size:.85rem;line-height:1.55}
+  .tok-k{color:#e0a94e} .tok-s{color:#8ec98a} .tok-c{color:#6b7280;font-style:italic} .tok-n{color:#6bb7d6}
+  nav.toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px 24px;margin:26px 0}
+  nav.toc h4{margin:0 0 10px;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  nav.toc ol{margin:0;padding-left:20px;columns:2;column-gap:34px}
+  nav.toc li{margin:5px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 24px;margin:20px 0}
+  .callout{border-radius:10px;padding:14px 18px;margin:18px 0;border:1px solid;display:flex;gap:12px}
+  .callout .ic{font-size:1.3rem;line-height:1}
+  .callout.good{background:rgba(76,175,109,.09);border-color:rgba(76,175,109,.4)}
+  .callout.warn{background:rgba(224,112,75,.09);border-color:rgba(224,112,75,.45)}
+  .callout.info{background:rgba(93,179,166,.09);border-color:rgba(93,179,166,.4)}
+  .callout b{color:#fff}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font-size:.92rem}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#eef1f6;font-weight:600}
+  tr:nth-child(even) td{background:rgba(255,255,255,.014)}
+  .mono{font-family:"Cascadia Code",Consolas,monospace}
+  figure{margin:24px 0;text-align:center}
+  figure svg{max-width:100%;height:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  figcaption{color:var(--dim);font-size:.85rem;margin-top:8px}
+  .pill{display:inline-block;font-size:.72rem;padding:2px 9px;border-radius:20px;font-weight:600;
+    vertical-align:middle;margin-left:8px}
+  .pill.v{background:rgba(76,175,109,.16);color:#7fd99a;border:1px solid rgba(76,175,109,.4)}
+  .pill.u{background:rgba(224,169,78,.16);color:var(--acc);border:1px solid rgba(224,169,78,.4)}
+  .foot{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}
+  ul.tight li{margin:4px 0}
+  .kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 7px;font-size:.82em;font-family:monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1><span class="fg">QuestForge</span> — Neue Quests für Two Worlds 1</h1>
+  <p class="sub">Wie man dem Spiel eigene Quests hinzufügt, und das Werkzeug, das es erzeugt.</p>
+  <div class="banner">
+    <div class="chip ok"><div class="k">Machbarkeit</div><div class="v">Daten-Problem, kein Hack</div></div>
+    <div class="chip ok"><div class="k">Werkzeug</div><div class="v">QuestForge — fertig</div></div>
+    <div class="chip ok"><div class="k">Formate</div><div class="v">.qtx / .lan / .wd verifiziert</div></div>
+    <div class="chip ok"><div class="k">Im Spiel bestätigt</div><div class="v">Quest-Text lädt aus Mod</div></div>
+  </div>
+</header>
+
+<div class="callout good">
+  <div class="ic">✓</div>
+  <div><b>Im Spiel bestätigt.</b> Der Smoke-Test hat funktioniert: <code>[MOD] Fluch des
+  Blutes</code> stand im Quest-Tagebuch. Damit ist bewiesen, dass eine Mod-<code>.wd</code>
+  die Basis-Archive überschreibt <i>und</i> dass Quest-Texte aus einem Mod geladen werden —
+  die zentrale offene Frage. Neue Quests sind damit machbar.</div>
+</div>
+<div class="callout warn">
+  <div class="ic">⚠️</div>
+  <div><b>Die teuerste Lektion: nur die bewährten Packer nutzen.</b> Ein selbst
+  geschriebener WD-Packer erzeugte Archive, die jeder Reader sauber lesen konnte — die
+  das Spiel aber stillschweigend ignorierte. Erst mit buglords <code>wdio.py</code> bzw.
+  <code>Tw1WDRepacker.exe</code> lud die Mod. QuestForge packt deshalb ausschließlich
+  darüber; <code>tw1_wd.write()</code> ist als veraltet markiert.</div>
+</div>
+
+<nav class="toc">
+  <h4>Inhalt</h4>
+  <ol>
+    <li><a href="#verdikt">Verdikt: geht das?</a></li>
+    <li><a href="#modell">Wie eine Quest aufgebaut ist</a></li>
+    <li><a href="#pipeline">Die Pipeline</a></li>
+    <li><a href="#formate">Formatreferenz (.qtx / .lan / .wd)</a></li>
+    <li><a href="#tool">Das QuestForge-Werkzeug</a></li>
+    <li><a href="#regeln">Die harten Regeln</a></li>
+    <li><a href="#deploy">Ausliefern (Mods + Registry)</a></li>
+    <li><a href="#test">Der In-Game-Test</a></li>
+    <li><a href="#alte-tools">Die alten Werkzeuge</a></li>
+    <li><a href="#voice">Vertonung</a></li>
+    <li><a href="#dateien">Dateien im QuestForge-Ordner</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<h2 id="verdikt"><span class="num">1</span>Verdikt: geht das?</h2>
+<p class="lead">Ja — und es ist einfacher, als es klingt.</p>
+<p>
+Das Questsystem von Two Worlds 1 ist ein <b>generischer, datengetriebener Loader</b>.
+Der kompilierte Missions-Skript <code>PQuests.eco</code> ruft
+<code>LoadQuests1("Scripts\Quests\TwoWorldsQuests.qtx")</code> auf, und der Parser im
+SDK-Quelltext (<code>PQuestLoader.ech</code>) verzweigt <b>nur über die Textmarken</b>
+<code>QUEST / GIVER / FC / AOQ / ACTION / REWARD / NPC / END</code>. Es gibt keine fest
+verdrahtete Logik pro Quest. Ein neuer <code>QUEST</code>-Block <i>ist</i> mechanisch
+eine neue Quest.
+</p>
+<div class="callout good">
+  <div class="ic">✓</div>
+  <div><b>Kernaussage.</b> Eine neue Quest zu bauen bedeutet, zwei Textdateien zu
+  erzeugen und sie als Mod ins Spiel zu legen. Kein Reverse Engineering, kein Editor
+  zwingend nötig. Das Werkzeug in diesem Ordner nimmt dir beides ab.</div>
+</div>
+<p>Was statisch <b>bewiesen</b> ist:</p>
+<ul class="tight">
+  <li>Die drei Formate (<code>.qtx</code>, <code>.lan</code>, <code>.wd</code>) sind vollständig gelesen <i>und</i> geschrieben — der <code>.lan</code>-Writer reproduziert die 3,3-MB-Originaldatei byte-genau, der <code>.qtx</code>-Emitter alle 500 Original-Quests byte-genau.</li>
+  <li>Die Verknüpfung Quest → Text läuft rein über Namenskonvention (<code>translateQ_&lt;n&gt;</code>), aus dem SDK-Quelltext bestätigt.</li>
+  <li>Neuer Text kann additiv in einer <b>neuen</b> <code>Language\*.lan</code> ausgeliefert werden — der Master bleibt unangetastet.</li>
+  <li>Eine neue Quest braucht <b>keine Karten-/Marker-Arbeit</b>, wenn sie einen vorhandenen Quest-NPC als Geber wiederverwendet.</li>
+</ul>
+<p>Was noch <b>offen</b> ist (der eine Test):</p>
+<ul class="tight">
+  <li>Dass eine Mod-Datei die Basis wirklich überschreibt — du weißt aus deiner PAR-Mod, dass <em>die neueste Datei gewinnt</em>; das bestätigen wir mit dem Smoke-Test.</li>
+  <li>Dass das Spiel die neue Quest-ID zur Laufzeit akzeptiert (kein Absturz).</li>
+</ul>
+
+<!-- 2 -->
+<h2 id="modell"><span class="num">2</span>Wie eine Quest aufgebaut ist</h2>
+<p class="lead">Ein <code>QUEST</code>-Block bündelt Geber, Ziele, Verkettung, Aktionen und Belohnungen.</p>
+
+<figure>
+<svg viewBox="0 0 920 430" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI,sans-serif">
+  <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+    <path d="M0,0 L9,4.5 L0,9 z" fill="#5db3a6"/></marker></defs>
+  <rect x="360" y="20" width="200" height="56" rx="10" fill="#232732" stroke="#e0a94e" stroke-width="2"/>
+  <text x="460" y="44" fill="#e0a94e" font-size="16" font-weight="700" text-anchor="middle">QUEST Q_381</text>
+  <text x="460" y="63" fill="#9aa3b2" font-size="12" text-anchor="middle">EnableLevel · Group · Guild · Rep · Log</text>
+  <g font-size="13.5" fill="#dfe3ea">
+    <!-- GIVER -->
+    <rect x="40" y="150" width="180" height="72" rx="9" fill="#1c1f26" stroke="#2c313c"/>
+    <text x="130" y="174" fill="#5db3a6" font-weight="700" text-anchor="middle">GIVER</text>
+    <text x="130" y="194" text-anchor="middle" font-size="12">welcher NPC gibt sie</text>
+    <text x="130" y="211" text-anchor="middle" font-size="11.5" fill="#9aa3b2">PASSIVE · NPC_145</text>
+    <!-- FC -->
+    <rect x="245" y="150" width="180" height="72" rx="9" fill="#1c1f26" stroke="#2c313c"/>
+    <text x="335" y="174" fill="#5db3a6" font-weight="700" text-anchor="middle">FC — Ziel</text>
+    <text x="335" y="194" text-anchor="middle" font-size="12">Abschlussbedingung</text>
+    <text x="335" y="211" text-anchor="middle" font-size="11.5" fill="#9aa3b2">KILL · BRING · GO …</text>
+    <!-- AOQ -->
+    <rect x="450" y="150" width="180" height="72" rx="9" fill="#1c1f26" stroke="#2c313c"/>
+    <text x="540" y="174" fill="#5db3a6" font-weight="700" text-anchor="middle">AOQ — Kette</text>
+    <text x="540" y="194" text-anchor="middle" font-size="12">löst andere Quests aus</text>
+    <text x="540" y="211" text-anchor="middle" font-size="11.5" fill="#9aa3b2">TAKE · PROMOTE …</text>
+    <!-- ACTION -->
+    <rect x="655" y="150" width="180" height="72" rx="9" fill="#1c1f26" stroke="#2c313c"/>
+    <text x="745" y="174" fill="#5db3a6" font-weight="700" text-anchor="middle">ACTION</text>
+    <text x="745" y="194" text-anchor="middle" font-size="12">Events / Welt</text>
+    <text x="745" y="211" text-anchor="middle" font-size="11.5" fill="#9aa3b2">NPC_CREATE · OPEN …</text>
+    <!-- REWARD -->
+    <rect x="360" y="290" width="200" height="72" rx="9" fill="#1c1f26" stroke="#e0a94e"/>
+    <text x="460" y="314" fill="#e0a94e" font-weight="700" text-anchor="middle">REWARD</text>
+    <text x="460" y="334" text-anchor="middle" font-size="12">Gold · EP · Gegenstand · Ruf</text>
+    <text x="460" y="351" text-anchor="middle" font-size="11.5" fill="#9aa3b2">GLD · EXP · ITM · REP</text>
+  </g>
+  <g stroke="#5db3a6" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+    <path d="M430,76 C300,110 160,120 130,148"/>
+    <path d="M445,78 C400,110 350,120 335,148"/>
+    <path d="M475,78 C520,110 540,120 540,148"/>
+    <path d="M490,76 C640,110 700,120 745,148"/>
+    <path d="M335,222 C360,265 420,275 448,290" stroke="#e0a94e"/>
+    <path d="M540,222 C520,265 500,275 472,290" stroke="#e0a94e"/>
+  </g>
+  <text x="460" y="405" fill="#9aa3b2" font-size="12" text-anchor="middle">Text (Titel + Journaleinträge) lebt getrennt in der .lan über den Schlüssel translateQ_381</text>
+</svg>
+<figcaption>Anatomie eines Quest-Blocks. Alle Teile außer dem Text stehen in der <code>.qtx</code>.</figcaption>
+</figure>
+
+<p>So sieht eine echte, kleine Original-Quest aus (aus <code>Net_M_20.qtx</code>):</p>
+<pre><code><span class="tok-k">QUEST</span> Q_2007 1 10 (null) 0 True
+  <span class="tok-k">GIVER</span> PASSIVE NPC_2007 AUTO_CLOSE_ON_SOLVE NONE
+  <span class="tok-k">FC</span> BRING_OBJECT QITEM_096 1        <span class="tok-c"># Ziel: bring 1× Gegenstand</span>
+  <span class="tok-k">REWARD</span> ITM SOLVE -1 QITEM_096       <span class="tok-c"># nimmt den Gegenstand wieder</span>
+  <span class="tok-k">REWARD</span> EXP SOLVE SMALL
+  <span class="tok-k">REWARD</span> GLD SOLVE SMALL
+  <span class="tok-k">AOQ</span> CLOSE SOLVE Q_2006             <span class="tok-c"># schließt die Eltern-Quest</span>
+<span class="tok-k">END</span></code></pre>
+
+<!-- 3 -->
+<h2 id="pipeline"><span class="num">3</span>Die Pipeline</h2>
+<p class="lead">Reality Pump nutzte WhizzEdit. Wir gehen direkt auf die kompilierten Formate — kürzer und ohne Altlasten.</p>
+
+<figure>
+<svg viewBox="0 0 920 250" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI,sans-serif">
+  <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+    <path d="M0,0 L9,4.5 L0,9 z" fill="#9aa3b2"/></marker>
+    <marker id="a3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+    <path d="M0,0 L9,4.5 L0,9 z" fill="#e0a94e"/></marker></defs>
+  <!-- old path -->
+  <text x="20" y="42" fill="#9aa3b2" font-size="12.5" font-weight="600">Reality Pumps Weg (Original)</text>
+  <g opacity=".65">
+    <rect x="20" y="54" width="120" height="46" rx="8" fill="#1c1f26" stroke="#2c313c"/><text x="80" y="82" fill="#dfe3ea" font-size="13" text-anchor="middle">WhizzEdit .shf</text>
+    <rect x="200" y="54" width="120" height="46" rx="8" fill="#1c1f26" stroke="#2c313c"/><text x="260" y="82" fill="#dfe3ea" font-size="13" text-anchor="middle">.idx (XML)</text>
+    <rect x="380" y="54" width="150" height="46" rx="8" fill="#1c1f26" stroke="#2c313c"/><text x="455" y="76" fill="#dfe3ea" font-size="13" text-anchor="middle">.qtx + .lan</text><text x="455" y="92" fill="#9aa3b2" font-size="11" text-anchor="middle">(kompiliert)</text>
+    <line x1="140" y1="77" x2="196" y2="77" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#a2)"/>
+    <line x1="320" y1="77" x2="376" y2="77" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#a2)"/>
+  </g>
+  <!-- our path -->
+  <text x="20" y="150" fill="#e0a94e" font-size="12.5" font-weight="600">QuestForge (unser Weg)</text>
+  <rect x="20" y="162" width="150" height="50" rx="8" fill="#232732" stroke="#e0a94e"/><text x="95" y="184" fill="#e0a94e" font-size="13" text-anchor="middle" font-weight="700">JSON-Spec</text><text x="95" y="200" fill="#9aa3b2" font-size="11" text-anchor="middle">von Hand geschrieben</text>
+  <rect x="230" y="162" width="170" height="50" rx="8" fill="#232732" stroke="#e0a94e"/><text x="315" y="184" fill="#e0a94e" font-size="13" text-anchor="middle" font-weight="700">questforge.py</text><text x="315" y="200" fill="#9aa3b2" font-size="11" text-anchor="middle">validiert + packt</text>
+  <rect x="460" y="162" width="170" height="50" rx="8" fill="#232732" stroke="#e0a94e"/><text x="545" y="184" fill="#e0a94e" font-size="13" text-anchor="middle" font-weight="700">MeinMod.wd</text><text x="545" y="200" fill="#9aa3b2" font-size="11" text-anchor="middle">.qtx + .lan gepackt</text>
+  <rect x="690" y="162" width="170" height="50" rx="8" fill="#232732" stroke="#4caf6d"/><text x="775" y="184" fill="#4caf6d" font-size="13" text-anchor="middle" font-weight="700">Mods\ + Registry</text><text x="775" y="200" fill="#9aa3b2" font-size="11" text-anchor="middle">spielbar</text>
+  <line x1="170" y1="187" x2="226" y2="187" stroke="#e0a94e" stroke-width="1.6" marker-end="url(#a3)"/>
+  <line x1="400" y1="187" x2="456" y2="187" stroke="#e0a94e" stroke-width="1.6" marker-end="url(#a3)"/>
+  <line x1="630" y1="187" x2="686" y2="187" stroke="#e0a94e" stroke-width="1.6" marker-end="url(#a3)"/>
+</svg>
+<figcaption>Der obere Weg braucht WhizzEdit (fragil, hartkodierte D:\-Pfade). Der untere ist zwei Dateiedits.</figcaption>
+</figure>
+
+<!-- 4 -->
+<h2 id="formate"><span class="num">4</span>Formatreferenz</h2>
+
+<h3>4.1 &nbsp;<code>.qtx</code> — die Quest-Definitionen <span class="pill v">verifiziert</span></h3>
+<p>Reiner ASCII-Text, <b>LF-Zeilenenden</b>, <code>(null)</code> = leer. Drei Satzarten
+auf oberster Ebene, Unterzeilen exakt zwei Leerzeichen eingerückt, Blöcke mit
+<code>END</code> in Spalte 0.</p>
+<table>
+  <tr><th>Unterzeile</th><th>Bedeutung</th><th>Beispiel</th></tr>
+  <tr><td class="mono">GIVER</td><td>Geber-NPC + Verhalten</td><td class="mono">GIVER PASSIVE NPC_145 BACK_TO_GIVER_MAP_SIGN NONE</td></tr>
+  <tr><td class="mono">FC</td><td>Abschlussbedingung (Ziel)</td><td class="mono">FC KILL NPC_231 · FC BRING_GOLD 500 · FC GO 23 D1 0</td></tr>
+  <tr><td class="mono">AOQ</td><td>Quest-Verkettung</td><td class="mono">AOQ TAKE TAKE Q_380</td></tr>
+  <tr><td class="mono">ACTION</td><td>Welt-Event</td><td class="mono">ACTION NPC_CREATE TAKE NPC_231</td></tr>
+  <tr><td class="mono">REWARD</td><td>Belohnung</td><td class="mono">REWARD GLD CLOSE MEDIUM · REWARD ITM SOLVE 1 QITEM_096</td></tr>
+</table>
+<p>Der Kopf ist <code>QUEST &lt;id&gt; &lt;EnableLevel&gt; &lt;Group&gt; &lt;Guild&gt;
+&lt;MinRep&gt; &lt;InsLog&gt;</code>. Die vollständige Arity-/Enum-Tabelle steckt in
+<code>tw1_qtx.py</code> und validiert jede erzeugte Zeile.</p>
+
+<h3>4.2 &nbsp;<code>.lan</code> — die Texte <span class="pill v">verifiziert</span></h3>
+<p>Binär, little-endian. Der Schlüssel trägt das Präfix <code>translate</code>. Eine
+minimale reine Text-Datei ist Kopf + N Übersetzungen + zwei Null-Zähler:</p>
+<pre><code>"LAN\0" | u32 version=3
+u32 N   ; N × { u32 keyLen, ASCII-Key, u32 valLen(Zeichen), UTF-16LE-Wert }
+u32 0   ; Aliasse
+u32 0   ; Dialogbäume</code></pre>
+<p>Die Schlüssel pro Quest <code>Q_&lt;n&gt;</code>:</p>
+<table>
+  <tr><th>Schlüssel</th><th>Inhalt</th></tr>
+  <tr><td class="mono">translateQ_&lt;n&gt;</td><td>Quest-Titel</td></tr>
+  <tr><td class="mono">translateQ_&lt;n&gt;_QTD</td><td>Journaltext beim Annehmen</td></tr>
+  <tr><td class="mono">translateQ_&lt;n&gt;_QSD</td><td>Journaltext beim Lösen (optional)</td></tr>
+  <tr><td class="mono">translateQ_&lt;n&gt;_QCD</td><td>Journaltext beim Abschließen</td></tr>
+  <tr><td class="mono">translateGROUP_&lt;n&gt;</td><td>Name einer Quest-<b>Gruppe</b> (eigene Überschrift im Tagebuch)</td></tr>
+</table>
+<div class="callout warn"><div class="ic">⚠️</div><div>
+  <b>Überschrieben wird auf Datei-Ebene, nicht auf Schlüssel-Ebene.</b> Das Spiel
+  lädt die neueste Datei unter einem bestimmten Pfad. Eine <i>neue</i> Datei
+  (<code>Language\ZZ_MeinMod.lan</code>) wird nie geladen — danach sucht niemand.
+  Quest-Text heißt also: Master lesen, eigene Schlüssel hineinmischen, die
+  <b>ganze Datei</b> unter dem Originalpfad <code>Language\TwoWorldsQuests.lan</code>
+  wieder ausliefern. (Im ersten Test genau daran gescheitert.)
+</div></div>
+
+<h3>4.3 &nbsp;<code>.wd</code> — das Archiv <span class="pill v">verifiziert</span></h3>
+<p>Alle Spieldateien liegen in <code>.wd</code>-Archiven (zlib-komprimiert). Aufbau:</p>
+<figure>
+<svg viewBox="0 0 860 150" xmlns="http://www.w3.org/2000/svg" font-family="Cascadia Code,Consolas,monospace">
+  <rect x="20" y="40" width="150" height="54" rx="7" fill="#232732" stroke="#5db3a6"/><text x="95" y="63" fill="#5db3a6" font-size="12.5" text-anchor="middle">zlib(Header)</text><text x="95" y="80" fill="#9aa3b2" font-size="10.5" text-anchor="middle">WD · 0x200 · GUID</text>
+  <rect x="185" y="40" width="330" height="54" rx="7" fill="#1c1f26" stroke="#2c313c"/><text x="350" y="63" fill="#dfe3ea" font-size="12.5" text-anchor="middle">Dateidaten (je optional zlib)</text><text x="350" y="80" fill="#9aa3b2" font-size="10.5" text-anchor="middle">TwoWorldsQuests.qtx · TwoWorldsQuests.lan · …</text>
+  <rect x="530" y="40" width="230" height="54" rx="7" fill="#232732" stroke="#5db3a6"/><text x="645" y="63" fill="#5db3a6" font-size="12.5" text-anchor="middle">zlib(Verzeichnis)</text><text x="645" y="80" fill="#9aa3b2" font-size="10.5" text-anchor="middle">Pfad · Flags · Offset · Länge</text>
+  <rect x="775" y="40" width="65" height="54" rx="7" fill="#1c1f26" stroke="#e0a94e"/><text x="807" y="60" fill="#e0a94e" font-size="11" text-anchor="middle">u32</text><text x="807" y="76" fill="#9aa3b2" font-size="10" text-anchor="middle">DIR_OFF</text>
+  <text x="430" y="122" fill="#9aa3b2" font-size="11.5" text-anchor="middle" font-family="Segoe UI">Flags: 0x01 komprimiert · .qtx nutzt 0x05 · .lan nutzt 0x01 (wie Vanilla exakt repliziert)</text>
+</svg>
+</figure>
+<p><code>tw1_wd.py</code> liest und schreibt das — round-trip byte-genau gegen deine
+eigene <code>Yamalin.wd</code> getestet, inkl. Erhalt der Flags und Extra-Felder.</p>
+
+<!-- 5 -->
+<h2 id="tool"><span class="num">5</span>Das QuestForge-Werkzeug</h2>
+<p class="lead">Eine kleine JSON-Datei rein, eine fertige Mod-<code>.wd</code> raus.</p>
+
+<p>Beispiel-Spec (<code>example_quest.json</code>):</p>
+<pre><code>{
+  <span class="tok-n">"mod_name"</span>: <span class="tok-s">"MyFirstQuest"</span>,
+  <span class="tok-n">"quests"</span>: [{
+    <span class="tok-n">"id"</span>: <span class="tok-s">"auto"</span>,                         <span class="tok-c"># nimmt die nächste freie ID (381–399)</span>
+    <span class="tok-n">"title"</span>: <span class="tok-s">"Der Prüfstein"</span>,
+    <span class="tok-n">"journal_take"</span>: <span class="tok-s">"Sammle 500 Goldstücke."</span>,
+    <span class="tok-n">"journal_close"</span>: <span class="tok-s">"Du hast das Gold gebracht."</span>,
+    <span class="tok-n">"giver"</span>: { <span class="tok-n">"npc"</span>: 145, <span class="tok-n">"type"</span>: <span class="tok-s">"PASSIVE"</span>,
+               <span class="tok-n">"type_ex"</span>: <span class="tok-s">"BACK_TO_GIVER_MAP_SIGN"</span>, <span class="tok-n">"remove_time"</span>: <span class="tok-s">"NONE"</span> },
+    <span class="tok-n">"objectives"</span>: [{ <span class="tok-n">"fc"</span>: <span class="tok-s">"BRING_GOLD"</span>, <span class="tok-n">"args"</span>: [500] }],
+    <span class="tok-n">"rewards"</span>: [
+      { <span class="tok-n">"type"</span>: <span class="tok-s">"GLD"</span>, <span class="tok-n">"time"</span>: <span class="tok-s">"CLOSE"</span>, <span class="tok-n">"args"</span>: [<span class="tok-s">"MEDIUM"</span>] },
+      { <span class="tok-n">"type"</span>: <span class="tok-s">"EXP"</span>, <span class="tok-n">"time"</span>: <span class="tok-s">"SOLVE"</span>, <span class="tok-n">"args"</span>: [<span class="tok-s">"MEDIUM"</span>] }
+    ]
+  }]
+}</code></pre>
+
+<p>Bauen und ausliefern:</p>
+<pre><code><span class="tok-c"># nur bauen -> out\MyFirstQuest.wd</span>
+python questforge.py example_quest.json
+
+<span class="tok-c"># bauen + in den Mods-Ordner kopieren + in der Registry aktivieren</span>
+python questforge.py example_quest.json --deploy --register
+
+<span class="tok-c"># eine Starter-Spec ausgeben</span>
+python questforge.py --example</code></pre>
+
+<div class="callout good"><div class="ic">🛡️</div><div>
+  Das Werkzeug <b>validiert jede Zeile</b> (richtige Anzahl Tokens, gültige Enum-Werte),
+  hält die Quest-ID im sicheren Bereich, prüft dass der Geber-NPC existiert, erzwingt
+  LF, und liest die fertige <code>.wd</code> zur Kontrolle mit dem Spiel-eigenen Leser
+  wieder ein — bevor sie geschrieben wird.
+</div></div>
+
+<!-- 6 -->
+<h2 id="regeln"><span class="num">6</span>Die harten Regeln</h2>
+<p class="lead">Vier Dinge, die man falsch machen kann — das Werkzeug hält sie automatisch ein.</p>
+<table>
+  <tr><th>Regel</th><th>Warum</th></tr>
+  <tr><td><b>Nur Quest-IDs 381–399</b></td><td>Der Singleplayer-Loader kappt bei 400. Die IDs 700+ gehören dem <b>Multiplayer</b> — eine Quest dort wäre im SP unsichtbar.</td></tr>
+  <tr><td><b>Nur LF, niemals CRLF</b></td><td>Der Parser trennt an Leerzeichen; ein <code>\r</code> verseucht das letzte Token jeder Zeile (<code>True\r</code>) und bricht die ganze Datei.</td></tr>
+  <tr><td><b>Von Update16 ausgehen</b></td><td>Die Patches 1.1–1.6 überschreiben die Quest-Datei. Von der alten 1.0-Kopie auszugehen würde alle Patch-Fixes verwerfen.</td></tr>
+  <tr><td><b>Bestehenden Geber-NPC nutzen</b></td><td>Dann keine Marker-/<code>.lnd</code>-Arbeit im Editor nötig — der NPC hat seinen <code>MARKER_QUEST_START</code> schon.</td></tr>
+</table>
+<div class="callout warn"><div class="ic">⚠️</div><div>
+  <b>Geber-Quests brauchen einen Dialogbaum.</b> Alle 377 Original-Quests mit Geber
+  haben einen <code>DQ_&lt;n&gt;</code>-Dialog. Für die <i>erste</i> Quest umgeht man das
+  am besten mit einer <b>giverlosen</b> Quest, die über <code>AOQ</code> von einer
+  bestehenden Quest ausgelöst wird — oder man akzeptiert, dass der Geber die Quest ohne
+  gesprochenen Dialog anbietet (unbewiesen). Der Dialogbaum-Autor ist der nächste
+  Ausbauschritt des Werkzeugs.
+</div></div>
+
+<!-- 7 -->
+<h2 id="deploy"><span class="num">7</span>Ausliefern: Mods + Registry</h2>
+<p class="lead">Die neueste Datei gewinnt — genau wie bei deiner PAR-Mod.</p>
+<figure>
+<svg viewBox="0 0 880 210" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI,sans-serif">
+  <text x="30" y="34" fill="#9aa3b2" font-size="12.5">Ladereihenfolge — spätere überschreibt frühere</text>
+  <g font-size="12.5">
+    <rect x="30" y="48" width="150" height="42" rx="7" fill="#1c1f26" stroke="#2c313c"/><text x="105" y="74" fill="#9aa3b2" text-anchor="middle">Scripts.wd (1.0)</text>
+    <rect x="210" y="48" width="150" height="42" rx="7" fill="#1c1f26" stroke="#2c313c"/><text x="285" y="74" fill="#9aa3b2" text-anchor="middle">Update11-15.wd</text>
+    <rect x="390" y="48" width="150" height="42" rx="7" fill="#1c1f26" stroke="#2c313c"/><text x="465" y="74" fill="#dfe3ea" text-anchor="middle">Update16.wd</text>
+    <rect x="600" y="48" width="230" height="42" rx="7" fill="#232732" stroke="#4caf6d" stroke-width="2"/><text x="715" y="68" fill="#4caf6d" text-anchor="middle" font-weight="700">Mods\MeinMod.wd</text><text x="715" y="84" fill="#9aa3b2" text-anchor="middle" font-size="10.5">Registry = 1 → gewinnt</text>
+  </g>
+  <line x1="180" y1="69" x2="208" y2="69" stroke="#2c313c" stroke-width="2"/>
+  <line x1="360" y1="69" x2="388" y2="69" stroke="#2c313c" stroke-width="2"/>
+  <line x1="540" y1="69" x2="598" y2="69" stroke="#4caf6d" stroke-width="2.4"/>
+  <text x="440" y="150" fill="#dfe3ea" font-size="13" text-anchor="middle">Voll­ersatz unter dem <tspan font-weight="700">Originalpfad</tspan> — neue Dateinamen werden nie geladen:</text>
+  <text x="440" y="176" fill="#e6d9b8" font-size="12.5" text-anchor="middle" font-family="Cascadia Code,monospace">Mods\MeinMod.wd  →  Scripts\Quests\TwoWorldsQuests.qtx  +  Language\TwoWorldsQuests.lan</text>
+</svg>
+</figure>
+<p>Aktiviert wird über einen Registry-Wert (macht <code>--register</code> automatisch):</p>
+<pre><code>HKCU\SOFTWARE\Reality Pump\TwoWorlds\Mods
+    "MeinMod.wd" = 1   <span class="tok-c">(DWORD; 1 = an, 0 = aus)</span></code></pre>
+
+<!-- 8 -->
+<h2 id="test"><span class="num">8</span>Der In-Game-Test <span class="pill u">wartet auf dich</span></h2>
+<p class="lead">Ein 1-Minuten-Test, der alle offenen Fragen auf einmal klärt.</p>
+<p>Der Smoke-Test-Mod ist bereits gebaut, in den Mods-Ordner kopiert und in der Registry
+aktiviert (<code>QuestTest.wd = 1</code>). Er tut zwei Dinge:</p>
+<ul class="tight">
+  <li><b>Signal A</b> — er stellt jedem sichtbaren Quest-Titel ein <code>[MOD]</code> voran (über eine neue <code>.lan</code>).</li>
+  <li><b>Signal B</b> — er hängt eine neue Quest <code>Q_385</code> an die <code>.qtx</code> an.</li>
+</ul>
+<div class="card">
+  <b>So testest du:</b>
+  <ol>
+    <li>Two Worlds starten (normal, Singleplayer).</li>
+    <li>Einen Spielstand laden.</li>
+    <li>Questlog öffnen (<span class="kbd">J</span> bzw. übers Menü).</li>
+    <li><b>Steht <code>[MOD]</code> vor deinen Quest-Titeln?</b></li>
+  </ol>
+  <p style="margin-bottom:0">→ <b>Ja:</b> Präzedenz + <code>.lan</code>-Override + Laufzeitakzeptanz sind bewiesen. Das Spiel lädt Mod-Quests. Grünes Licht für echte Quests.<br>
+  → <b>Nein:</b> Sag mir Bescheid — dann liegt es an der Ladereihenfolge, und ich habe eine Fallback-Variante (loser Ordner statt <code>.wd</code>) parat.</p>
+</div>
+<div class="callout info"><div class="ic">↩️</div><div>
+  <b>Rückgängig:</b> in der Registry <code>QuestTest.wd = 0</code> setzen (oder die
+  <code>QuestTest.wd</code> aus dem Mods-Ordner löschen). Deine Saves bleiben unberührt —
+  nur die Anzeige-Titel ändern sich.
+</div></div>
+
+<!-- 9 -->
+<h2 id="alte-tools"><span class="num">9</span>Die alten Werkzeuge</h2>
+<p class="lead">Was in deiner Sammlung schon liegt und wofür es gut ist.</p>
+<table>
+  <tr><th>Werkzeug</th><th>Kann</th><th>Grenze</th></tr>
+  <tr><td><b>Quest-Editor</b><br><span class="mono">tw1_quest_editor_IDX_QTX.py</span></td><td>Liest/schreibt <code>.qtx</code>/<code>.idx</code>, zeigt <code>.shf</code>. Guter Betrachter für bestehende Quests.</td><td>Kann keine <b>neue</b> Quest anlegen (nur Felder ändern). Schreibt <code>.qtx</code> mit CRLF — für neue Quests unbrauchbar, dafür ist QuestForge da.</td></tr>
+  <tr><td><b>LAN-Viewer</b><br><span class="mono">tw1_lan_viewer.py</span></td><td>Zeigt alle Texte einer <code>.lan</code>. Gut zum Nachschlagen von Schlüsseln.</td><td>Nur lesen.</td></tr>
+  <tr><td><b>PAR-Editor</b><br><span class="mono">tw1_par_editor.py</span></td><td>Editiert Werte in <code>TwoWorlds.par</code> direkt (Startausrüstung, Lauftempo …).</td><td>Kann die PAR nicht neu erzeugen, nur bearbeiten.</td></tr>
+  <tr><td><b>WD-Repacker</b><br><span class="mono">Tw1WDRepacker.exe</span></td><td>Packt Ordner ↔ <code>.wd</code> (GUI). QuestForge macht dasselbe headless per <code>tw1_wd.py</code>.</td><td>GUI.</td></tr>
+  <tr><td><b>Editor-Command-Injector</b></td><td>Fährt die Editor-Konsole per Tastatur/Zwischenablage.</td><td>Nur schreiben, kein Rücklesen; kann keine Marker anlegen.</td></tr>
+  <tr><td><b>Two Worlds Editor</b><br><span class="mono">TwoWorldsEditorFix.exe</span></td><td>Der volle Welteditor (dein gepatchter). Nötig nur, wenn ein <b>neuer</b> NPC an einem <b>neuen</b> Ort platziert werden soll.</td><td>GUI, hartkodierte <code>D:\Games\TwoWorldsSDK</code>-Pfade.</td></tr>
+</table>
+
+<!-- 10 -->
+<h2 id="voice"><span class="num">10</span>Vertonung</h2>
+<p class="lead">Aufgeschoben, bis die erste Quest läuft — aber der Plan steht.</p>
+<p>Der Ton liegt in <code>XACT\win\</code> (nicht in den <code>.wd</code>-Archiven): eine
+935-MB-Wave-Bank <code>UnitTalk.xwb</code> plus <code>Sounds.xsb</code>. Neue Sprachzeilen
+heißt diese Bank neu bauen — deutlich mehr Arbeit als die Quest selbst. <b>Aber:</b>
+Dialogzeilen ohne Sprachdatei sind im Format vorgesehen (<code>cue=""</code>), also
+funktionieren neue Quests zunächst mit Text/Untertiteln.</p>
+<p>Plan: neue NPC-Stimmen über ElevenLabs (günstige, passende Stimmen), für den Helden
+eine ähnliche Stimme suchen. Das kommt, sobald der In-Game-Test grün ist — vorher lohnt
+kein Abo.</p>
+
+<!-- 11 -->
+<h2 id="dateien"><span class="num">11</span>Dateien im QuestForge-Ordner</h2>
+<table>
+  <tr><th>Datei</th><th>Rolle</th></tr>
+  <tr><td class="mono">questforge.py</td><td>Hauptwerkzeug — JSON-Spec → Mod-<code>.wd</code> (bauen, deployen, registrieren)</td></tr>
+  <tr><td class="mono">tw1_qtx.py</td><td><code>.qtx</code>-Parser/Emitter + Validierung (500/500 Original-Quests byte-genau)</td></tr>
+  <tr><td class="mono">tw1_lan.py</td><td><code>.lan</code>-Reader/Writer (3,3-MB-Master byte-genau)</td></tr>
+  <tr><td class="mono">wdio.py</td><td>buglords Referenz-Packer (CC0) — <b>packt alle Mods</b></td></tr>
+  <tr><td class="mono">tw1_wd.py</td><td><code>.wd</code> <b>lesen</b>; <code>write()</code> ist veraltet (siehe Warnung oben)</td></tr>
+  <tr><td class="mono">example_quest.json</td><td>Starter-Spec</td></tr>
+  <tr><td class="mono">build_smoketest.py</td><td>Baut den <code>QuestTest.wd</code>-Smoke-Test</td></tr>
+  <tr><td class="mono">base\TwoWorldsQuests.qtx</td><td>Basis aus Update16 (Quest-Definitionen)</td></tr>
+  <tr><td class="mono">base\TwoWorldsQuests.lan</td><td>Master-Texte (zum Nachschlagen)</td></tr>
+  <tr><td class="mono">out\*.wd</td><td>Erzeugte Mod-Archive</td></tr>
+</table>
+
+<div class="foot">
+  QuestForge · erstellt für Marco · alle Formatangaben aus den Originaldateien und dem
+  SDK-Quelltext verifiziert, außer dem einen offenen In-Game-Test (Abschnitt 8).
+  Umkehrbar: alle Mods über die Registry abschaltbar, Saves bleiben unberührt.
+</div>
+
+</div>
+</body>
+</html>
