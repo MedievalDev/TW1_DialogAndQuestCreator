@@ -155,7 +155,7 @@ END
 
 | Regel | Grund |
 |---|---|
-| Quest-ID **381–399** | 1–380 sind belegt, 700+ ist Multiplayer und im Einzelspieler unsichtbar |
+| Quest-ID **381–699** | 1–380 ist Einzelspieler, 700–959 ist Multiplayer, dazwischen ist alles frei. Der Parser selbst kennt keine Obergrenze — die mitgelieferten Mehrspieler-Kartendateien nutzen IDs wie 2001 und 4001. Eine engine-seitige Array-Grenze irgendwo in diesem Bereich lässt sich aus den Daten allein nicht ausschließen; sie würde sich als Quest zeigen, die einfach nie erscheint. |
 | `enableLevel 1` | wie die Retail-Startquests; `0` funktionierte in Tests nicht zuverlässig |
 | Kopfzeile letzte Spalte `True` | sonst kein Tagebucheintrag |
 | Symbolische Belohnungen sind mager | `MEDIUM` Gold ≈ 160, `SMALL` EXP ≈ 20 — konkrete Zahlen benutzen (Retail tut das auch: `REWARD GLD SOLVE 5000`) |

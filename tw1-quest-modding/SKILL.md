@@ -40,7 +40,7 @@ into a `.wd`, and re-reads it with the game's own WD reader to verify.
 
 | Rule | Why |
 |------|-----|
-| Quest id **381–399** only | SP loader caps at 400; 700+ is multiplayer and invisible in SP. Id must be > 0. |
+| Quest id **381–699** | 1–380 is single-player, 700–959 multiplayer; the whole gap between is unused. There is **no 400 cap** — that was an early wrong assumption; the shipped MP map files (`Net_M_20.qtx`, `Net_M_40.qtx`) use ids like 2001 and 4001, so the field is just a number. An engine-side array limit inside 400–699 cannot be ruled out from the data; it would surface as a quest that never appears. Id must be > 0. |
 | **LF line endings, never CRLF** | Parser splits on spaces; a stray `\r` corrupts the last token of every line and breaks the whole file. |
 | Base = **Update16.wd**'s `TwoWorldsQuests.qtx` | Patches 1.1–1.6 overwrote it; the loose 1.0 copy in `Lan_QTX Tools\` is stale — do not use it. |
 | Reuse an **existing** giver NPC (< 698) | It already has its `MARKER_QUEST_START`; avoids all editor/marker/.lnd work. |
@@ -110,6 +110,30 @@ tiles needs no cache changes at all.
 To disable a mod, set it to 0 or delete the `.wd`. Saves are unaffected — only
 quests/text change. Quest *state* is baked into a save, so test with a new game
 or a save from before the quest.
+
+### What a single-player save actually stores (format decoded 2026-07)
+
+`Documents\TwoWorlds files\Players\<name>\Single\NNNNNN.TwoWorldsSave`:
+`"RGMH"` + u32 1 + u32 0x2028 (payload offset) + u32 4 + u32 0 + u32 pngLen,
+GUID, UTF-16 title (fixed field) … at 0x2028: u32 pngLen again + PNG thumbnail,
+then ONE zlib stream: `"SV\x01"` + dstring "1.6" + UTF-16 save name + **GUID of
+the loaded TwoWorlds.par** (content fingerprint; matches `PARAM_GUID` in
+tw1mp/savegame.py for stock) + sections. ~6.3 MB decompressed.
+
+The save does NOT store file versions — it stores **content**:
+- an embedded level-state block per *visited* tile (literal `Levels\Map_X.lnd`
+  path + `LN\0\0` block). On visited tiles the save's state always wins over
+  any mod; unvisited tiles load fresh. (`Documents\TwoWorlds files\Levels\` is
+  an additional per-user tile cache.)
+- every spawned quest NPC as a world object (`NPC_Q_006`, …)
+- quest state, but **no qtx/lan copies** — quest definitions, texts and dialog
+  trees load fresh from the archives on every load. Text mods and .par values
+  therefore work in old saves.
+
+**Why a new quest still doesn't appear in an old save:** its `AOQ PROMOTE`
+trigger sits on taking the hook quest — in an old save that moment has passed
+and never re-fires. Fix without save editing: chain the quest *additionally*
+onto a quest the player has not taken yet (multiple AOQ lines are legal).
 
 ## Format cheat-sheet
 

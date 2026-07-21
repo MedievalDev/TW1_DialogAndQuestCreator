@@ -8,3 +8,7 @@ clean_lhc.bin
 # Python
 __pycache__/
 *.pyc
+
+# Broken/superseded — kept locally only
+tw1_par.py
+tw1-quest-modding/archive_build_smoketest.py.txt
