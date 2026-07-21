@@ -113,18 +113,32 @@ or a save from before the quest.
 
 ### What a single-player save actually stores (format decoded 2026-07)
 
-`Documents\TwoWorlds files\Players\<name>\Single\NNNNNN.TwoWorldsSave`:
-`"RGMH"` + u32 1 + u32 0x2028 (payload offset) + u32 4 + u32 0 + u32 pngLen,
-GUID, UTF-16 title (fixed field) … at 0x2028: u32 pngLen again + PNG thumbnail,
-then ONE zlib stream: `"SV\x01"` + dstring "1.6" + UTF-16 save name + **GUID of
-the loaded TwoWorlds.par** (content fingerprint; matches `PARAM_GUID` in
-tw1mp/savegame.py for stock) + sections. ~6.3 MB decompressed.
+The active folder is **`%USERPROFILE%\Saved Games\Two Worlds Saves\`** with
+the `NNNNNN.TwoWorldsSave` files sitting DIRECTLY in it and **no _files_.txt**
+— the load-list label comes from inside each save. (An old
+`Documents\TwoWorlds files\Players\<name>\Single\` layout may also exist but
+the retail game does NOT load it — writing there does nothing.)
+`tw1_save.find_save_dir()` returns the right one.
+
+Format: `"RGMH"` + u32 1 + u32 0x2028 (payload offset) + u32 4 + u32 0 +
+u32 pngLen, GUID, a generic UTF-16 header label ("Two Worlds") to 0x2028;
+at 0x2028: u32 pngLen again + PNG thumbnail; then ~91 B of UNCOMPRESSED
+payload-head preview; then ONE zlib stream (level 6) to EOF. **No length
+field or checksum anywhere** — an edited payload re-deflated at level 6 is
+accepted by the game (verified: a title change loads fine). `tw1_save.py`
+does byte-exact round-trip + title editing.
+
+Payload: `"SV\x01"` + dstring "1.6" + UTF-16 save name + **GUID of the loaded
+TwoWorlds.par** (content fingerprint; matches `PARAM_GUID` in
+tw1mp/savegame.py for stock) + sections. ~3-6 MB decompressed.
 
 The save does NOT store file versions — it stores **content**:
-- an embedded level-state block per *visited* tile (literal `Levels\Map_X.lnd`
-  path + `LN\0\0` block). On visited tiles the save's state always wins over
-  any mod; unvisited tiles load fresh. (`Documents\TwoWorlds files\Levels\` is
-  an additional per-user tile cache.)
+- an embedded level-state block per *visited* tile. Structure: a u32
+  tile-count, then per tile a 20-byte head `[col, tileX, worldY, worldX,
+  pathLen]` + dstring `Levels\Map_X.lnd` + tile data + `LN\0\0` + UTF-16
+  place name + u32 128 + u32 128 + grid data. Blocks are variable size
+  (3-16 KB) and packed back to back. On visited tiles the save's state
+  always wins over any mod; unvisited tiles load fresh.
 - every spawned quest NPC as a world object (`NPC_Q_006`, …)
 - quest state, but **no qtx/lan copies** — quest definitions, texts and dialog
   trees load fresh from the archives on every load. Text mods and .par values
@@ -133,7 +147,22 @@ The save does NOT store file versions — it stores **content**:
 **Why a new quest still doesn't appear in an old save:** its `AOQ PROMOTE`
 trigger sits on taking the hook quest — in an old save that moment has passed
 and never re-fires. Fix without save editing: chain the quest *additionally*
-onto a quest the player has not taken yet (multiple AOQ lines are legal).
+onto a quest the player has not taken yet (multiple AOQ lines are legal). The
+Quest Creator's "Also after" field does exactly this.
+
+**Tile reset (parked, 2026-07).** Making a visited tile load fresh from a
+map mod by editing the save is HARD and currently unsolved:
+- Removing a tile block (and fixing the u32 count) **crashes the game** —
+  there are hidden length/offset fields further in the payload that a size
+  change breaks.
+- A length-preserving edit **loads fine** (no crash), but renaming the
+  block's `Levels\Map_X.lnd` path to a phantom had **no effect** — the game
+  does not key tile state on that path string (likely on the head
+  coordinates instead).
+So: size changes are unsafe; the tile identity is not the path. A real
+solution needs every size/offset field mapped, or the exact "visited" key
+found. Not worth it for the niche benefit (only players with old saves;
+new games see mods anyway).
 
 ## Format cheat-sheet
 

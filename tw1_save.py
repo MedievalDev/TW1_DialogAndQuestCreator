@@ -121,6 +121,20 @@ def read(path):
         return Save(f.read())
 
 
+def find_save_dir():
+    """The active single-player save folder.
+
+    The game writes to `%USERPROFILE%\\Saved Games\\Two Worlds Saves\\`
+    with the NNNNNN.TwoWorldsSave files sitting DIRECTLY in it (there is no
+    _files_.txt there - the load-list label comes from inside each save).
+    An old `Documents\\TwoWorlds files\\Players\\<name>\\Single\\` layout may
+    also exist but is not what the retail game loads.
+    """
+    cand = os.path.join(os.path.expanduser('~'), 'Saved Games',
+                        'Two Worlds Saves')
+    return cand if os.path.isdir(cand) else None
+
+
 def _files_path(save_path):
     return os.path.join(os.path.dirname(save_path), '_files_.txt')
 
