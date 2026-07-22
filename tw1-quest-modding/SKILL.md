@@ -164,6 +164,28 @@ solution needs every size/offset field mapped, or the exact "visited" key
 found. Not worth it for the niche benefit (only players with old saves;
 new games see mods anyway).
 
+## Removing the end of the game (post-Gandohar free roam) — PROVEN
+
+The game does **not** end because Gandohar dies. It ends because the final
+quests fire a cutscene, and the EarthC campaign code
+(`PQuestActions.ech::ActionPlayCutscene`) sets `bEndGameAfter = true` **only**
+for cutscene numbers 7 or 8 in single-player. Nothing else ends the game.
+
+Those two cutscenes are triggered from the `.qtx`:
+- `Q_21` (`FC KILL NPC_5` — NPC_5 is Gandohar) → `ACTION PLAY_CUTSCENE SOLVE 8`
+- `Q_18` (the final showdown)               → `ACTION PLAY_CUTSCENE SOLVE 7`
+
+**Delete those two ACTION lines from the qtx and the game never ends.**
+Verified in-game via the Komorin early-Gandohar-kill exploit: with the lines
+removed, Gandohar dies, no cutscene plays, and the world stays open. This
+needs **no EarthC recompile** — the SDK's EarthC.exe (1.6, v0.002) emits a
+`78 9c` .eco format the 1.7 game does not load, so avoid that route; the
+`.qtx` edit is the whole fix. The other cutscenes (5, 6, 3) are mid-story
+and must stay.
+
+To test fast: new game, go to Komorin, kill Gandohar early. Ending gone =
+success. (Test needs a NEW game — quest state is baked into saves.)
+
 ## Format cheat-sheet
 
 ### .qtx (quest definitions) — ASCII, LF, `(null)` = unset
