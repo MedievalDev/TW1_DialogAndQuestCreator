@@ -1090,6 +1090,14 @@ class App:
         self.edit_bar.pack(fill='x', pady=(6, 0), before=self.lbl_conv_hint)
         if hasattr(self, 'btn_build'):
             self.btn_build.configure(text='Save dialog')
+        # Pull in the quest's journal texts + title so they can be edited too;
+        # "Save dialog" ships whichever of these are non-empty.
+        qid, tr = rec['qid'], rec['tr']
+        self.var_title.set(rec['title'])
+        for widget, suffix in ((self.txt_qtd, '_QTD'), (self.txt_qsd, '_QSD'),
+                               (self.txt_qcd, '_QCD')):
+            widget.delete('1.0', 'end')
+            widget.insert('1.0', tr.get(f'translateQ_{qid}{suffix}', ''))
 
     def _exit_edit_mode(self):
         self.loaded_dialog = None
@@ -1098,6 +1106,9 @@ class App:
             self.btn_build.configure(text='Build & install')
         for key, conv in self.convs.items():
             conv.load(TEMPLATES[key])
+        self.var_title.set('')
+        for widget in (self.txt_qtd, self.txt_qsd, self.txt_qcd):
+            widget.delete('1.0', 'end')
         self._conv_switch('offer')
 
     def line_remove(self):
@@ -1482,6 +1493,21 @@ class App:
                     cams=cams, anim1=0, anim2=0))
             self.log(f'  {conv.label}: {len(order)} lines')
         tree = tw1_lan.DialogTree(dq, entries)
+
+        # journal texts + title, if the user filled them in
+        qid = ld['qid']
+        title = self.var_title.get().strip()
+        if title:
+            new_text[f'translateQ_{qid}'] = title
+        jn = 0
+        for suffix, widget in (('_QTD', self.txt_qtd), ('_QSD', self.txt_qsd),
+                               ('_QCD', self.txt_qcd)):
+            txt = get_text(widget)
+            if txt:
+                new_text[f'translateQ_{qid}{suffix}'] = txt
+                jn += 1
+        if title or jn:
+            self.log(f'journal: title{" +" if jn else ""} {jn} text(s) updated')
 
         # start from the target archive's master .lan if it has one, else base
         base = hub.mod_lan.get(archive) or open(questforge.BASE_LAN, 'rb').read()
