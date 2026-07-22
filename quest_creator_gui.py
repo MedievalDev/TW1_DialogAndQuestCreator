@@ -743,6 +743,16 @@ class App:
         ttk.Button(picker, text='Load dialog…',
                    command=self.load_dialog).pack(side='right')
 
+        # Shown only while editing an existing dialog (vs building a new
+        # quest): Build then ships just the dialog, no new quest.
+        self.loaded_dialog = None
+        self.edit_bar = ttk.Frame(left)
+        self.lbl_edit = ttk.Label(self.edit_bar, foreground=GOLD,
+                                  font=('Segoe UI', 9, 'bold'))
+        self.lbl_edit.pack(side='left')
+        ttk.Button(self.edit_bar, text='New quest instead',
+                   command=self._exit_edit_mode).pack(side='right')
+
         self.lbl_conv_hint = ttk.Label(left, foreground=MUT, wraplength=560,
                                        justify='left')
         self.lbl_conv_hint.pack(anchor='w', pady=(6, 8))
@@ -1009,14 +1019,15 @@ class App:
                 return
             rec = shown[sel[0]]
             n = self._convert_tree(rec['entries'], rec['tr'])
+            self._enter_edit_mode(rec)
             win.destroy()
             self._conv_switch('offer')
             messagebox.showinfo(APP, f'Loaded {rec["dq"]} "{rec["title"]}" — '
-                                f'{n} lines across the four conversation '
-                                'states. Edit and Build to ship the changes '
-                                'as a mod.\n\nNote: cameras reset to standard; '
-                                'the quest id/objective on the Quest tab '
-                                'decide where it is saved.')
+                                f'{n} lines. Edit the conversations and press '
+                                '"Save dialog" on the Build tab to ship just '
+                                'this dialog as a mod.\n\nNote: cameras reset '
+                                'to standard. Use "New quest instead" to '
+                                'switch back to building a fresh quest.')
         lb.bind('<Double-1>', do_load)
         ent.bind('<Return>', do_load)
         bar = ttk.Frame(fr); bar.pack(fill='x')
@@ -1070,6 +1081,24 @@ class App:
                 build(r)
             total += len(conv.nodes)
         return total
+
+    def _enter_edit_mode(self, rec):
+        self.loaded_dialog = {'qid': rec['qid'], 'dq': rec['dq'],
+                              'title': rec['title']}
+        self.lbl_edit.configure(
+            text=f'Editing dialog of Q_{rec["qid"]} "{rec["title"]}"')
+        self.edit_bar.pack(fill='x', pady=(6, 0), before=self.lbl_conv_hint)
+        if hasattr(self, 'btn_build'):
+            self.btn_build.configure(text='Save dialog')
+
+    def _exit_edit_mode(self):
+        self.loaded_dialog = None
+        self.edit_bar.pack_forget()
+        if hasattr(self, 'btn_build'):
+            self.btn_build.configure(text='Build & install')
+        for key, conv in self.convs.items():
+            conv.load(TEMPLATES[key])
+        self._conv_switch('offer')
 
     def line_remove(self):
         nid = self._selected_node()
@@ -1359,7 +1388,12 @@ class App:
         return errs, qid, giver, fc, target
 
     def build(self):
-        errs, qid, giver, fc, target = self._validate()
+        if self.loaded_dialog:
+            errs = self._validate_dialog()
+            args = None
+        else:
+            errs, qid, giver, fc, target = self._validate()
+            args = (qid, giver, fc, target)
         if errs:
             messagebox.showerror('Not yet', '\n'.join(errs))
             return
@@ -1372,8 +1406,98 @@ class App:
             return
         self.btn_build.state(['disabled'])
         self.notebook.select(2)
-        threading.Thread(target=self._build_thread,
-                         args=(qid, giver, fc, target), daemon=True).start()
+        if args is None:
+            threading.Thread(target=self._build_dialog_thread,
+                             daemon=True).start()
+        else:
+            threading.Thread(target=self._build_thread, args=args,
+                             daemon=True).start()
+
+    def _validate_dialog(self):
+        """Editing an existing dialog: only the conversations matter, no
+        quest fields. Empty states are fine (a dialog may not use all four)."""
+        errs = []
+        if not any(c.nodes and c.root for c in self.convs.values()):
+            errs.append('All conversations are empty - nothing to save.')
+        for conv in self.convs.values():
+            if not conv.nodes:
+                continue
+            seen, stack = set(), [conv.root]
+            while stack:
+                nid = stack.pop()
+                if nid in seen or nid not in conv.nodes:
+                    continue
+                seen.add(nid)
+                stack.extend(e[0] for e in conv.nodes[nid]['next'])
+            lost = len(conv.nodes) - len(seen)
+            if lost:
+                errs.append(f'"{conv.label}": {lost} line(s) cannot be '
+                            'reached from the first line.')
+            if any(not n['text'].strip() for n in conv.nodes.values()):
+                errs.append(f'"{conv.label}" has an empty line.')
+        return errs
+
+    def _build_dialog_thread(self):
+        try:
+            self._do_build_dialog()
+            self.log('DONE - start a NEW game (or one from before this quest) '
+                     'to see the changed dialog.', 'ok')
+        except Exception as exc:
+            self.log(f'FAILED: {exc}', 'err')
+        finally:
+            self.root.after(0, lambda: self.btn_build.state(['!disabled']))
+
+    def _do_build_dialog(self):
+        """Ship only the edited dialog tree (+ its texts) as a .lan mod -
+        no quest, no qtx. Replaces the tree at its original DQ key."""
+        hub = self.hub
+        ld = self.loaded_dialog
+        dq = ld['dq']
+        archive = self.var_target.get()
+        self.log(f'Saving dialog {dq} "{ld["title"]}" into {archive}', 'gold')
+
+        suffix_of = {'offer': '0.FT.AS', 'open': '0.QNS.AE',
+                     'solved': '0.QS.AE', 'closed': '0.QC'}
+        new_text = {}
+        entries = []
+        for key, _flags, _label, _hint in CONVERSATIONS:
+            conv = self.convs[key]
+            if not conv.nodes:
+                continue
+            order = conv.order()
+            index = {nid: len(entries) + i for i, nid in enumerate(order)}
+            for i, nid in enumerate(order):
+                node = conv.nodes[nid]
+                tid = f'{dq}_{suffix_of[key]}_{i}'
+                new_text[tid] = node['text']
+                nxt = [-index[t] if (hide and index[t]) else index[t]
+                       for t, hide in node['next'] if t in index]
+                is_hero = node['who'] == 'hero'
+                flags = node['flags'] if 'flags' in node else conv.flags
+                cams = node.get('cams') or [7 if is_hero else 2]
+                lec = node['lector'] if 'lector' in node else (
+                    1 if is_hero else 0)
+                entries.append(tw1_lan.DialogEntry(
+                    lector=lec, tid=tid, cue='', next=nxt, flags=flags,
+                    cams=cams, anim1=0, anim2=0))
+            self.log(f'  {conv.label}: {len(order)} lines')
+        tree = tw1_lan.DialogTree(dq, entries)
+
+        # start from the target archive's master .lan if it has one, else base
+        base = hub.mod_lan.get(archive) or open(questforge.BASE_LAN, 'rb').read()
+        translations, aliases, rest = tw1_lan.read(base)
+        translations.update(new_text)
+        trees = [t for t in tw1_lan.parse_trees(rest) if t.id != dq] + [tree]
+        full_lan = tw1_lan.build(translations, aliases,
+                                 tw1_lan.build_trees(trees))
+        overlay = tw1_lan.build(new_text, [], tw1_lan.build_trees([tree]))
+        short = dq.replace('translate', '')
+        files = {
+            'Language\\TwoWorldsQuests.lan': full_lan,
+            f'Language\\ZZ_{short}.lan': overlay,
+        }
+        self.log(f'lan: dialog tree {dq} replaced, {len(new_text)} texts')
+        self._pack_into_archive(archive, files)
 
     def _build_thread(self, qid, giver, fc, target):
         try:
@@ -1496,11 +1620,14 @@ class App:
             'Language\\TwoWorldsQuests.lan': full_lan,
             f'Language\\ZZ_Q{qid}.lan': overlay,
         }
+        self._pack_into_archive(d['archive'], files)
 
-        # --- pack into the target archive --------------------------------
-        mods_dir = os.path.join(hub.game_dir, 'Mods')
+    def _pack_into_archive(self, archive_name, files):
+        """Merge `files` (inner path -> bytes) into a Mods\\*.wd, back it up,
+        verify byte-for-byte and enable it in the registry."""
+        mods_dir = os.path.join(self.hub.game_dir, 'Mods')
         os.makedirs(mods_dir, exist_ok=True)
-        archive = os.path.join(mods_dir, d['archive'])
+        archive = os.path.join(mods_dir, archive_name)
         tmp = tempfile.mkdtemp(prefix='questforge_')
         try:
             if os.path.exists(archive):
@@ -1509,11 +1636,11 @@ class App:
                     shutil.copy2(archive, backup)
                     self.log(f'backup: {os.path.basename(backup)}')
                 wdio.unpack_single(archive, tmp)
-                self.log(f'merging into existing {d["archive"]}')
+                self.log(f'merging into existing {archive_name}')
             else:
-                self.log(f'creating new archive {d["archive"]} - if the '
-                         'quest does not show up, merge into an archive '
-                         'that already loads (see guide).', 'gold')
+                self.log(f'creating new archive {archive_name} - if it does '
+                         'not show up, merge into an archive that already '
+                         'loads (see guide).', 'gold')
             for inner, data in files.items():
                 dest = os.path.join(tmp, inner.replace('\\', os.sep))
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -1525,14 +1652,13 @@ class App:
             shutil.rmtree(tmp, ignore_errors=True)
         self.log(f'packed: {os.path.getsize(archive):,} B')
 
-        # --- verify + enable ---------------------------------------------
         got = {e.path: e.data for e in tw1_wd.read(archive)}
         for inner, data in files.items():
             assert got.get(inner) == data, f'verify failed: {inner}'
         self.log('verified: archive re-read, all files byte-identical', 'ok')
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_MODS) as k:
-            winreg.SetValueEx(k, d['archive'], 0, winreg.REG_DWORD, 1)
-        self.log(f'registry: "{d["archive"]}" = 1 (enabled)')
+            winreg.SetValueEx(k, archive_name, 0, winreg.REG_DWORD, 1)
+        self.log(f'registry: "{archive_name}" = 1 (enabled)')
 
     def run(self):
         self.root.mainloop()
