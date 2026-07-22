@@ -946,8 +946,9 @@ class App:
 
     def _all_dialogs(self):
         """Every dialog tree the game and the installed mods carry, as
-        [{'dq','qid','title','entries','tr'}], newest wins per quest id.
-        Cached after the first call."""
+        [{'dq','qid','title','entries','tr','kind'}], newest wins per quest
+        id. kind is 'sp' (single-player, id < 700) or 'mp' (multiplayer,
+        id >= 700 incl. the 2xxx/4xxx net-map dialogs). Cached."""
         if getattr(self, '_dialog_cache', None) is not None:
             return self._dialog_cache
         by_id = {}                      # qid -> record (mod overrides base)
@@ -962,9 +963,21 @@ class App:
                 title = (tr.get(f'translateQ_{qid}', '').strip()
                          or self.hub.quests.get(qid, ('',))[0])
                 by_id[qid] = {'dq': t.id, 'qid': qid, 'title': title,
-                              'entries': t.entries, 'tr': tr}
+                              'entries': t.entries, 'tr': tr,
+                              'kind': 'mp' if qid >= 700 else 'sp'}
 
-        ingest(open(questforge.BASE_LAN, 'rb').read())          # base first
+        ingest(open(questforge.BASE_LAN, 'rb').read())          # SP + 700-959
+        # multiplayer net-map dialogs live in their own archives
+        for arc in ('Content01_Lan.wd', 'Content02_Lan.wd'):
+            p = os.path.join(self.hub.game_dir, 'WDFiles', arc)
+            if not os.path.exists(p):
+                continue
+            try:
+                for inner in tw1_wd.read(p):
+                    if inner.path.lower().endswith('.lan'):
+                        ingest(inner.data)
+            except Exception:
+                pass
         for name in self.hub.mods():                            # mods override
             path = os.path.join(self.hub.game_dir, 'Mods', name)
             try:
@@ -983,8 +996,20 @@ class App:
         win.geometry('640x560')
         win.transient(self.root); win.grab_set()
         fr = ttk.Frame(win, padding=12); fr.pack(fill='both', expand=True)
+        # single-player vs multiplayer, kept apart for overview
+        kinds = {'sp': sum(1 for d in dialogs if d['kind'] == 'sp'),
+                 'mp': sum(1 for d in dialogs if d['kind'] == 'mp')}
+        fbar = ttk.Frame(fr); fbar.pack(fill='x')
+        ttk.Label(fbar, text='Show:').pack(side='left', padx=(0, 8))
+        var_kind = tk.StringVar(value='sp')
+        for val, text in (('sp', f'Single-player ({kinds["sp"]})'),
+                          ('mp', f'Multiplayer ({kinds["mp"]})'),
+                          ('all', 'All')):
+            ttk.Radiobutton(fbar, text=text, value=val, variable=var_kind,
+                            command=lambda: refill()).pack(side='left',
+                                                           padx=(0, 8))
         ttk.Label(fr, text='Type a quest name (like in the Two Worlds guide) '
-                           'or a Q-number:').pack(anchor='w')
+                           'or a Q-number:').pack(anchor='w', pady=(10, 0))
         var_q = tk.StringVar()
         ent = ttk.Entry(fr, textvariable=var_q)
         ent.pack(fill='x', pady=(2, 10), ipady=3)
@@ -999,19 +1024,24 @@ class App:
 
         def refill(*_):
             needle = var_q.get().strip().lower()
+            kind = var_kind.get()
             lb.delete(0, 'end'); shown.clear()
             for rec in dialogs:
+                if kind != 'all' and rec['kind'] != kind:
+                    continue
                 label = f'Q_{rec["qid"]}  {rec["title"]}'
                 if (not needle or needle in label.lower()
                         or needle in f'q_{rec["qid"]}'):
                     shown.append(rec)
-                    lb.insert('end', f'{label}   ({len(rec["entries"])} lines)')
+                    tag = ' [MP]' if rec['kind'] == 'mp' else ''
+                    lb.insert('end',
+                              f'{label}{tag}   ({len(rec["entries"])} lines)')
             if shown:
                 lb.selection_set(0)
         var_q.trace_add('write', refill)
         refill()
-        ttk.Label(fr, foreground=MUT, text=f'{len(dialogs)} dialogs from the '
-                  'game and your mods.').pack(anchor='w')
+        ttk.Label(fr, foreground=MUT, text=f'{len(dialogs)} dialogs total from '
+                  'the game and your mods.').pack(anchor='w')
 
         def do_load(*_):
             sel = lb.curselection()
