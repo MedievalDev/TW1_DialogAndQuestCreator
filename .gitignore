@@ -9,6 +9,9 @@ clean_lhc.bin
 __pycache__/
 *.pyc
 
+# Local per-user settings (game path) - never distribute
+questforge_config.json
+
 # Broken/superseded — kept locally only
 tw1_par.py
 tw1-quest-modding/archive_build_smoketest.py.txt

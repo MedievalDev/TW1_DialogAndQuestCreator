@@ -36,12 +36,188 @@ APP = 'TW1 Dialog & Quest Creator'
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
 REG_MODS = r'SOFTWARE\Reality Pump\TwoWorlds\Mods'
+CONFIG_PATH = os.path.join(HERE, 'questforge_config.json')
+
+
+def valid_game_dir(path):
+    """True if `path` looks like a Two Worlds install (has the WD archives)."""
+    if not path or not os.path.isdir(path):
+        return False
+    wd = os.path.join(path, 'WDFiles')
+    return (os.path.exists(os.path.join(wd, 'Update16.wd'))
+            or os.path.exists(os.path.join(wd, 'Language.wd')))
+
+
+def _config():
+    try:
+        return json.load(open(CONFIG_PATH, encoding='utf-8'))
+    except Exception:
+        return {}
+
+
+def config_game_dir():
+    d = _config().get('game_dir')
+    return d if valid_game_dir(d) else None
+
+
+def save_game_dir(path):
+    cfg = _config()
+    cfg['game_dir'] = path
+    try:
+        json.dump(cfg, open(CONFIG_PATH, 'w', encoding='utf-8'), indent=2)
+    except Exception:
+        pass
+
+
+def find_game_dir():
+    """Saved choice first, then registry, then the usual Steam locations."""
+    saved = config_game_dir()
+    if saved:
+        return saved
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r'SOFTWARE\Reality Pump\TwoWorlds') as k:
+            path = winreg.QueryValueEx(k, 'DataDir')[0].rstrip('\\')
+            if valid_game_dir(path):
+                return path
+    except OSError:
+        pass
+    for cand in (
+            r'F:\SteamLibrary\steamapps\common\Two Worlds - Epic Edition',
+            r'C:\Program Files (x86)\Steam\steamapps\common'
+            r'\Two Worlds - Epic Edition',
+            r'C:\Program Files\Steam\steamapps\common'
+            r'\Two Worlds - Epic Edition'):
+        if valid_game_dir(cand):
+            return cand
+    return None
+
+
+def ask_game_dir(parent, current=None):
+    """Prompt for the Two Worlds folder, validate it, save it. Returns the
+    chosen path or None if the user cancelled."""
+    while True:
+        path = filedialog.askdirectory(
+            parent=parent, title='Select your Two Worlds folder '
+            '(the one containing WDFiles)',
+            initialdir=current or 'C:\\')
+        if not path:
+            return None
+        path = os.path.normpath(path)
+        if valid_game_dir(path):
+            save_game_dir(path)
+            return path
+        if not messagebox.askretrycancel(
+                APP, f'That folder has no WDFiles\\Update16.wd:\n{path}\n\n'
+                'Pick the Two Worlds install folder itself.', parent=parent):
+            return None
 
 # Dialog-state flags (see README - 0.FT.AS is the offer, nothing else works)
 F_FTAS = 0x20001
 F_QNSAE = 0x100
 F_QSAE = 0x40200
 F_QC = 0x8
+
+# In-app documentation. ('h1'|'h2'|'p'|'li'|'code', text) blocks.
+DOCS = [
+    ('h1', 'TW1 Dialog & Quest Creator'),
+    ('p', 'Point-and-click quest and dialog building for Two Worlds '
+          '(2007). You pick NPCs from your own install, write the texts, '
+          'press Build - the tool assembles the quest script and the '
+          'language file, packs them with the reference packer and installs '
+          'the mod into the game. No hex editing, no manual packing.'),
+
+    ('h1', 'Quick start - a new quest in 6 steps'),
+    ('li', 'File > New quest (or the "+ New quest" button) clears the form.'),
+    ('li', 'Quest tab: pick a free Quest ID, type a Title and pick a '
+           'Journal group.'),
+    ('li', 'Pick the Giver (the NPC who offers it) and the Target NPC.'),
+    ('li', 'Choose the objective (talk to / kill the target) and the '
+           'Reward (gold + experience).'),
+    ('li', 'Dialog tab: write the four states - Offer, Open, Solved, '
+           'Closed (see below).'),
+    ('li', 'Build & Install tab: name the mod archive and press Build & '
+           'install. Start the game - the giver now offers your quest.'),
+
+    ('h1', 'The Quest tab'),
+    ('h2', 'Quest ID'),
+    ('p', 'Each quest needs a unique number. The dropdown only lists IDs '
+          'that are still free in your install (retail quests and already '
+          'installed mods are filtered out). 1-380 are the single-player '
+          'retail quests, 381-699 are free to use, 700+ belong to '
+          'multiplayer.'),
+    ('h2', 'Journal group'),
+    ('p', 'Which chapter of the quest journal the entry is filed under. '
+          'Purely cosmetic - it decides where the player finds the quest '
+          'in their log.'),
+    ('h2', 'Giver and Target'),
+    ('p', 'Both are chosen from the named NPC lists read straight from your '
+          'game. The Giver carries the offer dialog. The Target is who the '
+          'objective points at - the NPC you talk to or kill to solve it.'),
+    ('h2', 'Objective and Reward'),
+    ('p', 'Talk-to quests are solved by speaking to the target; kill quests '
+          'by killing it. The reward (gold and experience) is handed out '
+          'the moment the quest turns solved.'),
+
+    ('h1', 'The Dialog tab'),
+    ('p', 'A quest has four conversation states. The game shows whichever '
+          'one matches the quest\'s current status, so the same NPC talks '
+          'differently before, during and after the quest:'),
+    ('li', 'OFFER - shown before the player accepts. Ends on the line that '
+           'hands the quest over.'),
+    ('li', 'OPEN - shown while the quest is running but not yet done.'),
+    ('li', 'SOLVED - shown once the objective is met; this is where the '
+           'reward line lives.'),
+    ('li', 'CLOSED - shown after everything is wrapped up.'),
+    ('h2', 'Reply choices and branching'),
+    ('p', 'Give a line more than one follow-up line and the game shows them '
+          'as a numbered reply menu - the player picks one. Chain further '
+          'lines onto each reply to build a branching conversation as deep '
+          'as you like. Use "Link" to point a reply at an existing line '
+          '(loops and shared endings), and mark a reply hide-after-use so '
+          'it disappears once chosen.'),
+    ('h2', 'Who speaks'),
+    ('p', 'Every line is tagged as the Hero or the NPC. That controls the '
+          'camera and who the subtitle is attributed to.'),
+    ('h2', 'Branch colours and tooltips'),
+    ('p', 'In the line list each branch gets its own colour so you can see '
+          'the shape of the conversation at a glance. Hover any line to see '
+          'which state and branch it belongs to.'),
+
+    ('h1', 'Editing an existing dialog'),
+    ('p', 'Dialog tab > Load. The tool reads every dialog from the game and '
+          'from installed mods into one searchable list. Search by quest '
+          'title (the names from the Two Worlds guide work) or by Q-number. '
+          'Single-player and multiplayer are separated - switch with the '
+          'radio buttons; multiplayer rows are tagged [MP].'),
+    ('p', 'Pick one and the whole conversation loads with its branch '
+          'colours, plus the quest title and all journal texts, so you can '
+          'edit those too. "Save dialog" writes your changes back as an '
+          'overlay - it does not touch the quest logic, only the texts and '
+          'the tree. "New quest instead" leaves edit mode.'),
+
+    ('h1', 'Build & Install'),
+    ('p', 'The mod archive name is the .wd file dropped into the game\'s '
+          'Mods folder. Build always makes a timestamped backup of any '
+          'archive it replaces, packs with the play-tested reference packer, '
+          'verifies the result and enables the mod in the registry. Nothing '
+          'is ever deleted.'),
+
+    ('h1', 'Game path'),
+    ('p', 'The tool finds your Two Worlds install automatically from the '
+          'registry or the usual Steam locations. If it can\'t, it asks you '
+          'to pick the folder (the one that contains WDFiles) and remembers '
+          'it. Change it any time via File > Change game path.'),
+
+    ('h1', 'Good to know'),
+    ('li', 'The offer conversation must end on the line that grants the '
+           'quest - that hand-over is what makes the giver actually offer '
+           'it. The tool wires this for you.'),
+    ('li', 'New dialog lines have no voice-over (like retail lines that were '
+           'never recorded); they show as subtitles.'),
+    ('li', 'Drafts (File > Save/Load draft) let you park a work-in-progress '
+           'and come back to it without building.'),
+]
 
 # ---------------------------------------------------------------------------
 # Dark theme (same palette as the TW1MP server panel / website)
@@ -223,8 +399,8 @@ def apply_dark_theme(root):
 class DataHub:
     """Loads everything the pickers need from the player's own install."""
 
-    def __init__(self):
-        self.game_dir = self._find_game_dir()
+    def __init__(self, game_dir=None):
+        self.game_dir = game_dir if game_dir is not None else find_game_dir()
         self._ensure_base()
         self.qtx = open(questforge.BASE_QTX, 'rb').read().decode('latin-1')
         tr, _, _ = tw1_lan.read(open(questforge.BASE_LAN, 'rb').read())
@@ -233,26 +409,15 @@ class DataHub:
 
     @staticmethod
     def _find_game_dir():
-        for root, key in ((winreg.HKEY_CURRENT_USER, r'SOFTWARE\Reality Pump\TwoWorlds'),):
-            try:
-                with winreg.OpenKey(root, key) as k:
-                    path, _ = winreg.QueryValueEx(k, 'DataDir')
-                    if os.path.isdir(path):
-                        return path.rstrip('\\')
-            except OSError:
-                pass
-        for cand in (r'F:\SteamLibrary\steamapps\common\Two Worlds - Epic Edition',
-                     r'C:\Program Files (x86)\Steam\steamapps\common\Two Worlds - Epic Edition'):
-            if os.path.isdir(cand):
-                return cand
-        return None
+        return find_game_dir()
 
     def _ensure_base(self):
         if (os.path.exists(questforge.BASE_QTX)
                 and os.path.exists(questforge.BASE_LAN)):
             return
         if not self.game_dir:
-            raise SystemExit('Game not found - run extract_base.py manually.')
+            raise SystemExit('No Two Worlds folder selected - '
+                             'set the game path first.')
         os.makedirs('base', exist_ok=True)
         pairs = ((os.path.join(self.game_dir, 'WDFiles', 'Update16.wd'),
                   'Scripts\\Quests\\TwoWorldsQuests.qtx', questforge.BASE_QTX),
@@ -522,8 +687,14 @@ class App:
         self.root.minsize(940, 640)
         apply_dark_theme(self.root)
 
+        game_dir = find_game_dir()
+        if not game_dir:
+            messagebox.showinfo(
+                APP, 'Two Worlds install not found automatically.\n'
+                'Please pick your Two Worlds folder (the one with WDFiles).')
+            game_dir = ask_game_dir(self.root)
         try:
-            self.hub = DataHub()
+            self.hub = DataHub(game_dir)
         except Exception as exc:
             messagebox.showerror(APP, f'Could not load game data:\n{exc}')
             raise
@@ -543,6 +714,7 @@ class App:
         bar = ttk.Frame(self.root, style='Menubar.TFrame')
         bar.pack(fill='x')
         for label, filler in (('File', self._fill_file_menu),
+                              ('Docs', self._fill_docs_menu),
                               ('Links', self._fill_links_menu)):
             item = ttk.Label(bar, text=label, style='Menubar.TLabel')
             item.pack(side='left')
@@ -561,6 +733,8 @@ class App:
             menu.grab_release()
 
     def _fill_file_menu(self, menu):
+        menu.add_command(label='New quest', command=self.new_quest)
+        menu.add_separator()
         menu.add_command(label='Load draft…', command=self.load_draft)
         menu.add_command(label='Save draft…', command=self.save_draft)
         menu.add_separator()
@@ -569,7 +743,16 @@ class App:
                 label='Open Mods folder',
                 command=lambda: os.startfile(
                     os.path.join(self.hub.game_dir, 'Mods')))
+        menu.add_command(label='Change game path…', command=self.change_game_path)
         menu.add_command(label='Exit', command=self.root.destroy)
+
+    def _fill_docs_menu(self, menu):
+        menu.add_command(label='Documentation', command=self.show_docs)
+        menu.add_separator()
+        menu.add_command(label='Online guide',
+                         command=lambda: webbrowser.open(GUIDE_URL))
+        menu.add_command(label='README on GitHub',
+                         command=lambda: webbrowser.open(GITHUB_URL))
 
     def _fill_links_menu(self, menu):
         menu.add_command(label='Guide (alchemy-fox.de)',
@@ -577,13 +760,81 @@ class App:
         menu.add_command(label='GitHub',
                          command=lambda: webbrowser.open(GITHUB_URL))
 
+    def change_game_path(self):
+        new = ask_game_dir(self.root, current=self.hub.game_dir)
+        if not new:
+            return
+        self.hub.game_dir = new
+        if hasattr(self, 'lbl_game'):
+            self.lbl_game.configure(text=new)
+        messagebox.showinfo(APP, f'Game path set:\n{new}')
+
+    def new_quest(self):
+        """Blank the whole form back to a fresh, unsaved quest."""
+        if self.loaded_dialog:
+            self._exit_edit_mode()
+        else:
+            for key, conv in self.convs.items():
+                conv.load(TEMPLATES[key])
+            self.var_title.set('')
+            for widget in (self.txt_qtd, self.txt_qsd, self.txt_qcd):
+                widget.delete('1.0', 'end')
+            self._conv_switch('offer')
+        if self.hub.free_ids:
+            self.var_qid.set(str(self.hub.free_ids[0]))
+        self.notebook.select(0)
+
+    def show_docs(self):
+        if getattr(self, '_docs_win', None) and self._docs_win.winfo_exists():
+            self._docs_win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._docs_win = win
+        win.title('Documentation - ' + APP)
+        win.geometry('780x680')
+        win.configure(bg=BG)
+        dark_titlebar(win)
+
+        wrap = ttk.Frame(win, padding=1)
+        wrap.pack(fill='both', expand=True)
+        sb = ttk.Scrollbar(wrap, orient='vertical')
+        sb.pack(side='right', fill='y')
+        txt = tk.Text(wrap, wrap='word', bd=0, padx=26, pady=20,
+                      bg=BG, fg=INK, font=('Segoe UI', 10),
+                      spacing1=2, spacing3=4, cursor='arrow',
+                      yscrollcommand=sb.set)
+        txt.pack(side='left', fill='both', expand=True)
+        sb.configure(command=txt.yview)
+
+        txt.tag_configure('h1', font=('Segoe UI Semibold', 15),
+                          foreground=GOLD, spacing1=18, spacing3=8)
+        txt.tag_configure('h2', font=('Segoe UI Semibold', 11),
+                          foreground=GOLD_HI, spacing1=10, spacing3=4)
+        txt.tag_configure('p', spacing3=8, lmargin1=2, lmargin2=2)
+        txt.tag_configure('li', spacing3=6, lmargin1=20, lmargin2=34)
+        for kind, text in DOCS:
+            if kind == 'li':
+                txt.insert('end', '•  ' + text + '\n', 'li')
+            else:
+                txt.insert('end', text + '\n', kind)
+        txt.configure(state='disabled')
+
+        bar = ttk.Frame(win, padding=(12, 10))
+        bar.pack(fill='x')
+        ttk.Button(bar, text='Online guide', style='Accent.TButton',
+                   command=lambda: webbrowser.open(GUIDE_URL)).pack(side='left')
+        ttk.Button(bar, text='Close', command=win.destroy).pack(side='right')
+
     def _build_header(self):
         head = ttk.Frame(self.root, padding=(12, 10))
         head.pack(fill='x')
         ttk.Label(head, text='QUEST CREATOR', style='Brand.TLabel').pack(
             side='left')
+        ttk.Button(head, text='+ New quest', style='Accent.TButton',
+                   command=self.new_quest).pack(side='left', padx=(14, 0))
         game = self.hub.game_dir or 'game not found!'
-        ttk.Label(head, text=game, foreground=MUT).pack(side='left', padx=14)
+        self.lbl_game = ttk.Label(head, text=game, foreground=MUT)
+        self.lbl_game.pack(side='left', padx=14)
         ttk.Label(head, foreground=MUT,
                   text=f'{len(self.hub.npcs)} NPCs · '
                        f'{len(self.hub.quests)} quests · '

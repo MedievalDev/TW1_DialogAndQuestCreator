@@ -31,8 +31,8 @@ os.chdir(HERE)
 sys.path.insert(0, HERE)
 
 from quest_creator_gui import (BG, ERR, FIELD, GOLD, GOLD_HI, INK, LINE, MUT,
-                               OK, PANEL, SEL, DataHub, apply_dark_theme,
-                               dark_titlebar)
+                               OK, PANEL, SEL, apply_dark_theme,
+                               ask_game_dir, dark_titlebar, find_game_dir)
 
 APP = 'TW1 Mod Manager'
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
@@ -87,9 +87,14 @@ class App:
         apply_dark_theme(self.root)
         dark_titlebar(self.root)
 
-        self.game_dir = DataHub._find_game_dir()
+        self.game_dir = find_game_dir()
         if not self.game_dir:
-            messagebox.showerror(APP, 'Two Worlds installation not found.')
+            messagebox.showinfo(
+                APP, 'Two Worlds install not found automatically.\n'
+                'Please pick your Two Worlds folder (the one with WDFiles).')
+            self.game_dir = ask_game_dir(self.root)
+        if not self.game_dir:
+            messagebox.showerror(APP, 'No Two Worlds folder selected.')
             raise SystemExit(1)
         self.mods_dir = os.path.join(self.game_dir, 'Mods')
         os.makedirs(self.mods_dir, exist_ok=True)
@@ -100,8 +105,8 @@ class App:
         head.pack(fill='x')
         ttk.Label(head, text='MOD MANAGER', style='Brand.TLabel').pack(
             side='left')
-        ttk.Label(head, text=self.game_dir, foreground=MUT).pack(
-            side='left', padx=14)
+        self.lbl_game = ttk.Label(head, text=self.game_dir, foreground=MUT)
+        self.lbl_game.pack(side='left', padx=14)
 
         nb = ttk.Notebook(self.root)
         nb.pack(fill='both', expand=True, padx=12, pady=(0, 4))
@@ -145,7 +150,20 @@ class App:
                          command=lambda: os.startfile(self.mods_dir))
         menu.add_command(label='Refresh', command=self.refresh)
         menu.add_separator()
+        menu.add_command(label='Change game path…', command=self.change_game_path)
         menu.add_command(label='Exit', command=self.root.destroy)
+
+    def change_game_path(self):
+        new = ask_game_dir(self.root, current=self.game_dir)
+        if not new:
+            return
+        self.game_dir = new
+        self.mods_dir = os.path.join(new, 'Mods')
+        os.makedirs(self.mods_dir, exist_ok=True)
+        if hasattr(self, 'lbl_game'):
+            self.lbl_game.configure(text=new)
+        self.refresh()
+        messagebox.showinfo(APP, f'Game path set:\n{new}')
 
     def _fill_links_menu(self, menu):
         menu.add_command(label='Guide (alchemy-fox.de)',
