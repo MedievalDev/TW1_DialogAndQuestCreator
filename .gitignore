@@ -16,5 +16,6 @@ questforge_config.json
 tw1_par.py
 tw1-quest-modding/archive_build_smoketest.py.txt
 
-# Local story bible - not for the public repo
+# Local story bible + campaign implementation - not for the public repo
 STORY_KONZEPT.md
+build_campaign.py

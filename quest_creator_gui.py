@@ -1351,6 +1351,11 @@ class App:
                 node['flags'] = e.flags
                 node['cams'] = list(e.cams)
                 node['lector'] = e.lector
+                # keep the voice cue + gesture anims so editing a retail line
+                # never strips its sound (see build_campaign DQ_5 fix)
+                node['cue'] = e.cue
+                node['anim1'] = e.anim1
+                node['anim2'] = e.anim2
                 idx2node[idx] = nid
                 for nx in e.next:
                     child = build(abs(nx))
@@ -1770,8 +1775,9 @@ class App:
                 lec = node['lector'] if 'lector' in node else (
                     1 if is_hero else 0)
                 entries.append(tw1_lan.DialogEntry(
-                    lector=lec, tid=tid, cue='', next=nxt, flags=flags,
-                    cams=cams, anim1=0, anim2=0))
+                    lector=lec, tid=tid, cue=node.get('cue', ''), next=nxt,
+                    flags=flags, cams=cams,
+                    anim1=node.get('anim1', 0), anim2=node.get('anim2', 0)))
             self.log(f'  {conv.label}: {len(order)} lines')
         tree = tw1_lan.DialogTree(dq, entries)
 
@@ -1903,8 +1909,9 @@ class App:
                 lec = node['lector'] if 'lector' in node else (
                     1 if is_hero else lector)
                 entries.append(tw1_lan.DialogEntry(
-                    lector=lec, tid=tid, cue='',
-                    next=nxt, flags=flags, cams=cams, anim1=0, anim2=0))
+                    lector=lec, tid=tid, cue=node.get('cue', ''),
+                    next=nxt, flags=flags, cams=cams,
+                    anim1=node.get('anim1', 0), anim2=node.get('anim2', 0)))
             branches = sum(1 for nid in order
                            if len(conv.nodes[nid]['next']) > 1)
             self.log(f'  {conv.label}: {len(order)} lines'
