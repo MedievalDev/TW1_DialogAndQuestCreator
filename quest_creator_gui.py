@@ -51,6 +51,47 @@ INK = '#ece7db'; MUT = '#9a938a'; LINE = '#352f26'
 GOLD = '#d2a044'; GOLD_HI = '#e3b45c'; SEL = '#3a3122'
 OK = '#43b563'; ERR = '#e06c60'
 
+# Distinct, dark-theme-legible colours cycled through for dialog branches.
+BRANCH_COLORS = ['#e06c60', '#6ca0e0', '#7fbf7f', '#e0a050',
+                 '#c090e0', '#5fc7c7', '#d4796b', '#a0b060']
+
+
+class _TreeTip:
+    """A hover tooltip for a Treeview. `text_for(item)` returns the tip
+    string (or None) for the row under the cursor."""
+
+    def __init__(self, tree, text_for):
+        self.tree = tree
+        self.text_for = text_for
+        self.tip = None
+        self.item = None
+        tree.bind('<Motion>', self._move, add='+')
+        tree.bind('<Leave>', lambda e: self._hide(), add='+')
+
+    def _move(self, ev):
+        item = self.tree.identify_row(ev.y)
+        if item != self.item:
+            self._hide()
+            self.item = item
+            text = self.text_for(item) if item else None
+            if text:
+                self._show(text, ev)
+
+    def _show(self, text, ev):
+        self.tip = tk.Toplevel(self.tree)
+        self.tip.wm_overrideredirect(True)
+        self.tip.attributes('-topmost', True)
+        tk.Label(self.tip, text=text, bg=PANEL, fg=INK, bd=1,
+                 relief='solid', justify='left', padx=6, pady=3,
+                 font=('Segoe UI', 8)).pack()
+        self.tip.wm_geometry(f'+{ev.x_root + 14}+{ev.y_root + 12}')
+
+    def _hide(self):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+        self.item = None
+
 
 def dark_titlebar(window):
     """Dark title bar on Windows.
@@ -699,6 +740,8 @@ class App:
                             variable=self.var_conv,
                             command=lambda k=key: self._conv_switch(k)).pack(
                 side='left', padx=(0, 10))
+        ttk.Button(picker, text='Load dialog…',
+                   command=self.load_dialog).pack(side='right')
 
         self.lbl_conv_hint = ttk.Label(left, foreground=MUT, wraplength=560,
                                        justify='left')
@@ -720,7 +763,13 @@ class App:
         self.tree_lines.pack(side='left', fill='both', expand=True)
         self.tree_lines.tag_configure('jump', foreground=GOLD)
         self.tree_lines.tag_configure('orphan', foreground=ERR)
+        # One colour per branch; a choice and its whole follow-up strand
+        # share it, so you can see at a glance where each option leads.
+        for i, col in enumerate(BRANCH_COLORS):
+            self.tree_lines.tag_configure(f'branch{i}', foreground=col)
         self.tree_lines.bind('<Double-1>', lambda ev: self.line_edit())
+        self._tip = _TreeTip(self.tree_lines, lambda i: self.item_tips.get(i))
+        self.item_tips = {}
 
         btns = ttk.Frame(left)
         btns.pack(fill='x', pady=(8, 0))
@@ -778,10 +827,11 @@ class App:
     def _lines_fill(self, select=None):
         self.tree_lines.delete(*self.tree_lines.get_children())
         self.item2node = {}
+        self.item_tips = {}
         conv = self.conv
         shown = set()
 
-        def render(parent, nid, label):
+        def render(parent, nid, label, tag, path):
             node = conv.nodes.get(nid)
             if node is None:
                 return
@@ -792,22 +842,30 @@ class App:
                     values=(who, f'back to: {node["text"][:60]}'),
                     tags=('jump',))
                 self.item2node[item] = nid
+                self.item_tips[item] = (f'{conv.label} · {path} · rejoins an '
+                                        'earlier line')
                 return
             shown.add(nid)
+            tags = (tag,) if tag else ()
             item = self.tree_lines.insert(parent, 'end', text=label,
-                                          values=(who, node['text']))
+                                          values=(who, node['text']), tags=tags)
             self.item2node[item] = nid
+            self.item_tips[item] = f'{conv.label} · {path}'
             self.tree_lines.item(item, open=True)
             kids = node['next']
             for i, (tid, hide) in enumerate(kids):
                 if len(kids) > 1:
+                    # a new branch: give it its own colour, carried down
                     sub = f'choice {i + 1}' + (' ·hide' if hide else '')
+                    ctag = f'branch{self._branch_ct % len(BRANCH_COLORS)}'
+                    self._branch_ct += 1
+                    render(item, tid, sub, ctag, f'{path} › choice {i + 1}')
                 else:
-                    sub = 'then'
-                render(item, tid, sub)
+                    render(item, tid, 'then', tag, path)
 
+        self._branch_ct = 0
         if conv.root:
-            render('', conv.root, 'start')
+            render('', conv.root, 'start', '', 'start')
         for nid in conv.nodes:
             if nid not in shown:
                 node = conv.nodes[nid]
@@ -816,6 +874,8 @@ class App:
                     values=('Giver' if node['who'] == 'npc' else 'Hero',
                             node['text']), tags=('orphan',))
                 self.item2node[item] = nid
+                self.item_tips[item] = (f'{conv.label} · not reachable from '
+                                        'the first line')
         if select is not None:
             for item, nid in self.item2node.items():
                 if nid == select:
@@ -871,6 +931,138 @@ class App:
             node['who'], node['text'] = w, t
             self._lines_fill(select=nid)
         self._line_dialog('Edit line', node['who'], node['text'], done)
+
+    # -- loading an existing dialog -------------------------------------
+
+    def _dialog_sources(self):
+        """[(label, path)] of .lan files that carry dialog trees: the base
+        master plus any Language\\*.lan inside installed mods."""
+        out = [('Base game (all quests)', questforge.BASE_LAN)]
+        for name in self.hub.mods():
+            path = os.path.join(self.hub.game_dir, 'Mods', name)
+            try:
+                for inner in tw1_wd.read(path):
+                    if inner.path.lower().endswith('.lan'):
+                        out.append((f'{name}  ›  '
+                                    f'{os.path.basename(inner.path)}',
+                                    (path, inner.path)))
+            except Exception:
+                pass
+        return out
+
+    @staticmethod
+    def _read_lan_any(src):
+        """src is a path (str) or (wd_path, inner) tuple."""
+        if isinstance(src, tuple):
+            data = gamelang.wd_read(src[0], src[1])
+        else:
+            data = open(src, 'rb').read()
+        tr, al, rest = tw1_lan.read(data)
+        return tr, tw1_lan.parse_trees(rest)
+
+    def load_dialog(self):
+        win = tk.Toplevel(self.root)
+        win.title('Load an existing dialog')
+        win.geometry('620x520')
+        win.transient(self.root); win.grab_set()
+        fr = ttk.Frame(win, padding=12); fr.pack(fill='both', expand=True)
+        ttk.Label(fr, text='Source file:').pack(anchor='w')
+        sources = self._dialog_sources()
+        var_src = tk.StringVar(value=sources[0][0])
+        cb = ttk.Combobox(fr, textvariable=var_src, state='readonly',
+                          values=[s[0] for s in sources])
+        cb.pack(fill='x', pady=(2, 10))
+        ttk.Label(fr, text='Dialog (quest):').pack(anchor='w')
+        wrap = ttk.Frame(fr); wrap.pack(fill='both', expand=True, pady=(2, 8))
+        lb = tk.Listbox(wrap, exportselection=False, font=('Segoe UI', 9))
+        sb = ttk.Scrollbar(wrap, command=lb.yview)
+        lb.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y'); lb.pack(side='left', fill='both',
+                                                 expand=True)
+        state = {'trees': [], 'tr': {}}
+
+        def fill(*_):
+            src = dict(sources)[var_src.get()]
+            try:
+                tr, trees = self._read_lan_any(src)
+            except Exception as exc:
+                messagebox.showerror(APP, f'Cannot read: {exc}', parent=win)
+                return
+            state['tr'], state['trees'] = tr, trees
+            lb.delete(0, 'end')
+            for t in trees:
+                m = re.match(r'translateDQ_(\d+)', t.id)
+                qid = m.group(1) if m else '?'
+                title = tr.get(f'translateQ_{qid}', '').strip()
+                lb.insert('end', f'DQ_{qid}  {title}  '
+                                 f'({len(t.entries)} lines)')
+        cb.bind('<<ComboboxSelected>>', fill)
+        fill()
+
+        def do_load():
+            sel = lb.curselection()
+            if not sel:
+                return
+            tree = state['trees'][sel[0]]
+            n = self._convert_tree(tree.entries, state['tr'])
+            win.destroy()
+            self._conv_switch('offer')
+            messagebox.showinfo(APP, f'Loaded {tree.id} — {n} lines across the '
+                                'four conversation states. Edit and Build to '
+                                'ship the changes as a mod.\n\nNote: cameras '
+                                'reset to standard; the quest id/objective on '
+                                'the Quest tab decide where it is saved.')
+        bar = ttk.Frame(fr); bar.pack(fill='x')
+        ttk.Button(bar, text='Load', style='Accent.TButton',
+                   command=do_load).pack(side='left')
+        ttk.Button(bar, text='Cancel', command=win.destroy).pack(side='left',
+                                                                 padx=6)
+
+    def _convert_tree(self, entries, translations):
+        """Turn a parsed dialog tree into the four conversation graphs,
+        preserving each line's flag, camera and lector. Lines shared by two
+        states are duplicated so every state stays a self-contained graph."""
+        STATE_FLAG = {'offer': F_FTAS, 'open': F_QNSAE,
+                      'solved': F_QSAE, 'closed': F_QC}
+        for conv in self.convs.values():
+            conv.nodes.clear(); conv.root = None; conv._seq = 0
+        reached = set()
+        for e in entries:
+            for nx in e.next:
+                reached.add(abs(nx))
+        total = 0
+        for state_key, state_flag in STATE_FLAG.items():
+            conv = self.convs[state_key]
+            roots = [i for i, e in enumerate(entries)
+                     if e.flags == state_flag and i not in reached]
+            if not roots:
+                roots = [i for i, e in enumerate(entries)
+                         if e.flags == state_flag][:1]
+            if not roots:
+                continue
+            idx2node = {}
+
+            def build(idx):
+                if idx in idx2node:
+                    return idx2node[idx]
+                e = entries[idx]
+                who = 'hero' if e.lector == 1 else 'npc'
+                nid = conv.add(who, translations.get(e.tid, e.tid))
+                node = conv.nodes[nid]
+                node['flags'] = e.flags
+                node['cams'] = list(e.cams)
+                node['lector'] = e.lector
+                idx2node[idx] = nid
+                for nx in e.next:
+                    child = build(abs(nx))
+                    conv.link(nid, child, hide=(nx < 0))
+                return nid
+
+            conv.root = build(roots[0])
+            for r in roots[1:]:
+                build(r)
+            total += len(conv.nodes)
+        return total
 
     def line_remove(self):
         nid = self._selected_node()
@@ -1265,10 +1457,16 @@ class App:
                 nxt = [-index[t] if (hide and index[t]) else index[t]
                        for t, hide in node['next'] if t in index]
                 is_hero = node['who'] == 'hero'
+                # A loaded line keeps its original flag/cams/lector; a new
+                # one uses the state's default flag, a standard camera, and
+                # the chosen giver's lector.
+                flags = node['flags'] if 'flags' in node else conv.flags
+                cams = node.get('cams') or [7 if is_hero else 2]
+                lec = node['lector'] if 'lector' in node else (
+                    1 if is_hero else lector)
                 entries.append(tw1_lan.DialogEntry(
-                    lector=1 if is_hero else lector, tid=tid, cue='',
-                    next=nxt, flags=conv.flags,
-                    cams=[7 if is_hero else 2], anim1=0, anim2=0))
+                    lector=lec, tid=tid, cue='',
+                    next=nxt, flags=flags, cams=cams, anim1=0, anim2=0))
             branches = sum(1 for nid in order
                            if len(conv.nodes[nid]['next']) > 1)
             self.log(f'  {conv.label}: {len(order)} lines'
