@@ -934,84 +934,91 @@ class App:
 
     # -- loading an existing dialog -------------------------------------
 
-    def _dialog_sources(self):
-        """[(label, path)] of .lan files that carry dialog trees: the base
-        master plus any Language\\*.lan inside installed mods."""
-        out = [('Base game (all quests)', questforge.BASE_LAN)]
-        for name in self.hub.mods():
+    def _all_dialogs(self):
+        """Every dialog tree the game and the installed mods carry, as
+        [{'dq','qid','title','entries','tr'}], newest wins per quest id.
+        Cached after the first call."""
+        if getattr(self, '_dialog_cache', None) is not None:
+            return self._dialog_cache
+        by_id = {}                      # qid -> record (mod overrides base)
+
+        def ingest(data):
+            tr, _al, rest = tw1_lan.read(data)
+            for t in tw1_lan.parse_trees(rest):
+                m = re.match(r'translateDQ_(\d+)$', t.id)
+                if not m:
+                    continue
+                qid = int(m.group(1))
+                title = (tr.get(f'translateQ_{qid}', '').strip()
+                         or self.hub.quests.get(qid, ('',))[0])
+                by_id[qid] = {'dq': t.id, 'qid': qid, 'title': title,
+                              'entries': t.entries, 'tr': tr}
+
+        ingest(open(questforge.BASE_LAN, 'rb').read())          # base first
+        for name in self.hub.mods():                            # mods override
             path = os.path.join(self.hub.game_dir, 'Mods', name)
             try:
                 for inner in tw1_wd.read(path):
                     if inner.path.lower().endswith('.lan'):
-                        out.append((f'{name}  ›  '
-                                    f'{os.path.basename(inner.path)}',
-                                    (path, inner.path)))
+                        ingest(inner.data)
             except Exception:
                 pass
-        return out
-
-    @staticmethod
-    def _read_lan_any(src):
-        """src is a path (str) or (wd_path, inner) tuple."""
-        if isinstance(src, tuple):
-            data = gamelang.wd_read(src[0], src[1])
-        else:
-            data = open(src, 'rb').read()
-        tr, al, rest = tw1_lan.read(data)
-        return tr, tw1_lan.parse_trees(rest)
+        self._dialog_cache = sorted(by_id.values(), key=lambda r: r['qid'])
+        return self._dialog_cache
 
     def load_dialog(self):
+        dialogs = self._all_dialogs()
         win = tk.Toplevel(self.root)
         win.title('Load an existing dialog')
-        win.geometry('620x520')
+        win.geometry('640x560')
         win.transient(self.root); win.grab_set()
         fr = ttk.Frame(win, padding=12); fr.pack(fill='both', expand=True)
-        ttk.Label(fr, text='Source file:').pack(anchor='w')
-        sources = self._dialog_sources()
-        var_src = tk.StringVar(value=sources[0][0])
-        cb = ttk.Combobox(fr, textvariable=var_src, state='readonly',
-                          values=[s[0] for s in sources])
-        cb.pack(fill='x', pady=(2, 10))
-        ttk.Label(fr, text='Dialog (quest):').pack(anchor='w')
-        wrap = ttk.Frame(fr); wrap.pack(fill='both', expand=True, pady=(2, 8))
+        ttk.Label(fr, text='Type a quest name (like in the Two Worlds guide) '
+                           'or a Q-number:').pack(anchor='w')
+        var_q = tk.StringVar()
+        ent = ttk.Entry(fr, textvariable=var_q)
+        ent.pack(fill='x', pady=(2, 10), ipady=3)
+        ent.focus_set()
+        wrap = ttk.Frame(fr); wrap.pack(fill='both', expand=True, pady=(0, 8))
         lb = tk.Listbox(wrap, exportselection=False, font=('Segoe UI', 9))
         sb = ttk.Scrollbar(wrap, command=lb.yview)
         lb.configure(yscrollcommand=sb.set)
         sb.pack(side='right', fill='y'); lb.pack(side='left', fill='both',
                                                  expand=True)
-        state = {'trees': [], 'tr': {}}
+        shown = []
 
-        def fill(*_):
-            src = dict(sources)[var_src.get()]
-            try:
-                tr, trees = self._read_lan_any(src)
-            except Exception as exc:
-                messagebox.showerror(APP, f'Cannot read: {exc}', parent=win)
-                return
-            state['tr'], state['trees'] = tr, trees
-            lb.delete(0, 'end')
-            for t in trees:
-                m = re.match(r'translateDQ_(\d+)', t.id)
-                qid = m.group(1) if m else '?'
-                title = tr.get(f'translateQ_{qid}', '').strip()
-                lb.insert('end', f'DQ_{qid}  {title}  '
-                                 f'({len(t.entries)} lines)')
-        cb.bind('<<ComboboxSelected>>', fill)
-        fill()
+        def refill(*_):
+            needle = var_q.get().strip().lower()
+            lb.delete(0, 'end'); shown.clear()
+            for rec in dialogs:
+                label = f'Q_{rec["qid"]}  {rec["title"]}'
+                if (not needle or needle in label.lower()
+                        or needle in f'q_{rec["qid"]}'):
+                    shown.append(rec)
+                    lb.insert('end', f'{label}   ({len(rec["entries"])} lines)')
+            if shown:
+                lb.selection_set(0)
+        var_q.trace_add('write', refill)
+        refill()
+        ttk.Label(fr, foreground=MUT, text=f'{len(dialogs)} dialogs from the '
+                  'game and your mods.').pack(anchor='w')
 
-        def do_load():
+        def do_load(*_):
             sel = lb.curselection()
             if not sel:
                 return
-            tree = state['trees'][sel[0]]
-            n = self._convert_tree(tree.entries, state['tr'])
+            rec = shown[sel[0]]
+            n = self._convert_tree(rec['entries'], rec['tr'])
             win.destroy()
             self._conv_switch('offer')
-            messagebox.showinfo(APP, f'Loaded {tree.id} — {n} lines across the '
-                                'four conversation states. Edit and Build to '
-                                'ship the changes as a mod.\n\nNote: cameras '
-                                'reset to standard; the quest id/objective on '
-                                'the Quest tab decide where it is saved.')
+            messagebox.showinfo(APP, f'Loaded {rec["dq"]} "{rec["title"]}" — '
+                                f'{n} lines across the four conversation '
+                                'states. Edit and Build to ship the changes '
+                                'as a mod.\n\nNote: cameras reset to standard; '
+                                'the quest id/objective on the Quest tab '
+                                'decide where it is saved.')
+        lb.bind('<Double-1>', do_load)
+        ent.bind('<Return>', do_load)
         bar = ttk.Frame(fr); bar.pack(fill='x')
         ttk.Button(bar, text='Load', style='Accent.TButton',
                    command=do_load).pack(side='left')
