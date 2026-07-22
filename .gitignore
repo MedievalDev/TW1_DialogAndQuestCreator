@@ -12,3 +12,6 @@ __pycache__/
 # Broken/superseded — kept locally only
 tw1_par.py
 tw1-quest-modding/archive_build_smoketest.py.txt
+
+# Local story bible - not for the public repo
+STORY_KONZEPT.md
