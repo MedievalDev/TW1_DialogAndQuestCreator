@@ -40,7 +40,7 @@ into a `.wd`, and re-reads it with the game's own WD reader to verify.
 
 | Rule | Why |
 |------|-----|
-| Quest id **381–699** | 1–380 is single-player, 700–959 multiplayer; the whole gap between is unused. There is **no 400 cap** — that was an early wrong assumption; the shipped MP map files (`Net_M_20.qtx`, `Net_M_40.qtx`) use ids like 2001 and 4001, so the field is just a number. An engine-side array limit inside 400–699 cannot be ruled out from the data; it would surface as a quest that never appears. Id must be > 0. |
+| Quest id **381–399 only** | **There IS a 400 cap in single-player** — play-tested, and it invalidates the older "no cap" note that used to stand here. From 400 up the engine resolves every AOQ reference to the quest down to **quest 0**: the quest never appears and the journal instead shows a phantom entry reading `translateQ_0` / `translateGROUP_0` / `translateQ_0_QTD`, complete with a stray map marker. The identical quest phantomed as `Q_400` and worked on the first try as `Q_389`. (MP map files do use ids like 2001/4001 — that is a different code path, not a counter-example.) That leaves **19 usable ids**; when they run out, reuse ids of retail quests the player has already finished. |
 | **LF line endings, never CRLF** | Parser splits on spaces; a stray `\r` corrupts the last token of every line and breaks the whole file. |
 | Base = **Update16.wd**'s `TwoWorldsQuests.qtx` | Patches 1.1–1.6 overwrote it; the loose 1.0 copy in `Lan_QTX Tools\` is stale — do not use it. |
 | Reuse an **existing** giver NPC (< 698) | It already has its `MARKER_QUEST_START`; avoids all editor/marker/.lnd work. |
@@ -185,6 +185,94 @@ and must stay.
 
 To test fast: new game, go to Komorin, kill Gandohar early. Ending gone =
 success. (Test needs a NEW game — quest state is baked into saves.)
+
+## Editor markers — each kind has its OWN number space
+
+Positions come from markers placed in the Two Worlds Editor. **The number alone
+means nothing** — `Teleport 1` and `Create_Enemy 1` are unrelated points. Every
+action reads exactly one kind, and using the right number of the wrong kind is
+the single most common cause of "the action silently does nothing":
+
+| qtx | reads marker kind |
+|---|---|
+| `ACTION HERO_TELEPORT_DELAYED`, `ACTION NPC_TELEPORT` | `Q_Action_Teleport` |
+| `ACTION NPC_GO` | `Q_Action_Walk` |
+| `ACTION ENEMY_CREATE` | `Q_Action_Create_Enemy` |
+| `ACTION OBJECT_CREATE` | `Q_Action_Create_Object` |
+| `FC GO`, `FC CLEAR_AREA` | `Q_Solve` |
+| NPC placement (`NPC <id> … <cell>`) | `Q_Giver`, **number = the NPC id** |
+
+Retail numbers a quest's markers after the quest (Q_235 spawns at marker 235
+and clears marker 235); copying that removes all ambiguity. Verified case:
+giver marker 6 in `F02_1` places `NPC_6` (Reist Tungard).
+
+**An NPC declared for a cell with no matching `Q_Giver` marker FREEZES the game
+when that cell loads** — the engine wants to instantiate it and has no position.
+
+## Engine pitfalls (each one cost a debugging round)
+
+**`FC CLEAR_AREA` only counts enemies the quest itself spawned.** Editor-placed
+enemies are ignored. It needs a paired `ACTION ENEMY_CREATE` of the same group
+(106 of retail's 113 CLEAR_AREA quests have one), and the group must be a
+*hostile faction*: retail only ever uses 18–23, and group 1 leaves them
+peaceful. If nothing spawned — e.g. the spawn fires while the player is in
+another cell so the target map is not loaded — the area counts as **already
+clear**, and the quest is taken, solved and closed in the same instant, never
+reaching the journal. Prefer `FC GO`, which cannot satisfy itself.
+
+**Never `NPC_TELEPORT` into an interior cell.** All 30 retail NPC teleports
+target outdoor cells; moving an NPC into a cave crashes the game. For someone
+inside, declare the NPC with the interior as its home cell and `NPC_CREATE` it
+— retail does exactly that (`NPC_6` in `F2_1`, `NPC_141` in `B8_1`).
+
+**`NPC_GO` only moves an NPC within its own cell, and never straight after
+creation.** Retail's four uses all sit on `SOLVE`/`CLOSE` for NPCs long since
+present. Ordering a freshly created NPC to walk crashed the game.
+
+**A quest solved by talking to its own giver skips the offer.** The engine
+solves first and picks the dialogue state afterwards, so the player hears the
+*solved-state* line and the offer conversation is never shown. Put the real
+conversation in `0.QS.AE` for such quests. For the same reason, two consecutive
+quests must not both be solved by talking to the same NPC — the handover
+collapses both conversations into one line.
+
+**`ACTION SHOW_LOCATION` works on `TAKE` only** (20 retail uses on TAKE, zero on
+SOLVE) **and only for real POIs**. Location types 19/17/16/12/20 are revealable;
+type 10 with radius 0 is a plain region label and cannot be marked — Yamalin
+(`LOC_F01_0_05`) ships as one, so it had to be retyped to 19/50 first. A marker
+on the map needs a quest whose objective *is* the location (`FC FIND_LOCATION`).
+
+**Reply menus: keep every `next` entry positive.** A negative index is *not*
+"hide after use" — the engine treats it as hidden outright, so a menu of four
+negatives plus one positive collapses to a single option.
+
+**Regenerate the level-header cache after map edits** with the SDK's
+`LevelHeadersCacheGen.bat`. It reads the game's virtual file system, so the maps
+must already be packed and swapped in — a map change therefore needs two passes:
+pack+swap, run the bat, pack+swap again.
+
+## Voice — reusing the original actors
+
+A dialog line's `cue` names an XACT cue (`XACT\win\Sounds.xsb` holds 7578 of
+them; audio in `UnitTalk.xwb`, lip sync in `LipSync\data.lipsync`). **Put an
+existing cue on a NEW line and the engine plays that original recording, with
+lip sync, for free** — no audio work at all. The price: the subtitle must match
+the recording word for word, so such lines are assembled from sentences the
+actors already spoke. Available: hero 1820 lines (989 short), Gandohar 101,
+Ferid 43, Kira 37. Search them with `voice_index.py`.
+
+Lines without a cue are silent subtitles — 46 % of the hero's retail lines are
+too, so mixing is unnoticeable. **When editing an existing dialog, never drop
+`cue`/`anim1`/`anim2`**: doing so silences a voiced retail conversation (it
+happened to Gandohar's `DQ_5`). The Quest Creator preserves them.
+
+## Removing a quest — strip it everywhere
+
+Deleting the `QUEST` block is not enough. Its dialog tree `translateDQ_<n>` and
+its text keys (`translateQ_<n>*`, `translateDQ_<n>_*`) live in the `.lan`, in
+the master **and in every `ZZ_` overlay**. Left behind, the giver keeps offering
+a quest that no longer exists. Keep the giver's shared retail name
+(`translateNPCName…`) and his retail dialog.
 
 ## Format cheat-sheet
 

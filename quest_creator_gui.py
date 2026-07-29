@@ -36,6 +36,7 @@ APP = 'TW1 Dialog & Quest Creator'
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
 REG_MODS = r'SOFTWARE\Reality Pump\TwoWorlds\Mods'
+MAX_SP_QUEST_ID = 399   # hard engine limit for single-player quests, see below
 CONFIG_PATH = os.path.join(HERE, 'questforge_config.json')
 
 
@@ -208,6 +209,89 @@ DOCS = [
           'registry or the usual Steam locations. If it can\'t, it asks you '
           'to pick the folder (the one that contains WDFiles) and remembers '
           'it. Change it any time via File > Change game path.'),
+
+    ('h1', 'Quest IDs - the hard 399 limit'),
+    ('p', 'Single-player quests must use an id between 381 and 399. The '
+          'retail game occupies 1-380 and multiplayer starts at 700, but the '
+          'gap in between is NOT free: from 400 upwards the engine resolves '
+          'every reference to the quest down to quest 0. The quest never '
+          'appears; instead the journal shows a phantom entry reading '
+          '"translateQ_0" / "translateGROUP_0" with a stray map marker. This '
+          'is play-tested - the same quest phantomed as Q_400 and worked '
+          'immediately as Q_389. The dropdown only offers valid ids.'),
+    ('p', 'That leaves 19 ids. If a project needs more, reuse the ids of '
+          'retail quests the player has already finished.'),
+
+    ('h1', 'Editor markers - every kind has its own numbering'),
+    ('p', 'Positions in the world come from markers placed in the Two Worlds '
+          'Editor. The single most common source of "nothing happens" is '
+          'using the right number of the wrong KIND: a Teleport 1 and a '
+          'Create_Enemy 1 are two unrelated points. Each action reads exactly '
+          'one kind:'),
+    ('li', 'Q_Action_Teleport - moving the hero or an NPC to a spot'),
+    ('li', 'Q_Action_Walk - making an NPC walk somewhere'),
+    ('li', 'Q_Action_Create_Enemy - where quest enemies appear'),
+    ('li', 'Q_Action_Create_Object - where a quest item is dropped'),
+    ('li', 'Q_Solve - the objective point: "go here", and the centre of a '
+           '"clear this area"'),
+    ('li', 'Q_Giver - where an NPC stands. Its number IS the NPC id: giver '
+           'marker 6 in F02_1 places NPC_6. An NPC declared for a cell with '
+           'no matching giver marker FREEZES the game when that cell loads.'),
+    ('p', 'Retail numbers a quest\'s markers after the quest itself - Q_235 '
+          'spawns at marker 235 and clears marker 235. Copying that habit '
+          'removes all doubt about which number belongs to what.'),
+
+    ('h1', 'Engine pitfalls that cost real debugging time'),
+    ('h2', 'Clearing an area only counts enemies the quest spawned'),
+    ('p', 'A "clear the area" objective ignores enemies placed in the editor. '
+          'It counts only what an accompanying Create_Enemy action spawned, '
+          'and only if that enemy group is a hostile faction (retail uses '
+          '18-23; group 1 leaves them peaceful). Worse, if nothing spawned - '
+          'for instance because the spawn fires while the player is still in '
+          'another cell and the target map is not loaded - the area counts as '
+          'already clear and the quest is taken, solved and closed in the '
+          'same instant, so it never even reaches the journal. When in doubt '
+          'use a "go there" objective, which cannot satisfy itself.'),
+    ('h2', 'Never teleport an NPC into an interior'),
+    ('p', 'All 30 NPC teleports in the retail game target outdoor cells. '
+          'Moving an NPC into a cave or a house crashes the game. To have '
+          'someone inside, declare the NPC with that interior as its home '
+          'cell and spawn it with an NPC-create action - which is exactly '
+          'what retail does. Walking orders have the same rule: an NPC only '
+          'walks to markers inside its own cell, and never right after being '
+          'created - retail only issues them on solve or close.'),
+    ('h2', 'A quest solved by talking to its own giver skips the offer'),
+    ('p', 'The engine solves the quest first and picks the dialogue state '
+          'afterwards, so the offer conversation is never heard - the player '
+          'gets the solved-state line instead. Put the real conversation in '
+          'the SOLVED state for such quests. For the same reason two '
+          'consecutive quests must not both be solved by talking to the same '
+          'person: the first hands over to the second, which is solved by the '
+          'same click, and both conversations collapse into one line.'),
+    ('h2', 'Revealing a place on the map'),
+    ('p', 'The show-location action works on TAKE only (retail uses it that '
+          'way 20 times and never on solve), and only for real points of '
+          'interest. Plain region labels cannot be revealed. A quest whose '
+          'objective IS the location is what actually draws a marker.'),
+    ('h2', 'Reply menus'),
+    ('p', 'Give a line several successors and the game shows them as a reply '
+          'menu. Keep every option positive: a negative entry is not "hide '
+          'after use", the engine treats it as hidden outright, so the menu '
+          'collapses to whatever is left.'),
+
+    ('h1', 'Voice - speaking with the original actors'),
+    ('p', 'Each dialog line carries a voice cue. Put an EXISTING cue on a new '
+          'line and the engine plays that original recording, with lip sync, '
+          'for free - no audio files involved. The catch: the subtitle has to '
+          'match the recording word for word, so such lines must be assembled '
+          'from sentences the actors already spoke. There are 1820 recorded '
+          'hero lines to choose from (989 of them short), which is enough to '
+          'carry most conversations; `voice_index.py` searches them.'),
+    ('p', 'Lines without a cue are simply silent subtitles - 46% of the '
+          'hero\'s retail lines are too, so mixing is unnoticeable. When '
+          'EDITING an existing dialog, never drop the cue: this tool keeps it '
+          '(and the gesture animations) for you, but hand-built files that '
+          'blank them leave the conversation mute.'),
 
     ('h1', 'Good to know'),
     ('li', 'The offer conversation must end on the line that grants the '
@@ -469,13 +553,14 @@ class DataHub:
                         grp = (head.split()[1]
                                if len(head.split()) > 1 else '')
                         self.quests[qid] = (title, grp, body)
-        # 1-380 is single-player, 700+ is multiplayer; everything between is
-        # unused. The parser itself has no ceiling - the shipped multiplayer
-        # map files use ids like 2001 and 4001 - so the whole gap is fair
-        # game. (An engine-side array limit somewhere in that range cannot
-        # be ruled out from the data alone; it would show up as a quest that
-        # simply never appears.)
-        self.free_ids = [i for i in range(381, 700) if i not in self.quests]
+        # 1-380 is single-player, 700+ is multiplayer. Only 381-399 is usable:
+        # ids from 400 up are PROVEN BROKEN in single-player - the engine
+        # mis-resolves every AOQ reference to them down to quest 0, and the
+        # journal then shows a phantom entry reading "translateQ_0" /
+        # "translateGROUP_0" with a stray map marker. Play-tested: Q_400 always
+        # phantomed, the identical quest as Q_389 worked at once.
+        self.free_ids = [i for i in range(381, MAX_SP_QUEST_ID + 1)
+                         if i not in self.quests]
         # NPCs: id -> (name, sector, lector)
         self.npcs = {}
         for line in self.qtx.splitlines():
@@ -1636,12 +1721,20 @@ class App:
         errs = []
         try:
             qid = int(self.var_qid.get())
-            if qid in self.hub.quests or not 0 < qid < 700:
-                errs.append(f'Quest ID {qid} is taken or out of range '
-                            '(free range is 381-699).')
+            if qid in self.hub.quests:
+                errs.append(f'Quest ID {qid} is already taken.')
+            elif qid > MAX_SP_QUEST_ID:
+                errs.append(
+                    f'Quest ID {qid} is above the single-player limit of '
+                    f'{MAX_SP_QUEST_ID}. Ids from 400 up never work: the '
+                    'engine resolves them to quest 0 and the journal fills '
+                    'with a "translateQ_0" phantom entry instead.')
+            elif qid < 381:
+                errs.append(f'Quest ID {qid} belongs to the retail quests '
+                            '(1-380). Use 381-399.')
         except ValueError:
             qid = None
-            errs.append('Quest ID must be a number (381-699).')
+            errs.append(f'Quest ID must be a number (381-{MAX_SP_QUEST_ID}).')
         if not self.var_title.get().strip():
             errs.append('Title is empty.')
         giver = self.pick_giver.get()
