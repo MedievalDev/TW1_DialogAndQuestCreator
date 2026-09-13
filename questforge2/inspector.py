@@ -191,10 +191,21 @@ class Inspector(ttk.Frame):
         if q.id and q.id not in free:
             free = sorted(free + [q.id])
         self._label(t('insp.id'))
-        self._combo(free, q.id, lambda v: setattr(q, 'id', v),
-                    labels=[f'Q_{i}' for i in free])
-        ttk.Label(self.body, text=t('insp.id.hint'), style='PanelMuted.TLabel',
-                  wraplength=260).pack(anchor='w')
+        if q.retail:
+            ttk.Label(self.body, text=f'Q_{q.id}', style='Panel.TLabel'
+                      ).pack(anchor='w')
+            ttk.Label(self.body, text=t('insp.id.game'),
+                      style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
+            raw = len(q.extra.get('qtx', {}).get('raw', []))
+            if raw:
+                ttk.Label(self.body, text=t('insp.raw', n=raw),
+                          style='PanelMuted.TLabel', wraplength=260
+                          ).pack(anchor='w')
+        else:
+            self._combo(free, q.id, lambda v: setattr(q, 'id', v),
+                        labels=[f'Q_{i}' for i in free])
+            ttk.Label(self.body, text=t('insp.id.hint'),
+                      style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
         self._label(t('insp.title'))
         self._entry(q.title, lambda v: setattr(q, 'title', v))
         self._label(t('insp.group'))
@@ -226,9 +237,10 @@ class Inspector(ttk.Frame):
                     lambda v: setattr(q, 'map_sign', v))
         ttk.Label(self.body, text=t('insp.map_sign.hint'),
                   style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
-        self._label(t('insp.offered'))
-        self._check(t('insp.offered.check'), q.offered,
-                    lambda v: setattr(q, 'offered', v))
+        if not q.retail:
+            self._label(t('insp.offered'))
+            self._check(t('insp.offered.check'), q.offered,
+                        lambda v: setattr(q, 'offered', v))
         self._label(t('insp.archive'))
         archives = self.app.mod_archives()
         var = tk.StringVar(value=self.app.project.target_archive)
@@ -451,7 +463,7 @@ class Inspector(ttk.Frame):
         self.after_idle(self.refresh)
 
     def _add_qaction_menu(self):
-        menu = tk.Menu(self, tearoff=0)
+        menu = theme.Menu(self, tearoff=0)
         for k, v in model.ACTION_MAIN + model.ACTION_MORE:
             menu.add_command(label=t(f'op.{k}.{v}'),
                              command=lambda k=k, v=v: self._add_qaction(k, v))

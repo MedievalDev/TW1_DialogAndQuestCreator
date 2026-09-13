@@ -90,7 +90,7 @@ class SpeakerBox(ttk.Frame):
                                       wy - model.HEADER_H / 2)
 
     def _menu(self, ev, sid):
-        menu = tk.Menu(self, tearoff=0)
+        menu = theme.Menu(self, tearoff=0)
         menu.add_command(label=t('speaker.rename'),
                          command=lambda: self.rename(sid))
         menu.add_command(label=t('speaker.remove'),
@@ -201,7 +201,7 @@ class ActionBox(ttk.Frame):
     def _verb_menu(self, x, y, parent):
         if not self.app.quest or not parent:
             return
-        menu = tk.Menu(self, tearoff=0)
+        menu = theme.Menu(self, tearoff=0)
         self.app.fill_action_menu(menu, parent)
         try:
             menu.tk_popup(x, y)
@@ -211,7 +211,7 @@ class ActionBox(ttk.Frame):
     def _cond_menu(self, x, y):
         if not self.app.quest:
             return
-        menu = tk.Menu(self, tearoff=0)
+        menu = theme.Menu(self, tearoff=0)
         self.app.fill_condition_menu(menu)
         try:
             menu.tk_popup(x, y)
@@ -316,13 +316,23 @@ class SpeakerDialog:
         self.v_lector = tk.StringVar(value=t('speaker.lector.none'))
         self.v_marker = tk.StringVar()
         self.v_template = tk.StringVar()
+        tile_row = ttk.Frame(nw)
+        ttk.Entry(tile_row, textvariable=self.v_tile).pack(side='left',
+                                                           fill='x',
+                                                           expand=True)
+        ttk.Button(tile_row, text='...', width=3, command=self._pick_tile
+                   ).pack(side='left', padx=(4, 0))
+        tpl_row = ttk.Frame(nw)
+        ttk.Entry(tpl_row, textvariable=self.v_template).pack(
+            side='left', fill='x', expand=True)
+        ttk.Button(tpl_row, text='...', width=3, command=self._pick_template
+                   ).pack(side='left', padx=(4, 0))
         rows = ((t('speaker.id'), ttk.Entry(nw, textvariable=self.v_id)),
                 (t('speaker.name'), ttk.Entry(nw, textvariable=self.v_name)),
-                (t('speaker.tile'), ttk.Entry(nw, textvariable=self.v_tile)),
+                (t('speaker.tile'), tile_row),
                 (t('insp.speaker.marker'),
                  ttk.Entry(nw, textvariable=self.v_marker)),
-                (t('insp.speaker.template'),
-                 ttk.Entry(nw, textvariable=self.v_template)))
+                (t('insp.speaker.template'), tpl_row))
         for r, (label, w) in enumerate(rows):
             ttk.Label(nw, text=label).grid(row=r, column=0, sticky='w',
                                            pady=3, padx=(0, 8))
@@ -351,6 +361,30 @@ class SpeakerDialog:
                    command=self._ok).pack(side='left', padx=(0, 6))
         ttk.Button(b, text=t('cancel'), command=self.win.destroy).pack(side='left')
         self.win.bind('<Escape>', lambda e: self.win.destroy())
+        self.win.grab_set()
+
+    def _pick_tile(self):
+        if not self.app.index:
+            return
+        from .mappicker import MapPicker
+        dlg = MapPicker(self.app, 'tile', None, self.v_tile.get())
+        self.app.root.wait_window(dlg.win)
+        if dlg.result:
+            self.v_tile.set(str(dlg.result['value']))
+        self.win.grab_set()
+
+    def _pick_template(self):
+        """NPC of the game whose record (look, party, guild) the new NPC
+        copies; the picker also fills the home tile when it is empty."""
+        if not self.app.index:
+            return
+        from .mappicker import MapPicker
+        dlg = MapPicker(self.app, 'npc', None, self.v_tile.get())
+        self.app.root.wait_window(dlg.win)
+        if dlg.result:
+            self.v_template.set(f"NPC_{dlg.result['value']}")
+            if not self.v_tile.get().strip() and dlg.result.get('tile'):
+                self.v_tile.set(dlg.result['tile'])
         self.win.grab_set()
 
     def _filter(self):

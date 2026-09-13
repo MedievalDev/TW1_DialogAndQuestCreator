@@ -541,14 +541,20 @@ def op_tokens(spec, values):
             out.append(v.upper() if v else '(null)')
             continue
         if v == '':
-            raise ModelError(f'field {key} is empty')
+            raise FieldError(key, 'empty', v, f'field {key} is empty')
         if kind == 'npc':
-            out.append(v if v.startswith('NPC_') else f'NPC_{v}')
+            if v.startswith('NPC_'):
+                v = v[4:]
+            if not v.isdigit():
+                raise FieldError(key, 'number', v,
+                                 f'field {key} must be an NPC id: {v!r}')
+            out.append(f'NPC_{v}')
         elif kind in ('int', 'party') or kind.startswith('marker:'):
             try:
                 out.append(str(int(v)))
             except ValueError:
-                raise ModelError(f'field {key} must be a number: {v!r}')
+                raise FieldError(key, 'number', v,
+                                 f'field {key} must be a number: {v!r}')
         elif kind == 'amount':
             if v.upper() in ('SMALL', 'MEDIUM', 'HIGH'):
                 out.append(v.upper())
@@ -556,13 +562,24 @@ def op_tokens(spec, values):
                 try:
                     out.append(str(int(v)))
                 except ValueError:
-                    raise ModelError(f'field {key}: number or SMALL/MEDIUM/'
+                    raise FieldError(key, 'amount', v,
+                                     f'field {key}: number or SMALL/MEDIUM/'
                                      f'HIGH, not {v!r}')
         else:
             if ' ' in v:
-                raise ModelError(f'field {key} must not contain spaces')
+                raise FieldError(key, 'space', v,
+                                 f'field {key} must not contain spaces')
             out.append(v)
     return out
+
+
+class FieldError(ModelError):
+    """A field of an opcode cannot be written (``reason``: empty, number,
+    amount, space)."""
+
+    def __init__(self, key, reason, value, text):
+        super().__init__(text)
+        self.key, self.reason, self.value = key, reason, value
 
 
 def ensure_entry(graph, state):

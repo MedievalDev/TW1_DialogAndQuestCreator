@@ -1,9 +1,5 @@
-"""Main window: menu bar, panels, status bar, project handling, graph.
-
-Milestone 1 built the frame, milestone 2 the node graph, milestone 3 the
-speaker box, the dialog node types and the property panel. Panels that
-belong to later milestones are still placeholders; their menu entries
-exist but are disabled so the final structure (plan section 3) is visible.
+"""Main window: menu bar, timeline, speaker/action box, node graph,
+property panel, coach, status bar, project handling and export.
 """
 
 import glob
@@ -18,16 +14,21 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from . import APP_NAME, VERSION, data, export, model, theme
+from . import APP_NAME, VERSION, data, export, model, retail, theme, validate
 from .graph import GraphView
+from .guide import Coach, show_docs
 from .i18n import t, set_lang, get_lang, detect_lang
 from .inspector import Inspector
 from .model import Project, Quest, ModelError, PROJECT_EXT
 from .palette import ActionBox, SpeakerBox
+from .timeline import Timeline
 
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
 COMMUNITY_URL = 'https://twmp.alchemy-fox.de/'
+SITE_URL = 'https://alchemy-fox.de/'
+LINKS = (('about.github', GITHUB_URL), ('about.site', SITE_URL),
+         ('about.guide', GUIDE_URL), ('about.community', COMMUNITY_URL))
 DEBUG = not getattr(sys, 'frozen', False)
 
 
@@ -42,6 +43,9 @@ class App:
         self.tab_state = model.DEFAULT_STATES[0]
         self.undo = model.UndoStack()
         self.clipboard = None
+        self.preview = None            # game quest shown but not in the project
+        self._preview_snap = None
+        self._val_job = None
 
         self.root = tk.Tk()
         self.root.withdraw()
@@ -49,6 +53,13 @@ class App:
         self.root.geometry(self.cfg.get('window') or '1280x800')
         self.root.minsize(960, 600)
         theme.apply_dark_theme(self.root)
+        self.selftest = os.environ.get('QF2_SELFTEST')
+        try:
+            self._icon = tk.PhotoImage(file=data.resource_path(
+                'questforge2', 'assets', 'icon64.png'))
+            self.root.iconphoto(True, self._icon)
+        except tk.TclError:
+            pass
         self.root.protocol('WM_DELETE_WINDOW', self.quit)
 
         self.vars = {k: tk.BooleanVar(value=v)
@@ -62,7 +73,8 @@ class App:
         self._build_statusbar()
         self._bind_keys()
         self.new_project(ask=False)
-        self.root.deiconify()
+        if not self.selftest:
+            self.root.deiconify()
         self.root.after(50, self._startup)
 
     # -- menu bar -----------------------------------------------------------
@@ -70,6 +82,7 @@ class App:
     def _build_menubar(self):
         bar = ttk.Frame(self.root, style='Menubar.TFrame')
         bar.pack(fill='x')
+        self.menubar = bar
         for key, filler in (('menu.file', self._fill_file),
                             ('menu.edit', self._fill_edit),
                             ('menu.view', self._fill_view),
@@ -86,7 +99,7 @@ class App:
         self.lbl_brand.pack(side='right', padx=(0, 6))
 
     def _popup(self, filler, widget):
-        menu = tk.Menu(self.root, tearoff=0)
+        menu = theme.Menu(self.root, tearoff=0)
         filler(menu)
         try:
             menu.tk_popup(widget.winfo_rootx(),
@@ -106,7 +119,7 @@ class App:
                       command=self.new_project)
         m.add_command(label=t('file.open'), accelerator=self._acc('Ctrl+O'),
                       command=self.open_project)
-        recent = tk.Menu(m, tearoff=0)
+        recent = theme.Menu(m, tearoff=0)
         paths = self.cfg.get('recent_projects') or []
         for p in paths:
             recent.add_command(label=p,
@@ -186,7 +199,7 @@ class App:
         m.add_separator()
         m.add_checkbutton(label=t('view.grid'), variable=self.grid_var,
                           command=lambda: g.set_grid(self.grid_var.get()))
-        edges = tk.Menu(m, tearoff=0)
+        edges = theme.Menu(m, tearoff=0)
         for key, val in (('view.edges.curve', 'curve'),
                          ('view.edges.line', 'line')):
             edges.add_radiobutton(
@@ -194,7 +207,7 @@ class App:
                 command=lambda: g.set_edge_style(self.edge_var.get()))
         m.add_cascade(label=t('view.edges'), menu=edges)
         m.add_separator()
-        lang = tk.Menu(m, tearoff=0)
+        lang = theme.Menu(m, tearoff=0)
         for code in ('de', 'en'):
             lang.add_radiobutton(label=t(f'view.lang.{code}'), value=code,
                                  variable=self.lang_var,
@@ -208,30 +221,53 @@ class App:
                       state=self._state(self.project is not None
                                         and self.cfg.get('game_dir')))
         if self.project and len(self.project.quests) > 1:
-            sub = tk.Menu(m, tearoff=0)
+            sub = theme.Menu(m, tearoff=0)
             for qq in self.project.quests:
                 sub.add_radiobutton(
                     label=f'Q_{qq.id}  {qq.title}', value=id(qq),
                     variable=tk.IntVar(value=id(self.quest)),
                     command=lambda qq=qq: self.open_quest(qq))
             m.add_cascade(label=t('quest.switch'), menu=sub)
-        m.add_command(label=t('quest.duplicate'), state='disabled')
-        m.add_command(label=t('quest.delete'), state='disabled')
+        tpls = data.list_templates()
+        sub_t = theme.Menu(m, tearoff=0)
+        for name, path in tpls:
+            sub_t.add_command(label=name,
+                              command=lambda p=path: self.new_from_template(p))
+        if not tpls:
+            sub_t.add_command(label=t('file.recent.none'), state='disabled')
+        m.add_cascade(label=t('quest.fromtemplate'), menu=sub_t,
+                      state=self._state(self.project is not None))
+        in_project = bool(self.quest and self.project
+                          and self.quest in self.project.quests)
+        m.add_command(label=t('quest.duplicate'),
+                      command=lambda: self.duplicate_quest(self.quest),
+                      state=self._state(self.quest is not None))
+        m.add_command(label=t('quest.delete'),
+                      command=lambda: self.delete_quest(self.quest),
+                      state=self._state(in_project))
         m.add_separator()
         m.add_command(label=t('quest.validate'), accelerator='F7',
-                      state='disabled')
+                      command=self.validate_ui,
+                      state=self._state(self.quest is not None))
         m.add_command(label=t('quest.preview'), command=self.show_preview,
                       state=self._state(self.quest is not None))
-        m.add_command(label=t('quest.template'), state='disabled')
+        m.add_command(label=t('quest.template'), command=self.save_template,
+                      state=self._state(self.quest is not None))
         if DEBUG:
             m.add_separator()
             m.add_command(label=t('quest.debug300'), command=self.debug_nodes,
                           state=self._state(self.quest is not None))
 
     def _fill_help(self, m):
-        m.add_command(label=t('help.tour'), state='disabled')
-        m.add_command(label=t('help.tutorial'), state='disabled')
-        m.add_command(label=t('help.docs'), state='disabled')
+        m.add_command(label=t('help.tour'),
+                      command=lambda: self.coach.start('tour'))
+        m.add_command(label=t('help.tutorial'),
+                      command=lambda: self.coach.start('tutorial'))
+        m.add_command(label=t('help.docs'), command=lambda: show_docs(self))
+        m.add_separator()
+        for key, url in LINKS:
+            m.add_command(label=f'{t(key)}  ({url})',
+                          command=lambda u=url: webbrowser.open(u))
         m.add_separator()
         m.add_command(label=t('help.about'), command=self.show_about)
 
@@ -241,7 +277,7 @@ class App:
         self.vpane = ttk.PanedWindow(self.root, orient='vertical')
         self.vpane.pack(fill='both', expand=True)
 
-        self.timeline = self._placeholder(self.vpane, 'panel.timeline', 6)
+        self.timeline = Timeline(self.vpane, self)
         self.hpane = ttk.PanedWindow(self.vpane, orient='horizontal')
 
         # centre: tab strip above the graph canvas (built before the boxes
@@ -261,6 +297,7 @@ class App:
         self.graph.node_style = self.node_style
         self.graph.docked_text = self.docked_text
         self.graph.fill_docked_menu = self._fill_docked_menu
+        self.graph.get_clipboard = lambda: self.clipboard
         self.graph.bind('<Configure>', self._draw_graph_placeholder, add='+')
 
         self.palette = ttk.PanedWindow(self.hpane, orient='vertical')
@@ -271,19 +308,11 @@ class App:
 
         self.side = ttk.PanedWindow(self.hpane, orient='vertical')
         self.inspector = Inspector(self.side, self)
-        self.coach = self._placeholder(self.side, 'panel.coach', 8)
+        self.coach = Coach(self.side, self)
         self.side.add(self.inspector, weight=3)
         self.side.add(self.coach, weight=1)
 
         self._apply_panels(initial=True)
-
-    def _placeholder(self, parent, title_key, milestone):
-        f = ttk.Frame(parent, style='Panel.TFrame')
-        ttk.Label(f, text=t(title_key), style='PanelTitle.TLabel'
-                  ).pack(anchor='w', fill='x')
-        ttk.Label(f, text=t('panel.placeholder', m=milestone),
-                  style='PanelMuted.TLabel').pack(padx=10, pady=4, anchor='w')
-        return f
 
     def _apply_panels(self, initial=False):
         v = self.vars
@@ -313,7 +342,7 @@ class App:
             self.root.update_idletasks()
             try:
                 if v['timeline'].get():
-                    self.vpane.sashpos(0, 130)
+                    self.vpane.sashpos(0, 110)
                 if v['palette'].get():
                     self.hpane.sashpos(0, 240)
                 if show_side:
@@ -359,7 +388,7 @@ class App:
         self._mark_tab()
 
     def _more_tabs(self, ev):
-        menu = tk.Menu(self.root, tearoff=0)
+        menu = theme.Menu(self.root, tearoff=0)
         present = self.quest.states_present()
         for s in model.STATES:
             if s not in present:
@@ -412,89 +441,221 @@ class App:
         self.speakers.refresh()
         self.inspector.show(set())
         self._update_status()
+        self.timeline.refresh()
+        self.timeline.show_current()
+        self.schedule_validation(10)
 
     def new_quest(self):
         if not self.project:
             return
-        taken = {q.id for q in self.project.quests if q.id}
-        free = self.index.free_ids(taken) if self.index else [
-            i for i in range(data.MIN_QUEST_ID, data.MAX_QUEST_ID + 1)
-            if i not in taken]
-        if not free:
-            messagebox.showwarning(APP_NAME, t('quest.noid'), parent=self.root)
+        qid = self._free_id()
+        if qid is None:
             return
-        q = Quest(free[0])
+        q = Quest(qid)
         model.add_default_conditions(q)
+        # journal group of the default predecessor (Q_4), group 0 has no name
+        pred = self.index.quest(4) if self.index else None
+        if pred and str(pred['group']) in self.index.groups:
+            q.group = pred['group']
         self.project.quests.append(q)
         self.mark_dirty()
         self.open_quest(q)
 
     def load_retail(self):
-        """Pick a dialog tree of the game (or a mod) and open it as a quest
-        of the project (plan 10; the timeline replaces this in M6)."""
+        """Pick a dialog of the game (or a mod) and open its quest."""
         game = self.cfg.get('game_dir')
         if not self.project or not game:
             return
+        trees = self._game_trees()
+        if trees is None:
+            return
+        dlg = RetailDialog(self, trees)
+        self.root.wait_window(dlg.win)
+        if dlg.result:
+            self.open_any_quest(int(dlg.result.split('_')[1]))
+
+    def _game_trees(self):
+        game = self.cfg.get('game_dir')
         self.root.configure(cursor='watch')
         self.root.update_idletasks()
         try:
-            trees = data.load_trees(game)
+            return data.load_trees(game)
         except Exception as e:
             messagebox.showerror(t('error'), t('index.error', err=e),
                                  parent=self.root)
-            return
+            return None
         finally:
             self.root.configure(cursor='')
-        dlg = RetailDialog(self, trees)
-        self.root.wait_window(dlg.win)
-        if not dlg.result:
-            return
-        tid = dlg.result
-        tree, tr, src = trees[tid]
-        qid = int(tid.split('_')[1])
-        existing = self.project.quest_by_id(qid)
-        if existing:
-            if not messagebox.askyesno(APP_NAME, t('retail.exists', id=qid),
-                                       parent=self.root):
-                self.open_quest(existing)
-                return
-            self.project.quests.remove(existing)
+
+    def quest_for(self, qid):
+        """Project quest with this id, else the quest built from the game."""
+        if self.project:
+            q = self.project.quest_by_id(qid)
+            if q:
+                return q
+        if self.preview and self.preview.id == qid:
+            return self.preview
+        return self.build_game_quest(qid)
+
+    def build_game_quest(self, qid):
+        """Quest of the game install (qtx block, texts, dialog tree)."""
+        game = self.cfg.get('game_dir')
+        if not game:
+            return None
+        trees = self._game_trees()
+        if trees is None:
+            return None
+        blocks = data.load_qtx_blocks(game)
+        tr = data.load_translations(game)
         q = Quest(qid, tr.get(f'translateQ_{qid}', ''))
         q.retail = True
         q.journal = {'take': tr.get(f'translateQ_{qid}_QTD', ''),
                      'solve': tr.get(f'translateQ_{qid}_QSD', ''),
                      'close': tr.get(f'translateQ_{qid}_QCD', '')}
         info = self.index.quest(qid) if self.index else None
-        if info:
-            q.group = info['group']
-            q.giver = info['giver']
-            q.giver_type = info['giver_type'] or 'PASSIVE'
-            q.enable_level = info['enable_level']
-        if q.giver is not None and self.index and self.index.npc(q.giver):
-            npc = self.index.npc(q.giver)
-            q.add_speaker({'id': q.giver, 'name': npc['name'],
+        giver = info['giver'] if info else None
+        if giver is not None and self.index and self.index.npc(giver):
+            npc = self.index.npc(giver)
+            q.add_speaker({'id': giver, 'name': npc['name'],
                            'lector': npc['lector'], 'tile': npc['tile'],
                            'new': False})
-        t0 = time.perf_counter()
-        rep = export.tree_to_graph(q, tree, tr, self.index, qid)
-        ms = (time.perf_counter() - t0) * 1000
-        self.project.quests.append(q)
-        self.mark_dirty()
+        tid = f'translateDQ_{qid}'
+        rep_ = None
+        if tid in trees:
+            tree, ttr, _src = trees[tid]
+            rep_ = export.tree_to_graph(q, tree, ttr, self.index, qid)
+        if qid in blocks:
+            retail.import_block(q, blocks[qid][0])
+        else:
+            q.extra['qtx'] = {'block': '', 'raw': [], 'sig': ''}
+        model.auto_layout(q.graph)
+        q.extra['import'] = {'lines': rep_.entries if rep_ else 0,
+                             'menus': rep_.menus if rep_ else 0,
+                             'notes': len(rep_.lossy) if rep_ else 0,
+                             'source': blocks[qid][1] if qid in blocks else ''}
+        return q
+
+    def open_any_quest(self, qid):
+        """Timeline click: project quest, or a read-only view of a game
+        quest that joins the project on its first change (plan 10)."""
+        if self.project:
+            q = self.project.quest_by_id(qid)
+            if q:
+                if q is not self.quest:
+                    self.open_quest(q)
+                return
+        if self.preview and self.preview.id == qid and self.quest is self.preview:
+            return
+        q = self.build_game_quest(qid)
+        if q is None:
+            return
+        self.preview = q
+        self._preview_snap = q.snapshot()
         self.open_quest(q)
         self.show_tab(None)
         self.graph.fit()
-        note = t('retail.loaded', tid=tid, src=src, n=rep.entries,
-                 menus=rep.menus, ms=ms)
-        if rep.lossy:
-            note += '   ' + t('retail.notes', n=len(rep.lossy))
-        self.set_info(note, 'StatusOk.TLabel' if not rep.lossy
-                      else 'Status.TLabel')
+        imp = q.extra.get('import', {})
+        self.set_info(t('retail.view', id=qid, src=imp.get('source') or '-',
+                        n=imp.get('lines', 0), menus=imp.get('menus', 0)),
+                      'Status.TLabel')
 
-    def show_preview(self):
-        if not self.quest:
+    def _confirm_game_edit(self):
+        """First change of a viewed game quest: ask, then add it to the
+        project or roll the change back. Returns True when kept."""
+        q = self.quest
+        if not (self.preview is not None and q is self.preview):
+            return True
+        ok = messagebox.askyesno(APP_NAME, t('retail.confirm', id=q.id),
+                                 parent=self.root)
+        if ok:
+            self.project.quests.append(q)
+            self.preview = None
+            self._preview_snap = None
+            self.timeline.schedule(50)
+            return True
+        q.restore(self._preview_snap)
+        self.undo.clear()
+        self.graph.set_graph(q.graph)
+        self.inspector.show(set())
+        self.speakers.refresh()
+        return False
+
+    def duplicate_any_quest(self, qid):
+        q = self.quest_for(qid)
+        if q is not None:
+            self.duplicate_quest(q)
+
+    def _free_id(self):
+        taken = {q.id for q in self.project.quests if q.id}
+        free = self.index.free_ids(taken) if self.index else [
+            i for i in range(data.MIN_QUEST_ID, data.MAX_QUEST_ID + 1)
+            if i not in taken]
+        if not free:
+            messagebox.showwarning(APP_NAME, t('quest.noid'), parent=self.root)
+            return None
+        return free[0]
+
+    def duplicate_quest(self, quest):
+        if not self.project or quest is None:
+            return
+        qid = self._free_id()
+        if qid is None:
+            return
+        new = retail.make_own(quest, qid)
+        new.title = (quest.title or '') + t('quest.copysuffix')
+        self.project.quests.append(new)
+        self.mark_dirty()
+        self.open_quest(new)
+
+    def delete_quest(self, quest):
+        if not self.project or quest not in self.project.quests:
+            return
+        if not messagebox.askyesno(APP_NAME, t('quest.delete.q', id=quest.id,
+                                               title=quest.title),
+                                   parent=self.root):
+            return
+        self.project.quests.remove(quest)
+        self.mark_dirty()
+        if quest is self.quest:
+            self.open_quest(self.project.quests[0] if self.project.quests
+                            else None)
+        else:
+            self.timeline.refresh()
+
+    def save_template(self):
+        q = self.quest
+        if not q:
+            return
+        from .palette import _AskString
+        dlg = _AskString(self.root, t('quest.template'), q.title or 'Vorlage')
+        self.root.wait_window(dlg.win)
+        if dlg.result:
+            path = data.save_template(dlg.result, q.to_dict())
+            self.set_info(t('quest.template.saved', path=path),
+                          'StatusOk.TLabel')
+
+    def new_from_template(self, path):
+        if not self.project:
+            return
+        qid = self._free_id()
+        if qid is None:
+            return
+        try:
+            d = data.load_template(path)
+        except (OSError, ValueError) as e:
+            messagebox.showerror(t('error'), str(e), parent=self.root)
+            return
+        q = retail.make_own(Quest.from_dict(d), qid)
+        self.project.quests.append(q)
+        self.mark_dirty()
+        self.open_quest(q)
+
+    def show_preview(self, quest=None):
+        quest = quest or self.quest
+        if not quest:
             return
         win = tk.Toplevel(self.root)
-        win.title(t('preview.title', id=self.quest.id))
+        win.title(t('preview.title', id=quest.id))
         win.geometry('900x640')
         win.transient(self.root)
         theme.dark_titlebar(win)
@@ -507,7 +668,7 @@ class App:
         sy.pack(side='right', fill='y')
         sx.pack(side='bottom', fill='x')
         txt.pack(fill='both', expand=True)
-        txt.insert('1.0', export.preview_text(self.quest, self.index, t))
+        txt.insert('1.0', export.preview_text(quest, self.index, t))
         txt.configure(state='disabled')
         ttk.Button(win, text=t('close'), command=win.destroy
                    ).pack(anchor='e', padx=8, pady=(0, 8))
@@ -626,7 +787,7 @@ class App:
             menu.add_command(label=t(f'op.{k}.{v}'), command=lambda k=k, v=v:
                              self.graph.add_docked(model.make_action(k, v,
                                                                      parent)))
-        more = tk.Menu(menu, tearoff=0)
+        more = theme.Menu(menu, tearoff=0)
         for k, v in model.ACTION_MORE:
             more.add_command(label=t(f'op.{k}.{v}'), command=lambda k=k, v=v:
                              self.graph.add_docked(model.make_action(k, v,
@@ -646,15 +807,15 @@ class App:
 
     def _fill_docked_menu(self, menu, kind, nid):
         if kind in ('npc', 'player'):
-            sub = tk.Menu(menu, tearoff=0)
+            sub = theme.Menu(menu, tearoff=0)
             self.fill_action_menu(sub, nid)
             menu.add_cascade(label=t('ctx.addaction'), menu=sub)
         elif kind == 'entry':
-            sub = tk.Menu(menu, tearoff=0)
+            sub = theme.Menu(menu, tearoff=0)
             self.fill_condition_menu(sub)
             menu.add_cascade(label=t('ctx.addcond'), menu=sub)
         elif kind == 'task':
-            sub = tk.Menu(menu, tearoff=0)
+            sub = theme.Menu(menu, tearoff=0)
             for fc in model.FC_MAIN + model.FC_MORE:
                 sub.add_command(label=t('op.FC.' + fc),
                                 command=lambda fc=fc: self._set_task(fc))
@@ -689,8 +850,13 @@ class App:
 
     # -- export ---------------------------------------------------------------
 
-    def export_ui(self, files_only=False):
+    def export_ui(self, files_only=False, quests=None):
         p = self.project
+        if quests is not None and p:
+            sub = Project(p.name)
+            sub.path, sub.target_archive = p.path, p.target_archive
+            sub.quests = [q for q in quests if q is not None]
+            p = sub
         game = self.cfg.get('game_dir')
         if not p or not p.quests:
             messagebox.showinfo(t('export.title'), t('export.nothing'),
@@ -701,13 +867,10 @@ class App:
                                  parent=self.root)
             return
         name = export.archive_name(p)
-        errors, warnings = [], []
-        for q in p.quests:
-            E, W = export.validate_quest(q, self.index, p, name, t)
-            errors += [(q, m, nid) for m, nid in E]
-            warnings += [(q, m, nid) for m, nid in W]
+        errors, warnings = validate.validate_project(p, self.index, name, t)
         if errors:
-            ProblemWindow(self, t('export.errors', n=len(errors)), errors)
+            ProblemWindow(self, t('export.errors', n=len(errors)), errors,
+                          warnings)
             return
         target = None
         if files_only:
@@ -765,14 +928,56 @@ class App:
             else:
                 win.finish(t('export.done', path=result['res']['archive'])
                            + '\n\n' + t('export.next'))
+            if 'err' not in result and self.coach.tutorial.quest in p.quests:
+                self.coach.tutorial.exported = True
 
         th = threading.Thread(target=work, daemon=True)
         th.start()
         poll()
 
+    def schedule_validation(self, ms=600):
+        if self._val_job:
+            self.root.after_cancel(self._val_job)
+        self._val_job = self.root.after(ms, self._auto_validate)
+
+    def _auto_validate(self):
+        self._val_job = None
+        q = self.quest
+        lbl = self.status['validation']
+        if not q:
+            lbl.configure(text=t('status.validation.none'),
+                          style='Status.TLabel')
+            return
+        E, W = validate.validate_quest(q, self.index, self.project,
+                                       export.archive_name(self.project)
+                                       if self.project else None, t)
+        self.last_validation = (E, W)
+        if not E and not W:
+            lbl.configure(text=t('status.validation.ok'),
+                          style='StatusOk.TLabel')
+        else:
+            lbl.configure(text=t('status.validation.bad', e=len(E),
+                                 w=len(W)),
+                          style='StatusErr.TLabel' if E else 'Status.TLabel')
+
+    def validate_ui(self):
+        q = self.quest
+        if not q:
+            return
+        E, W = validate.validate_quest(q, self.index, self.project,
+                                       export.archive_name(self.project)
+                                       if self.project else None, t)
+        self._auto_validate()
+        ProblemWindow(self, t('val.window', id=q.id),
+                      [(q, m, x) for m, x in E], [(q, m, x) for m, x in W])
+
     def goto_problem(self, quest, nid):
         if quest is not self.quest:
             self.open_quest(quest)
+        if isinstance(nid, str) and nid.startswith('qaction:'):
+            self.graph.select([])
+            self.inspector.show_qaction(int(nid.split(':')[1]))
+            return
         if nid and nid in quest.graph['nodes']:
             node = quest.graph['nodes'][nid]
             st = node.get('state')
@@ -864,7 +1069,7 @@ class App:
     def _edge_drop_empty(self, frm, port, wx, wy, ev):
         """Dragging an edge into the void: popup Spieler / speakers /
         Kommentar, the new node is connected at once (plan 5.3)."""
-        menu = tk.Menu(self.root, tearoff=0)
+        menu = theme.Menu(self.root, tearoff=0)
         x, y = int(wx), int(wy - model.HEADER_H / 2)
         menu.add_command(label=t('node.player'), command=lambda:
                          self.add_speaker_node(model.PLAYER, x, y, (frm, port)))
@@ -926,9 +1131,9 @@ class App:
             model.connect(g, prev, rnd.randrange(model.out_port_count(
                 g['nodes'][prev])), nid)
             if rnd.random() < 0.3:
-                prev = rnd.choice(list(g['nodes']))
-                if g['nodes'][prev]['type'] == 'comment':
-                    prev = nid
+                # only nodes with out ports (not comments, task, actions)
+                prev = rnd.choice([k for k, v in g['nodes'].items()
+                                   if model.out_port_count(v) > 0])
             else:
                 prev = nid
         model.auto_layout(g)
@@ -947,6 +1152,10 @@ class App:
 
     def changed(self, from_inspector=False):
         """Model changed: dirty flag, status, panels."""
+        if not self._confirm_game_edit():
+            return
+        self.timeline.schedule()
+        self.schedule_validation()
         self.mark_dirty()
         self._update_status()
         if not from_inspector:
@@ -1000,8 +1209,14 @@ class App:
             lbl = ttk.Label(bar, text='', style='Status.TLabel')
             lbl.pack(side='left')
             self.status[key] = lbl
+        self.status['validation'].configure(cursor='hand2',
+                                            text=t('status.validation.none'))
+        self.status['validation'].bind('<Button-1>',
+                                       lambda e: self.validate_ui())
         self.status['info'] = ttk.Label(bar, text='', style='Status.TLabel')
         self.status['info'].pack(side='right')
+        self.status['hint'] = ttk.Label(bar, text='', style='Status.TLabel')
+        self.status['hint'].pack(side='right')
         self._update_status()
 
     def _update_status(self):
@@ -1014,14 +1229,22 @@ class App:
             s['project'].configure(text=t('status.noproject'))
         s['game'].configure(text=self.cfg.get('game_dir')
                             or t('status.nogame'))
-        s['quest'].configure(text=f'Q_{self.quest.id}' if self.quest
-                             and self.quest.id else t('status.noquest'))
+        qtext = t('status.noquest')
+        if self.quest and self.quest.id:
+            qtext = f'Q_{self.quest.id}'
+            if self.preview is not None and self.quest is self.preview:
+                qtext += '  ' + t('status.gameview')
+            elif self.quest.retail:
+                qtext += '  ' + t('status.gameedit')
+        s['quest'].configure(text=qtext)
         n = self.quest.node_count() if self.quest else 0
         text = t('status.nodes', n=n)
         if DEBUG and self.graph.last_frame_ms:
             text += '   ' + t('status.frame', ms=self.graph.last_frame_ms)
         s['nodes'].configure(text=text)
-        s['validation'].configure(text=t('status.validation.none'))
+        if not self.quest:
+            s['validation'].configure(text=t('status.validation.none'),
+                                      style='Status.TLabel')
         self._update_title()
 
     def _update_title(self):
@@ -1032,6 +1255,16 @@ class App:
 
     def set_info(self, text, style='Status.TLabel'):
         self.status['info'].configure(text=text, style=style)
+
+    def set_hint(self, text):
+        self.status['hint'].configure(text=text[:140])
+
+    def timeline_height(self, h):
+        try:
+            if self.vars['timeline'].get():
+                self.vpane.sashpos(0, h)
+        except tk.TclError:
+            pass
 
     # -- keys ---------------------------------------------------------------
 
@@ -1055,6 +1288,7 @@ class App:
         r.bind('<Control-s>', lambda e: self.save_project())
         r.bind('<Control-S>', lambda e: self.save_project_as())
         r.bind('<Control-e>', lambda e: self.export_ui())
+        r.bind('<F7>', lambda e: self.validate_ui())
         g = self.graph
         for seq, fn in (('<Control-z>', self.do_undo),
                         ('<Control-y>', self.do_redo),
@@ -1071,6 +1305,11 @@ class App:
 
     def _startup(self):
         game = data.find_game_dir(self.cfg)
+        if not game and self.selftest:
+            with open(self.selftest, 'w', encoding='utf-8') as f:
+                f.write('no game dir\n')
+            self.root.after(50, self.root.destroy)
+            return
         if not game:
             messagebox.showinfo(t('game.ask.title'), t('game.ask.msg'),
                                 parent=self.root)
@@ -1181,6 +1420,43 @@ class App:
         self.set_info(f'{stats}   {how}   {t("status.start", s=total)}',
                       'StatusOk.TLabel')
         self.inspector.refresh()
+        self.timeline.refresh()
+        if self.selftest:
+            # QF2_SELFTEST=<file>: write the start-up time and quit
+            try:
+                with open(self.selftest, 'w', encoding='utf-8') as f:
+                    f.write(f'version={VERSION} start={total:.3f} '
+                            f'index={seconds:.3f} cache={from_cache} '
+                            f'quests={len(index.quests)} '
+                            f'frozen={getattr(sys, "frozen", False)}\n')
+                    deep = os.environ.get('QF2_SELFTEST_EXPORT')
+                    if deep:
+                        f.write(self._selftest_export(deep) + '\n')
+            except Exception as e:           # reported in the file
+                with open(self.selftest, 'a', encoding='utf-8') as f:
+                    f.write(f'selftest failed: {e!r}\n')
+            finally:
+                self.root.after(50, self.root.destroy)
+            return
+        if not self.cfg.get('guide_seen') and not getattr(self, '_tour_done',
+                                                          False):
+            self._tour_done = True
+            self.root.after(300, lambda: self.coach.start('tour'))
+
+    def _selftest_export(self, spec):
+        """QF2_SELFTEST_EXPORT=<project>|<empty game dir>: validate and export
+        a project without registry change, read the archive back."""
+        import tw1_wd
+        project_path, game = spec.split('|', 1)
+        p = Project.load(project_path)
+        errors, warnings = validate.validate_project(
+            p, self.index, export.archive_name(p), t)
+        os.makedirs(os.path.join(game, 'Mods'), exist_ok=True)
+        res = export.export_mod(p, game, data.base_dir(), self.index,
+                                lambda m: None, register=False)
+        paths = sorted(e.path for e in tw1_wd.read(res['archive']))
+        return (f'export ok errors={len(errors)} warnings={len(warnings)} '
+                f'files={paths}')
 
     # -- project ------------------------------------------------------------
 
@@ -1202,6 +1478,7 @@ class App:
     def _set_project(self, project):
         self.project = project
         self.clipboard = None
+        self.preview = None
         self.open_quest(project.quests[0] if project.quests else None)
 
     def new_project(self, ask=True):
@@ -1293,13 +1570,18 @@ class App:
         theme.dark_titlebar(win)
         f = ttk.Frame(win, padding=24)
         f.pack(fill='both', expand=True)
-        ttk.Label(f, text=APP_NAME, style='Brand.TLabel').pack(anchor='w')
-        ttk.Label(f, text=t('about.version', v=VERSION), style='Muted.TLabel'
-                  ).pack(anchor='w', pady=(0, 12))
+        head = ttk.Frame(f)
+        head.pack(anchor='w', fill='x', pady=(0, 12))
+        if getattr(self, '_icon', None) is not None:
+            ttk.Label(head, image=self._icon).pack(side='left', padx=(0, 12))
+        names = ttk.Frame(head)
+        names.pack(side='left')
+        ttk.Label(names, text=APP_NAME, style='Brand.TLabel').pack(anchor='w')
+        ttk.Label(names, text=t('about.version', v=VERSION) +
+                  '   TW1QuestCreator.exe', style='Muted.TLabel'
+                  ).pack(anchor='w')
         ttk.Label(f, text=t('about.links') + ':').pack(anchor='w')
-        for key, url in (('about.guide', GUIDE_URL),
-                         ('about.github', GITHUB_URL),
-                         ('about.community', COMMUNITY_URL)):
+        for key, url in LINKS:
             lnk = ttk.Label(f, text=f'{t(key)}: {url}', foreground=theme.GOLD,
                             cursor='hand2')
             lnk.pack(anchor='w', padx=(12, 0))
@@ -1326,25 +1608,38 @@ class App:
 
 
 class ProblemWindow:
-    """List of validation problems; double click jumps to the node."""
+    """Errors and warnings; double click jumps to the node (plan 8)."""
 
-    def __init__(self, app, title, problems):
+    def __init__(self, app, title, errors, warnings=()):
         self.app = app
-        self.problems = problems
+        self.rows = []
         win = tk.Toplevel(app.root)
-        win.title(t('export.title'))
+        win.title(title)
         win.transient(app.root)
-        win.geometry('640x360')
+        win.geometry('700x420')
         theme.dark_titlebar(win)
         f = ttk.Frame(win, padding=10)
         f.pack(fill='both', expand=True)
-        ttk.Label(f, text=title, foreground=theme.ERR).pack(anchor='w')
+        ttk.Label(f, text=title, style='Brand.TLabel').pack(anchor='w')
         ttk.Label(f, text=t('export.gotonode'), style='Muted.TLabel'
                   ).pack(anchor='w', pady=(0, 6))
         self.lst = tk.Listbox(f, font=theme.FONT, activestyle='none')
         self.lst.pack(fill='both', expand=True)
-        for q, msg, nid in problems:
-            self.lst.insert('end', f'Q_{q.id}: {msg}')
+        if not errors and not warnings:
+            self.lst.insert('end', t('val.ok'))
+            self.lst.itemconfigure(0, foreground=theme.OK)
+        for head, items, color in ((t('val.errors'), errors, theme.ERR),
+                                   (t('val.warnings'), warnings, theme.GOLD)):
+            if not items:
+                continue
+            self.lst.insert('end', f'{head} ({len(items)})')
+            self.lst.itemconfigure('end', foreground=color)
+            self.rows.append(None)
+            for q, msg, nid in items:
+                self.lst.insert('end', f'   Q_{q.id}: {msg}')
+                self.rows.append((q, nid))
+        if not errors and not warnings:
+            self.rows.append(None)
         self.lst.bind('<Double-Button-1>', self._go)
         ttk.Button(f, text=t('close'), command=win.destroy
                    ).pack(anchor='e', pady=(8, 0))
@@ -1352,8 +1647,8 @@ class ProblemWindow:
 
     def _go(self, ev):
         sel = self.lst.curselection()
-        if sel:
-            q, msg, nid = self.problems[sel[0]]
+        if sel and sel[0] < len(self.rows) and self.rows[sel[0]]:
+            q, nid = self.rows[sel[0]]
             self.app.goto_problem(q, nid)
 
 

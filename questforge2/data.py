@@ -66,6 +66,14 @@ def app_dir():
 ROOT = app_dir()
 
 
+def resource_path(*parts):
+    """Read-only files shipped with the program (README, icons): inside the
+    PyInstaller bundle when frozen, else the repository root."""
+    base = getattr(sys, '_MEIPASS', None) or os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
+
 def config_path():
     return os.path.join(ROOT, 'questforge_config.json')
 
@@ -500,6 +508,36 @@ def build_index(game_dir, progress=None):
 
 
 _TREES = {}
+_BLOCKS = {}
+
+
+def load_qtx_blocks(game_dir, force=False):
+    """{quest id: (QUEST block text, source)} as the game sees them: base
+    qtx, then every Mods\\*.wd that ships the full qtx (later wins). The
+    source names the archive that last changed or added the block."""
+    key = os.path.normcase(game_dir)
+    if key in _BLOCKS and not force:
+        return _BLOCKS[key]
+    qtx_path, _ = ensure_base(game_dir)
+    with open(qtx_path, 'rb') as f:
+        sources = [('retail', f.read().decode('latin-1'))]
+    for p in sorted(glob.glob(os.path.join(game_dir, 'Mods', '*.wd'))):
+        try:
+            mqtx, _ = _read_mod(p)
+        except Exception:
+            continue
+        if mqtx:
+            sources.append((os.path.basename(p), mqtx))
+    out = {}
+    for name, text in sources:
+        text = text.replace('\r\n', '\n')
+        for m in re.finditer(r'^QUEST Q_(\d+) [^\n]*\n.*?^END\n', text,
+                             re.M | re.S):
+            qid = int(m.group(1))
+            if qid not in out or out[qid][0] != m.group(0):
+                out[qid] = (m.group(0), name)
+    _BLOCKS[key] = out
+    return out
 
 
 def load_trees(game_dir, force=False):
@@ -612,3 +650,48 @@ class Index:
     def retail_quest_ids(self):
         return sorted(int(k) for k, q in self.quests.items()
                       if q['source'] == 'retail')
+
+
+def load_translations(game_dir):
+    """Merged translations of base .lan, Content*_Lan.wd and mods."""
+    trees = load_trees(game_dir)
+    for _tree, tr, _src in trees.values():
+        return tr
+    _, lan_path = ensure_base(game_dir)
+    with open(lan_path, 'rb') as f:
+        return tw1_lan.read(f.read())[0]
+
+
+# ---------------------------------------------------------------------------
+# quest templates (plan 3.1 "Als Vorlage speichern")
+
+TEMPLATE_EXT = '.tw1quest'
+
+
+def templates_dir():
+    return os.path.join(ROOT, 'templates')
+
+
+def list_templates():
+    d = templates_dir()
+    if not os.path.isdir(d):
+        return []
+    return sorted((os.path.splitext(n)[0], os.path.join(d, n))
+                  for n in os.listdir(d) if n.endswith(TEMPLATE_EXT))
+
+
+def save_template(name, quest_dict):
+    safe = re.sub(r'[^A-Za-z0-9 _-]+', '', name).strip() or 'Vorlage'
+    os.makedirs(templates_dir(), exist_ok=True)
+    path = os.path.join(templates_dir(), safe + TEMPLATE_EXT)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(quest_dict, f, indent=2, ensure_ascii=False)
+    return path
+
+
+def load_template(path):
+    with open(path, encoding='utf-8') as f:
+        d = json.load(f)
+    if not isinstance(d, dict):
+        raise ValueError('template must be a JSON object')
+    return d

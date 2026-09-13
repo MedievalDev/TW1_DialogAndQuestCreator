@@ -26,3 +26,8 @@ swap_yamalin.ps1
 # QuestForge 2 index cache (derived game data)
 cache/
 *.tw1proj.tmp
+
+# QuestForge 2 build output and user data
+build/
+dist/
+templates/

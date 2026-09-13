@@ -42,6 +42,8 @@ FONT_BRAND = ('Georgia', 12, 'bold')
 FONT_MONO = ('Consolas', 9)
 FONT_H1 = ('Segoe UI Semibold', 15)
 FONT_H2 = ('Segoe UI Semibold', 11)
+# Menus (menu bar labels and dropdowns): one size larger than body text.
+FONT_MENU = ('Segoe UI', 10)
 
 
 def dark_titlebar(window):
@@ -172,8 +174,8 @@ def apply_dark_theme(root):
     # Themed stand-in for the native menu bar, which Windows always draws
     # light and which no ttk style can reach.
     style.configure('Menubar.TFrame', background=PANEL)
-    style.configure('Menubar.TLabel', background=PANEL, foreground=MUT,
-                    padding=(12, 5))
+    style.configure('Menubar.TLabel', background=PANEL, foreground=INK,
+                    padding=(12, 5), font=FONT_MENU)
     style.map('Menubar.TLabel', background=[('active', SEL)],
               foreground=[('active', GOLD_HI)])
     for pattern, value in (
@@ -189,14 +191,62 @@ def apply_dark_theme(root):
             ('*Menu.background', PANEL), ('*Menu.foreground', INK),
             ('*Menu.activeBackground', SEL),
             ('*Menu.activeForeground', GOLD_HI),
-            ('*Menu.disabledForeground', '#5c564c'),
+            ('*Menu.disabledForeground', DIM),
+            ('*Menu.selectColor', GOLD),
+            ('*Menu.font', FONT_MENU),
             ('*Menu.borderWidth', 1),
             ('*Menu.activeBorderWidth', 0),
+            ('*Menu.relief', 'flat'),
             ('*TCombobox*Listbox.background', FIELD),
             ('*TCombobox*Listbox.foreground', INK),
             ('*TCombobox*Listbox.selectBackground', SEL),
             ('*Toplevel.background', BG)):
         root.option_add(pattern, value)
+
+
+class Menu(tk.Menu):
+    """Dropdown / context menu with readable disabled entries.
+
+    On Windows Tk draws disabled menu entries with an embossed white shadow
+    that is hard to read on a dark background. Entries added with
+    ``state='disabled'`` are therefore kept technically enabled, drawn in the
+    dim colour, without hover highlight and without a command.
+    """
+
+    def __init__(self, master=None, **kw):
+        kw.setdefault('tearoff', 0)
+        kw.setdefault('font', FONT_MENU)
+        kw.setdefault('background', PANEL)
+        kw.setdefault('foreground', INK)
+        kw.setdefault('activebackground', SEL)
+        kw.setdefault('activeforeground', GOLD_HI)
+        kw.setdefault('disabledforeground', DIM)
+        kw.setdefault('relief', 'flat')
+        kw.setdefault('activeborderwidth', 0)
+        super().__init__(master, **kw)
+
+    @staticmethod
+    def _soft_disable(kind, kw):
+        if kw.get('state') == 'disabled':
+            kw['state'] = 'normal'
+            kw['foreground'] = DIM
+            kw['activeforeground'] = DIM
+            kw['activebackground'] = PANEL
+            if kind != 'cascade':
+                kw['command'] = lambda: None
+        return kw
+
+    def add_command(self, cnf=None, **kw):
+        super().add_command(cnf or {}, **self._soft_disable('command', kw))
+
+    def add_checkbutton(self, cnf=None, **kw):
+        super().add_checkbutton(cnf or {}, **self._soft_disable('check', kw))
+
+    def add_radiobutton(self, cnf=None, **kw):
+        super().add_radiobutton(cnf or {}, **self._soft_disable('radio', kw))
+
+    def add_cascade(self, cnf=None, **kw):
+        super().add_cascade(cnf or {}, **self._soft_disable('cascade', kw))
 
 
 class Tooltip:

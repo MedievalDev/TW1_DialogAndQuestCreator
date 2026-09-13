@@ -51,6 +51,7 @@ class GraphView(tk.Canvas):
         # (title, summary, problem) of an action / condition / task node
         self.docked_text = lambda node: ('', '', False)
         self.fill_docked_menu = None       # (menu, kind, nid) -> None
+        self.get_clipboard = None          # () -> clipboard payload or None
         self.last_frame_ms = 0.0
         self._drag = None
         self._space = False
@@ -698,6 +699,7 @@ class GraphView(tk.Canvas):
             port = int(role.split(':')[2])
             self._drag = {'kind': 'edge', 'frm': nid, 'port': port,
                           'line': None}
+            self._mark_targets(nid, port)
             return
         if nid and role == 'grip':
             node = self.graph['nodes'][nid]
@@ -741,6 +743,29 @@ class GraphView(tk.Canvas):
             self.on_select()
         self._drag = {'kind': 'band', 'x': self.canvasx(ev.x),
                       'y': self.canvasy(ev.y), 'rect': None, 'add': ctrl}
+
+    def _mark_targets(self, frm, port):
+        """Grey out input ports that cannot take the dragged edge (plan
+        5.3); ``frm=None`` restores them."""
+        for item in self.find_withtag('port:in'):
+            nid = next((tg[2:] for tg in self.gettags(item)
+                        if tg.startswith('n:')), None)
+            ok = frm is None or (nid and model.can_connect(self.graph, frm,
+                                                           port, nid))
+            self.itemconfigure(item, fill=theme.INK if ok else theme.LINE,
+                               outline=theme.BG if ok else theme.LINE)
+
+    def set_as_start(self, nid):
+        node = self.graph['nodes'][nid]
+        st = node.get('state')
+        if st in (None, 'neutral'):
+            return
+        self.before_change('start')
+        ent = model.entry_id(st)
+        model.ensure_entry(self.graph, st)
+        model.connect(self.graph, ent, 0, nid)
+        self.redraw()
+        self.after_change()
 
     def _movable(self, ids):
         """Selected nodes plus whatever is attached to them (comments,
@@ -845,6 +870,7 @@ class GraphView(tk.Canvas):
                 self.after_change()
         elif d['kind'] == 'edge':
             self.delete('temp')
+            self._mark_targets(None, None)
             hit = self._hit(ev)
             wx, wy = self.event_world(ev)
             to = hit['nid']
@@ -914,7 +940,7 @@ class GraphView(tk.Canvas):
             self.after_change()
 
     def _kind_menu(self, nid, ev):
-        menu = tk.Menu(self, tearoff=0)
+        menu = theme.Menu(self, tearoff=0)
         for kind in ('answer', 'question'):
             menu.add_command(label=t('insp.kind.' + kind),
                              command=lambda k=kind: self.set_kind(nid, k))
@@ -953,7 +979,7 @@ class GraphView(tk.Canvas):
         self.focus_set()
         hit = self._hit(ev)
         wx, wy = self.event_world(ev)
-        menu = tk.Menu(self, tearoff=0)
+        menu = theme.Menu(self, tearoff=0)
         nid = hit['nid']
         if nid:
             if nid not in self.selected:
@@ -984,7 +1010,7 @@ class GraphView(tk.Canvas):
                     menu.add_command(label=t('ctx.detach'),
                                      command=lambda: self._attach(nid, None))
                 else:
-                    sub = tk.Menu(menu, tearoff=0)
+                    sub = theme.Menu(menu, tearoff=0)
                     for oid, o in self.graph['nodes'].items():
                         if o['type'] in ('npc', 'player'):
                             label = self.node_style(o)[0] or oid
@@ -992,7 +1018,7 @@ class GraphView(tk.Canvas):
                                 label=f'{label}  ({oid})',
                                 command=lambda o=oid: self._attach(nid, o))
                     menu.add_cascade(label=t('ctx.attach'), menu=sub)
-                col = tk.Menu(menu, tearoff=0)
+                col = theme.Menu(menu, tearoff=0)
                 for c in [theme.COMMENT_COLOR] + theme.SPEAKER_COLORS:
                     col.add_command(label='■', foreground=c,
                                     command=lambda c=c: self._set_color(nid, c))
@@ -1001,7 +1027,7 @@ class GraphView(tk.Canvas):
                 menu.add_command(label=t('ctx.disconnect'),
                                  command=lambda: self._disconnect_node(nid))
                 if node['type'] in ('npc', 'player'):
-                    st = tk.Menu(menu, tearoff=0)
+                    st = theme.Menu(menu, tearoff=0)
                     for s in model.STATES:
                         st.add_radiobutton(
                             label=t('state.' + s), value=s,
@@ -1010,6 +1036,11 @@ class GraphView(tk.Canvas):
                     menu.add_cascade(label=t('insp.state'), menu=st)
                     menu.add_command(label=t('ctx.attach_comment'),
                                      command=lambda: self._new_comment_for(nid))
+                    menu.add_command(
+                        label=t('ctx.setstart'),
+                        command=lambda: self.set_as_start(nid),
+                        state='normal' if node.get('state') != 'neutral'
+                        else 'disabled')
         elif hit['edge']:
             self.selected_edge = hit['edge']
             self.selected = set()
@@ -1017,7 +1048,7 @@ class GraphView(tk.Canvas):
             menu.add_command(label=t('ctx.cut_edge'),
                              command=self.delete_selection)
         else:
-            add = tk.Menu(menu, tearoff=0)
+            add = theme.Menu(menu, tearoff=0)
             if self.fill_add_menu:
                 self.fill_add_menu(add, wx, wy)
             else:
@@ -1027,6 +1058,10 @@ class GraphView(tk.Canvas):
             add.add_command(label=t('node.comment'),
                             command=lambda: self.add_node_at('comment', wx, wy))
             menu.add_cascade(label=t('ctx.add'), menu=add)
+            clip = self.get_clipboard() if self.get_clipboard else None
+            menu.add_command(label=t('edit.paste'),
+                             command=lambda: self.paste(clip),
+                             state='normal' if clip else 'disabled')
             menu.add_separator()
             menu.add_command(label=t('edit.autolayout'),
                              command=self.auto_layout)

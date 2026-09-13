@@ -103,6 +103,8 @@ def tree_to_graph(quest, tree, translations, index=None, qid=None):
                    'fight': fight, 'tid': e.tid, 'order': i})
         if (e.flags & model.STATE_MASK) and state == 'neutral':
             ln['raw_flags'] = e.flags            # unknown combination
+        if e.tid not in translations:
+            ln['notext'] = True              # retail line without a text key
         if len(e.cams) != 1:
             ln['cams'] = list(e.cams)
         if e.anim2 != e.anim1:
@@ -291,7 +293,8 @@ def graph_to_tree(quest, propagate_take=True):
                     break
             counters[suffix] = k
         used_tids.add(tid)
-        texts[tid] = ln.get('text', '')
+        if ln.get('text') or not ln.get('notext'):
+            texts[tid] = ln.get('text', '')
         # camera, lector
         if 'cams' in ln:
             cams = list(ln['cams'])
@@ -361,7 +364,16 @@ def _propagate(g, order, index_of):
 def preview_text(quest, index=None, t=lambda k, **f: k):
     """Readable listing of the exported tree (plan 3.1, "Vorschau")."""
     tree, texts = graph_to_tree(quest)
-    lines = [f'{tree.id}: {len(tree.entries)} lines', '']
+    lines = []
+    try:
+        if quest.retail:
+            from . import retail
+            lines += retail.block_text(quest).rstrip('\n').split('\n')
+        else:
+            lines += build_quest_block(quest).emit().rstrip('\n').split('\n')
+    except Exception as e:           # incomplete quest: show why
+        lines.append(f'(qtx: {e})')
+    lines += ['', f'{tree.id}: {len(tree.entries)} lines', '']
     for i, e in enumerate(tree.entries):
         st, take, close, fight = model.flags_to_state(e.flags)
         who = 'Held' if e.lector == 1 else f'L{e.lector}'
@@ -401,7 +413,9 @@ import wdio  # noqa: E402
 INNER_QTX = 'Scripts\\Quests\\TwoWorldsQuests.qtx'
 INNER_LAN = 'Language\\TwoWorldsQuests.lan'
 REG_MODS = r'SOFTWARE\Reality Pump\TwoWorlds\Mods'
-GAME_EXES = ('twoworlds.exe', 'twoworlds_radeon.exe')
+# Every process that keeps the archives open: TwoWorlds.exe,
+# TwoWorlds_RADEON.exe, TwoWorldsExtended.exe, TwoWorldsEditor*.exe ...
+GAME_EXE_PREFIX = 'twoworlds'
 
 
 def header_values(quest):
@@ -449,103 +463,9 @@ def build_quest_block(quest):
 
 
 def validate_quest(quest, index=None, project=None, archive=None, t=None):
-    """(errors, warnings): lists of (message, node id or None). Minimal
-    rule set for the export; milestone 7 completes plan section 8."""
-    t = t or (lambda k, **f: k + (' ' + str(f) if f else ''))
-    E, W = [], []
-    g = quest.graph
-    nodes = g['nodes']
-    qid = quest.id
-    if not quest.retail:
-        if not isinstance(qid, int) or not 381 <= qid <= 399:
-            E.append((t('val.id.range', id=qid), None))
-        elif index and index.quest(qid):
-            src = index.quest(qid)['source']
-            if src == 'retail' or (archive and src != archive):
-                E.append((t('val.id.taken', id=qid, src=src), None))
-            else:
-                W.append((t('val.id.replace', id=qid, src=src), None))
-        if project and sum(1 for q in project.quests if q.id == qid) > 1:
-            E.append((t('val.id.twice', id=qid), None))
-        if not quest.title.strip():
-            E.append((t('val.title'), None))
-        if index and str(quest.group) not in index.groups:
-            W.append((t('warn.group', g=quest.group), None))
-        for key in ('take', 'solve', 'close'):
-            if not (quest.journal.get(key) or '').strip():
-                E.append((t('val.journal.' + key), None))
-        if quest.giver is None:
-            E.append((t('val.giver'), None))
-        task = quest.task()
-        if not task.get('fc'):
-            E.append((t('val.task'), model.TASK_ID))
-        else:
-            try:
-                model.op_tokens(model.FC_SPECS[task['fc']], task['args'])
-            except model.ModelError as e:
-                E.append((t('val.task.field', err=e), model.TASK_ID))
-        afters = [c for c in quest.conditions_list()
-                  if c.get('cond') == 'after']
-        if not afters:
-            E.append((t('val.after'), entry_id('first')))
-        for c in afters:
-            pq = c.get('quest')
-            known = (index and index.quest(pq)) or (
-                project and project.quest_by_id(pq))
-            if not isinstance(pq, int) or not known:
-                E.append((t('val.after.quest', id=pq), entry_id('first')))
-        first = model.edge_from(g, entry_id('first'), 0)
-        if not first:
-            E.append((t('val.offer.empty'), entry_id('first')))
-        elif nodes[first[2]]['type'] != 'npc':
-            E.append((t('val.offer.npc'), first[2]))
-        for a, when, nid in all_actions(quest):
-            if when is None:
-                E.append((t('val.action.level'), nid))
-                continue
-            allowed = (model.REWARD_WHEN if a['kind'] == 'REWARD'
-                       else model.ACTION_WHEN)
-            if when not in allowed:
-                E.append((t('val.action.when', when=when), nid))
-            try:
-                model.op_tokens(model.ACTION_SPECS[(a['kind'], a['verb'])],
-                                a['args'])
-            except model.ModelError as e:
-                E.append((t('val.action.field', err=e), nid))
-            if a['verb'] == 'NPC_TELEPORT' and '_' in str(
-                    a['args'].get('tile', '')):
-                W.append((t('warn.teleport.interior'), nid))
-            if a['verb'] == 'SHOW_LOCATION' and when != 'TAKE':
-                W.append((t('warn.showloc'), nid))
-            if a['verb'] == 'PLAY_CUTSCENE' and str(
-                    a['args'].get('number')) in ('7', '8'):
-                W.append((t('warn.cutscene'), nid))
-        if task.get('fc') == 'CLEAR_AREA':
-            party = str(task['args'].get('party'))
-            if not any(a['verb'] == 'ENEMY_CREATE'
-                       and str(a['args'].get('party')) == party
-                       for a, _, _ in all_actions(quest)):
-                W.append((t('warn.cleararea'), model.TASK_ID))
-            if party not in ('18', '19', '20', '21', '22', '23'):
-                W.append((t('warn.cleararea.party'), model.TASK_ID))
-        if task.get('fc') == 'TALK' and str(task['args'].get('npc')) == str(
-                quest.giver):
-            W.append((t('warn.talk.giver'), model.TASK_ID))
-    for nid, n in nodes.items():
-        if n.get('type') not in ('npc', 'player'):
-            continue
-        for ln in n.get('lines') or []:
-            text = ln.get('text') or ''
-            if '\r' in text:
-                E.append((t('val.cr'), nid))
-            if not text.strip() and ln.get('order') is None:
-                E.append((t('val.text.empty'), nid))
-        if n['type'] == 'npc' and quest.speaker(n.get('speaker')) is None:
-            E.append((t('val.speaker'), nid))
-    for key in ('take', 'solve', 'close'):
-        if '\r' in (quest.journal.get(key) or ''):
-            E.append((t('val.cr'), None))
-    return E, W
+    """Kept for callers of milestone 5; the rules live in validate.py."""
+    from .validate import validate_quest as _validate
+    return _validate(quest, index, project, archive, t)
 
 
 # -- qtx ----------------------------------------------------------------------
@@ -618,8 +538,19 @@ def patch_qtx(text, quests, index=None):
     text = text.replace('\r\n', '\n')
     if not text.endswith('\n'):
         text += '\n'
+    from . import retail
     for q in quests:
         if q.retail:
+            block = retail.block_text(q)
+            m = _find_block(text, q.id)
+            if m and m.group(0) == block:
+                continue
+            if m:
+                text = text[:m.start()] + block + text[m.end():]
+                log.append(('replace', q.id))
+            else:
+                text = text + block
+                log.append(('append', q.id))
             continue
         block = build_quest_block(q).emit()
         npc_text = ''
@@ -654,10 +585,13 @@ def quest_texts(quest):
     """(tree, {key: text}) with title, journal, dialog and new NPC names."""
     tree, texts = graph_to_tree(quest)
     qid = quest.id
-    texts[f'translateQ_{qid}'] = quest.title
-    texts[f'translateQ_{qid}_QTD'] = quest.journal.get('take', '')
-    texts[f'translateQ_{qid}_QSD'] = quest.journal.get('solve', '')
-    texts[f'translateQ_{qid}_QCD'] = quest.journal.get('close', '')
+    for key, value in ((f'translateQ_{qid}', quest.title),
+                       (f'translateQ_{qid}_QTD', quest.journal.get('take')),
+                       (f'translateQ_{qid}_QSD', quest.journal.get('solve')),
+                       (f'translateQ_{qid}_QCD', quest.journal.get('close'))):
+        # a game quest keeps keys it never had
+        if value or not quest.retail:
+            texts[key] = value or ''
     for s in quest.speakers:
         if s.get('new') and isinstance(s['id'], int):
             texts[f"translateNPC_{s['id']}"] = s['name']
@@ -697,9 +631,17 @@ def game_running():
                                                    'CREATE_NO_WINDOW', 0))
     except (OSError, subprocess.SubprocessError):
         return False
-    names = {ln.split(',')[0].strip('"').lower()
-             for ln in out.stdout.splitlines() if ln}
-    return any(n in names for n in GAME_EXES)
+    return running_game_name(out.stdout) is not None
+
+
+def running_game_name(tasklist_csv):
+    """Name of a running Two Worlds process in ``tasklist /FO CSV`` output."""
+    for ln in tasklist_csv.splitlines():
+        name = ln.split(',')[0].strip('"')
+        if name.lower().startswith(GAME_EXE_PREFIX) and \
+                name.lower().endswith('.exe'):
+            return name
+    return None
 
 
 def wd_paths(path):
@@ -854,8 +796,10 @@ def build_files(project, base_qtx, master_lan, index=None, overlay_name=None):
     """{inner path: bytes} for all quests of the project."""
     quests = list(project.quests)
     files = {}
-    if any(not q.retail for q in quests):
-        text, _ = patch_qtx(base_qtx.decode('latin-1'), quests, index)
+    base_text = base_qtx.decode('latin-1')
+    text, _ = patch_qtx(base_text, quests, index)
+    if text != base_text.replace('\r\n', '\n') or any(
+            not q.retail for q in quests):
         files[INNER_QTX] = text.encode('latin-1')
     full, overlay = build_lan(master_lan, quests)
     files[INNER_LAN] = full
