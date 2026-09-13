@@ -35,8 +35,9 @@ Multiplayer-Questsystem.
 | Entscheidung | Wahl | Grund |
 |---|---|---|
 | Sprache | Python 3.12, nur Standard-Library + bestehende Module | Bestehende Pipeline (`tw1_qtx`, `tw1_lan`, `wdio`, `questforge`, `DataHub`-Logik aus `quest_creator_gui.py`) wird 1:1 wiederverwendet |
-| GUI | **Tkinter, Node-Graph als eigener `Canvas`** | Keine Abhaengigkeit, eine einzige exe von ca. 12 MB, Start unter 1 s, das Dark-Theme aus `quest_creator_gui.py` existiert schon. Alternative PySide6 (QGraphicsView) waere fuer den Graphen komfortabler, kostet aber 50 bis 100 MB exe und 2 bis 4 s Start. Empfehlung: Tkinter. Umstieg auf Qt nur, wenn der Canvas in Meilenstein 2 nachweislich zu langsam ist |
-| Exe | PyInstaller `--onefile --noconsole --icon`, Build-Spec im Repo (`build_exe.spec`), Build-Skript `build_exe.bat` | Nutzer brauchen kein Python. Eine Datei, wie gewuenscht. Hinweis: onefile entpackt beim Start nach `%TEMP%`, bei Tkinter etwa 0,5 s, akzeptabel |
+| GUI | **Tkinter, Node-Graph als eigener `Canvas`** (entschieden 2026-09-13) | Keine Abhaengigkeit, eine einzige exe von ca. 12 MB, Start unter 1 s, das Dark-Theme aus `quest_creator_gui.py` existiert schon. Alternative PySide6 (QGraphicsView) waere fuer den Graphen komfortabler, kostet aber 50 bis 100 MB exe und 2 bis 4 s Start. Umstieg auf Qt nur, wenn der Canvas in Meilenstein 2 nachweislich zu langsam ist |
+| Exe | **`TW1QuestCreator.exe`**, PyInstaller `--onefile --noconsole --icon`, Build-Spec im Repo (`build_exe.spec`), Build-Skript `build_exe.bat` | Nutzer brauchen kein Python. Eine Datei, wie gewuenscht. Hinweis: onefile entpackt beim Start nach `%TEMP%`, bei Tkinter etwa 0,5 s, akzeptabel |
+| UI-Sprache | **Umschaltbar Deutsch / Englisch** (entschieden 2026-09-13) | Alle sichtbaren Texte laufen ueber `i18n.t('key')`, zwei Woerterbuecher in `questforge2/i18n.py`. Standard nach Windows-Sprache (`locale.getlocale`), Umschalten im Menue Ansicht, wirkt nach Neustart (Widgets werden nicht live umbeschriftet, das haelt den Code einfach). Guides und Validierungstexte sind ebenfalls zweisprachig |
 | Projektdatei | `*.tw1proj` (JSON, lesbar, Git-freundlich) | Ein Projekt = eine Mod (`.wd`) mit beliebig vielen Quests |
 | Konfig | `questforge_config.json` wie bisher (Spielpfad, zuletzt geoeffnete Projekte, Guide-schon-gesehen) | Bleibt kompatibel zum bestehenden Tool |
 
@@ -80,6 +81,7 @@ neue Tool nicht mit den Root-Skripten vermischt wird.
 | `questforge2/__main__.py` | Einstieg (`python -m questforge2`), Start des Hauptfensters |
 | `questforge2/app.py` | Hauptfenster, Menueleiste, Kontextmenues, Statusleiste, Fensterlayout, `VERSION` |
 | `questforge2/theme.py` | Dark-Theme, Farben, Schriften, Node-Farbpalette |
+| `questforge2/i18n.py` | `t(key)` und die beiden Woerterbuecher DE/EN, Spracherkennung, Umschalten |
 | `questforge2/model.py` | Datenmodell: Projekt, Quest, Sprecher, Node-Typen, Kanten; JSON laden/speichern; Undo-Stack |
 | `questforge2/graph.py` | Der Canvas-Node-Editor: Nodes zeichnen, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Auto-Layout |
 | `questforge2/inspector.py` | Rechte Seitenleiste: Eigenschaften-Formulare pro Node-Typ |
@@ -241,12 +243,26 @@ Warnung "Untertitel muss zur Aufnahme passen"), Kamera (Standard auf NPC),
 Animation 1/2 (Zahl, Standard 0). Beim Bearbeiten von Retail-Zeilen bleiben
 Cue und Animationen erhalten (SKILL: "never drop cue/anim1/anim2").
 
-**Annahme-Node** (gold, nur im Tab Angebot, optional): die Held-Zeile mit
-Flag `1.TAKE`. **[PRUEFEN]** Ob eine explizite `1.TAKE`-Zeile noetig ist oder
-die Quest am Ende der `0.FT.AS`-Kette ohnehin angenommen wird
-(`build_quest_tago.py` kommt ohne aus, README Abschnitt 6 nennt beides). Vor
-Meilenstein 4 am Spiel testen. Ergebnis entscheidet, ob die Node ueberhaupt in
-die Palette kommt.
+**Annahme und Ablehnen im Tab Angebot.** Wie das Spiel eine Annahme
+erkennt, ist nicht eindeutig dokumentiert; README Abschnitt 6 nennt zwei
+Dinge nebeneinander: die `0.FT.AS`-Kette, "an deren Ende die Quest angenommen
+ist" (so laeuft `build_quest_tago.py`), und das Flag `1.TAKE` (`0x20100`) als
+"Annahme-Option". Ausserdem gibt es den Zustand `0.QNT` (`0x2`, "Quest
+bekannt, nicht angenommen") und das Ereignis `HEAR` (Angebot gehoert) fuer
+`AOQ` und `REWARD`. Daraus folgt: **Ablehnen verwirft die Quest nicht.** Sie
+geht in den Zustand "bekannt, nicht angenommen", und der NPC kann sie beim
+naechsten Gespraech wieder anbieten. Offen ist nur der Mechanismus:
+
+| Hypothese | Bedeutung fuer den Nutzer |
+|---|---|
+| A: `1.TAKE` markiert die Annahme-Zeile, jede andere Endzeile im Angebot lehnt ab | Im Tab Angebot bekommt jede Zeile einer Spieler-Frage einen Haken **"Nimmt die Quest an"** (gold markiert). Zeilen ohne Haken, deren Zweig endet, sind Ablehnungen. Ein fuenfter Tab **"Bekannt"** (`0.QNT`) spielt nach einer Ablehnung; dort kann man erneut anbieten (wieder mit Annahme-Haken) |
+| B: Das Ende jeder `0.FT.AS`-Kette nimmt an, egal welche Zeile | Ablehnen ist im Angebot nicht moeglich. Der Haken entfaellt, der Coach sagt das klar ("Sobald das Angebotsgespraech endet, ist die Quest angenommen"). Der Tab "Bekannt" bleibt fuer Retail-Dialoge, die `0.QNT` nutzen |
+
+**[PRUEFEN] vor Meilenstein 4, am Spiel:** Angebot mit zwei Spieler-Zeilen
+bauen, eine mit `1.TAKE`, eine ohne, beide Zweige enden. Ablehnen waehlen,
+Tagebuch pruefen, NPC erneut ansprechen. Ergebnis entscheidet zwischen A und
+B; die Palette wird danach festgelegt. Bis dahin implementiert M3 den Haken
+(Hypothese A), weil er bei B einfach entfernt werden kann.
 
 **Kommentar-Node** (scharfe Ecken, grau, halbtransparent, groessenverstellbar,
 Farbe waehlbar): kein Port, keine Wirkung im Export. Kann per "Kommentar
@@ -257,11 +273,7 @@ eine Zeile keinen Nachfolger hat (`next=[]`). Eine Ende-Node waere nur
 Dekoration und eine weitere Sache, die der Nutzer verbinden muss. Stattdessen
 zeichnet der Graph an jedem offenen Ausgangsport ein kleines graues
 "Ende"-Kaeppchen, sodass sichtbar ist, wo das Gespraech auslaeuft.
-**[PRUEFEN] Ablehnen:** Ob eine Held-Zeile im Tab Angebot, die einfach endet,
-im Spiel als "abgelehnt, naechstes Mal wieder anbieten" funktioniert oder ob
-die Quest trotzdem angenommen wird. Wenn das Ablehnen anders funktioniert,
-kommt eine "Ablehnen"-Node (rot, nur Tab Angebot) dazu. Erst testen, dann
-entscheiden.
+Ablehnen: siehe Annahme und Ablehnen oben.
 
 ### 5.3 Bedienung im Graph
 
@@ -384,8 +396,8 @@ Bedingungs-Palette baut. Was es gibt und wie es im Tool erscheint:
 | "Gilde / Mindest-Ruf" | Kopfzeile `guild`, `minRep` | Einstieg Angebot |
 | "Aufgabe erledigt" | die `FC`-Zeile | ist implizit der Einstieg im Tab Erfuellt, keine Node noetig |
 
-Also: Bedingungs-Nodes (abgerundet, Schloss-Symbol) haengen **unten an der
-Einstiegs-Node**, nicht an beliebigen NPC-Nodes. NPC-Nodes bekommen deshalb
+Also (entschieden 2026-09-13): Bedingungs-Nodes (abgerundet, Schloss-Symbol)
+haengen **unten an der Einstiegs-Node**, nicht an beliebigen NPC-Nodes. NPC-Nodes bekommen deshalb
 **keinen** Bedingungs-Port, nur den Aktions-Port oben. Das weicht vom
 urspruenglichen Wunsch ab, ist aber ehrlich gegenueber dem Format: ein
 Bedingungs-Port an einer beliebigen Zeile wuerde etwas versprechen, das im
@@ -559,15 +571,21 @@ und Ablehnen; nach M5 die erste Tool-Quest; nach M6 eine Retail-Aenderung.
 
 ---
 
-## 12. Offene Punkte (vor M1 zu klaeren)
+## 12. Entscheidungen und offene Punkte
 
-1. Tkinter-Canvas (Empfehlung) oder PySide6 fuer den Graphen.
-2. UI-Sprache: Deutsch, Englisch, oder umschaltbar (das bestehende Tool ist
-   Englisch, die Doku Deutsch; umschaltbar kostet eine Texttabelle, sonst
-   nichts).
-3. Bedingungen nur am Einstieg (Abschnitt 6.3) statt an jeder NPC-Node:
-   einverstanden?
-4. Geklaert: Neubau auf Branch `questforge2`, altes Tool bleibt unangetastet
-   (Abschnitt 2.3). Offen bleibt nur, ob `quest_creator_gui.py` nach dem
-   ersten erfolgreichen Spieltest aus `main` entfernt wird.
-5. Projektname der exe (`QuestForge.exe`, `TW1QuestCreator.exe`, ...).
+Entschieden am 2026-09-13:
+
+1. Tkinter-Canvas fuer den Graphen (Abschnitt 2.1).
+2. UI-Sprache umschaltbar Deutsch/Englisch (Abschnitt 2.1).
+3. Bedingungen docken nur am Einstieg (Abschnitt 6.3).
+4. Neubau als Paket `questforge2/` auf eigenem Branch, altes Tool bleibt
+   unangetastet (Abschnitt 2.3).
+5. Exe heisst `TW1QuestCreator.exe`.
+
+Offen:
+
+- Ob `quest_creator_gui.py` nach dem ersten erfolgreichen Spieltest aus
+  `main` entfernt wird.
+- Alle `[PRUEFEN]`-Punkte: Annahme/Ablehnen (5.2), Kanten ueber Tab-Grenzen
+  (5.1), Zeilen-Bedingungen (6.3), `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4).
+  Werden am Spiel getestet, Ergebnis kommt in dieses Dokument.
