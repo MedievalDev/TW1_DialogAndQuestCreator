@@ -2,7 +2,7 @@
 
 Stand: 2026-09-13, **Plan freigegeben (Marco)**. Umsetzung laeuft auf Branch
 `questforge2` im Clone `C:\Users\marco\Desktop\TW1QuestCreator`.
-**M1 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
+**M1 und M2 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -595,7 +595,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 | M | Inhalt | Fertig wenn |
 |---|---|---|
 | M1 | Fenster, Menues, Statusleiste, Projekt neu/oeffnen/speichern, `data.py` mit Cache | Start unter 1 s beim zweiten Mal, Projektdatei round-trippt. **Fertig 2026-09-13:** Start 0,3 s (Cache 0,01 s), Vollaufbau des Index 0,8 bis 1,4 s, 14 Tests gruen, Projektdatei byte-gleich nach Speichern/Oeffnen/Speichern |
-| M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final |
+| M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final. **Fertig 2026-09-13:** `graph.py`; bei 300 Nodes (4449 Canvas-Items) ein Node ziehen 1,7 ms/Frame, alle 300 zusammen 13 ms/Frame, Zoomstufe wechseln 92 ms, Undo 107 ms. **Tkinter bleibt (final).** 21 Tests gruen |
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich |
 | M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet) |
@@ -652,6 +652,33 @@ Entschieden am 2026-09-13 (Umsetzung M1):
 11. Projektdatei `*.tw1proj`: JSON, `format: 1`, `tool_version`, `name`,
     `target_archive`, `quests[]`; unbekannte Schluessel werden beim Laden
     bewahrt und beim Speichern zurueckgeschrieben (Vorwaertskompatibilitaet).
+
+Entschieden am 2026-09-13 (Umsetzung M2):
+
+12. Tkinter-Canvas ist final (Messwerte in der M2-Zeile). Drag laeuft ueber
+    ein Sammel-Tag `sel` (ein `move`-Aufruf pro Frame), Kanten werden ueber
+    eine Item-Tabelle statt `find_withtag` aktualisiert, Drag-Deltas werden
+    auf ganze Welt-Einheiten gerundet (Modell bleibt int, kein Neuzeichnen
+    beim Loslassen).
+13. Node-Schema im Projekt: `type` (`entry` | `node` | `comment`), `x`, `y`,
+    `lines[]` (eine Zeile = ein Ausgangsport), `title`, `color`, bei
+    Kommentaren `w`, `h`, `text`, `attached_to`. Kanten `[von, port, nach]`,
+    genau eine Kante je Ausgangsport (Neuverbinden ersetzt), beliebig viele
+    Eingaenge (Wiedereinstieg). Der Einstieg heisst `entry`, ist je Tab fest,
+    nicht loeschbar, nicht verschiebbar.
+14. Undo als Snapshot von `quest.tabs` pro Aktion (`UndoStack`, 100 Stufen),
+    Undo-Stack wird beim Quest-Wechsel geleert. Zwischenablage haelt Nodes
+    plus interne Kanten, Einfuegen versetzt um 30/30 und vergibt neue IDs.
+15. Kante ins Leere ziehen erzeugt in M2 direkt eine Dialog-Node und
+    verbindet sie; M3 haengt dort das Popup "Spieler / Sprecher / Kommentar"
+    an. Doppelklick auf einen Node ist fuer das Eigenschaften-Panel (M3)
+    reserviert.
+16. Tabs ueber dem Graph als Label-Leiste (`Angebot`, `Laeuft`, `Erfuellt`,
+    `Abgeschlossen`; `Gruss`, `Bekannt`, `Neutral` nur wenn im Modell
+    vorhanden). "Quest > Neue Quest" ist schon in M2 aktiv (naechste freie
+    ID), der Quest-Panel-Rest bleibt M3.
+17. Nur im Quellcode-Modus (nicht in der Exe): "Quest > Debug: 300
+    Test-Nodes" und die Frame-Zeit des letzten Drags in der Statusleiste.
 
 Offen:
 

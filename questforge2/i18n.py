@@ -99,6 +99,21 @@ _DE = {
     'about.nodata': 'Dieses Programm enthaelt keine Spieldaten. Two Worlds '
                     'ist ein Titel von Reality Pump / TopWare Interactive.',
     'stats': '{q} Quests, {n} NPCs, {c} Cues, {f} freie IDs',
+    # graph
+    'tab.0.FT.AS': 'Angebot', 'tab.0.QNS.AE': 'Laeuft',
+    'tab.0.QS.AE': 'Erfuellt', 'tab.0.QC': 'Abgeschlossen',
+    'tab.0.FT': 'Gruss', 'tab.0.QNT': 'Bekannt', 'tab.0x0': 'Neutral',
+    'node.entry': 'Einstieg', 'node.end': 'Ende',
+    'node.dialog': 'Dialog-Node', 'node.comment': 'Kommentar',
+    'ctx.add': 'Node hinzufuegen', 'ctx.attach': 'An Node anheften',
+    'ctx.detach': 'Kommentar loesen',
+    'ctx.attach_comment': 'Kommentar anheften',
+    'ctx.disconnect': 'Kante(n) trennen', 'ctx.cut_edge': 'Trennen',
+    'ctx.color': 'Farbe',
+    'status.frame': 'Ziehen {ms:.1f} ms',
+    'quest.debug300': 'Debug: 300 Test-Nodes',
+    'quest.noquest': 'Keine Quest geoeffnet.',
+    'quest.noid': 'Keine freie Quest-ID mehr (381 bis 399 sind belegt).',
 }
 
 _EN = {
@@ -179,6 +194,20 @@ _EN = {
     'about.nodata': 'This program contains no game data. Two Worlds is a '
                     'title by Reality Pump / TopWare Interactive.',
     'stats': '{q} quests, {n} NPCs, {c} cues, {f} free ids',
+    'tab.0.FT.AS': 'Offer', 'tab.0.QNS.AE': 'Running',
+    'tab.0.QS.AE': 'Solved', 'tab.0.QC': 'Closed',
+    'tab.0.FT': 'Greeting', 'tab.0.QNT': 'Known', 'tab.0x0': 'Neutral',
+    'node.entry': 'Entry', 'node.end': 'End',
+    'node.dialog': 'Dialog node', 'node.comment': 'Comment',
+    'ctx.add': 'Add node', 'ctx.attach': 'Attach to node',
+    'ctx.detach': 'Detach comment',
+    'ctx.attach_comment': 'Attach comment',
+    'ctx.disconnect': 'Disconnect edge(s)', 'ctx.cut_edge': 'Disconnect',
+    'ctx.color': 'Colour',
+    'status.frame': 'Drag {ms:.1f} ms',
+    'quest.debug300': 'Debug: 300 test nodes',
+    'quest.noquest': 'No quest open.',
+    'quest.noid': 'No free quest id left (381 to 399 are taken).',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

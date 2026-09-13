@@ -1,25 +1,30 @@
-"""Main window: menu bar, panels, status bar, project handling.
+"""Main window: menu bar, panels, status bar, project handling, graph.
 
-Milestone 1: the frame of the tool. Panels that belong to later milestones
-are placeholders; their menu entries exist but are disabled so the final
-structure (plan section 3) is visible from the first start.
+Milestone 1 built the frame; milestone 2 adds the node graph (graph.py),
+the conversation tabs above it, undo/redo and the clipboard. Panels that
+belong to later milestones are still placeholders; their menu entries
+exist but are disabled so the final structure (plan section 3) is visible.
 """
 
 import json
 import os
+import random
+import sys
 import threading
 import time
 import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from . import APP_NAME, VERSION, data, theme
+from . import APP_NAME, VERSION, data, model, theme
+from .graph import GraphView
 from .i18n import t, set_lang, get_lang, detect_lang
-from .model import Project, ModelError, PROJECT_EXT
+from .model import Project, Quest, ModelError, PROJECT_EXT
 
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
 COMMUNITY_URL = 'https://twmp.alchemy-fox.de/'
+DEBUG = not getattr(sys, 'frozen', False)
 
 
 class App:
@@ -30,6 +35,9 @@ class App:
         self.index = None
         self.project = None
         self.quest = None
+        self.tab_key = model.DEFAULT_TABS[0]
+        self.undo = model.UndoStack()
+        self.clipboard = None
 
         self.root = tk.Tk()
         self.root.withdraw()
@@ -86,6 +94,9 @@ class App:
     def _acc(keys):
         return keys.replace('Ctrl', t('ctrl'))
 
+    def _state(self, cond):
+        return 'normal' if cond else 'disabled'
+
     def _fill_file(self, m):
         m.add_command(label=t('file.new'), accelerator=self._acc('Ctrl+N'),
                       command=self.new_project)
@@ -114,27 +125,49 @@ class App:
         m.add_command(label=t('file.quit'), command=self.quit)
 
     def _fill_edit(self, m):
-        for entry in (('edit.undo', 'Ctrl+Z'), ('edit.redo', 'Ctrl+Y'),
-                      None, ('edit.cut', 'Ctrl+X'), ('edit.copy', 'Ctrl+C'),
-                      ('edit.paste', 'Ctrl+V'), ('edit.duplicate', 'Ctrl+D'),
-                      ('edit.delete', 'Entf' if get_lang() == 'de'
-                       else 'Del'), ('edit.selectall', 'Ctrl+A'),
-                      None, ('edit.autolayout', 'Ctrl+L')):
-            if entry is None:
-                m.add_separator()
-            else:
-                m.add_command(label=t(entry[0]),
-                              accelerator=self._acc(entry[1]),
-                              state='disabled')
+        g = self.graph
+        has_q = self.quest is not None
+        has_sel = has_q and bool(g.selected - {model.ENTRY_ID})
+        m.add_command(label=t('edit.undo'), accelerator=self._acc('Ctrl+Z'),
+                      command=self.do_undo,
+                      state=self._state(has_q and self.undo.can_undo()))
+        m.add_command(label=t('edit.redo'), accelerator=self._acc('Ctrl+Y'),
+                      command=self.do_redo,
+                      state=self._state(has_q and self.undo.can_redo()))
+        m.add_separator()
+        m.add_command(label=t('edit.cut'), accelerator=self._acc('Ctrl+X'),
+                      command=self.cut, state=self._state(has_sel))
+        m.add_command(label=t('edit.copy'), accelerator=self._acc('Ctrl+C'),
+                      command=self.copy, state=self._state(has_sel))
+        m.add_command(label=t('edit.paste'), accelerator=self._acc('Ctrl+V'),
+                      command=self.paste,
+                      state=self._state(has_q and bool(self.clipboard)))
+        m.add_command(label=t('edit.duplicate'),
+                      accelerator=self._acc('Ctrl+D'),
+                      command=g.duplicate_selection,
+                      state=self._state(has_sel))
+        m.add_command(label=t('edit.delete'),
+                      accelerator='Entf' if get_lang() == 'de' else 'Del',
+                      command=g.delete_selection,
+                      state=self._state(has_sel or (has_q and
+                                                    g.selected_edge)))
+        m.add_command(label=t('edit.selectall'),
+                      accelerator=self._acc('Ctrl+A'),
+                      command=g.select_all, state=self._state(has_q))
+        m.add_separator()
+        m.add_command(label=t('edit.autolayout'),
+                      accelerator=self._acc('Ctrl+L'),
+                      command=g.auto_layout, state=self._state(has_q))
 
     def _fill_view(self, m):
+        g = self.graph
         m.add_command(label=t('view.zoomin'), accelerator=self._acc('Ctrl++'),
-                      state='disabled')
+                      command=g.zoom_in)
         m.add_command(label=t('view.zoomout'), accelerator=self._acc('Ctrl+-'),
-                      state='disabled')
+                      command=g.zoom_out)
         m.add_command(label=t('view.zoom100'), accelerator=self._acc('Ctrl+0'),
-                      state='disabled')
-        m.add_command(label=t('view.fit'), accelerator='F', state='disabled')
+                      command=g.zoom_reset)
+        m.add_command(label=t('view.fit'), accelerator='F', command=g.fit)
         m.add_separator()
         for key, var in (('view.timeline', 'timeline'),
                          ('view.palette', 'palette'),
@@ -144,12 +177,13 @@ class App:
                               command=self._apply_panels)
         m.add_separator()
         m.add_checkbutton(label=t('view.grid'), variable=self.grid_var,
-                          state='disabled')
+                          command=lambda: g.set_grid(self.grid_var.get()))
         edges = tk.Menu(m, tearoff=0)
-        edges.add_radiobutton(label=t('view.edges.curve'), value='curve',
-                              variable=self.edge_var, state='disabled')
-        edges.add_radiobutton(label=t('view.edges.line'), value='line',
-                              variable=self.edge_var, state='disabled')
+        for key, val in (('view.edges.curve', 'curve'),
+                         ('view.edges.line', 'line')):
+            edges.add_radiobutton(
+                label=t(key), value=val, variable=self.edge_var,
+                command=lambda: g.set_edge_style(self.edge_var.get()))
         m.add_cascade(label=t('view.edges'), menu=edges)
         m.add_separator()
         lang = tk.Menu(m, tearoff=0)
@@ -160,7 +194,8 @@ class App:
         m.add_cascade(label=t('view.lang'), menu=lang)
 
     def _fill_quest(self, m):
-        m.add_command(label=t('quest.new'), state='disabled')
+        m.add_command(label=t('quest.new'), command=self.new_quest,
+                      state=self._state(self.project is not None))
         m.add_command(label=t('quest.duplicate'), state='disabled')
         m.add_command(label=t('quest.delete'), state='disabled')
         m.add_separator()
@@ -168,6 +203,10 @@ class App:
                       state='disabled')
         m.add_command(label=t('quest.preview'), state='disabled')
         m.add_command(label=t('quest.template'), state='disabled')
+        if DEBUG:
+            m.add_separator()
+            m.add_command(label=t('quest.debug300'), command=self.debug_nodes,
+                          state=self._state(self.quest is not None))
 
     def _fill_help(self, m):
         m.add_command(label=t('help.tour'), state='disabled')
@@ -191,9 +230,18 @@ class App:
         self.palette.add(self.speakers, weight=1)
         self.palette.add(self.actions, weight=1)
 
-        self.graph = tk.Canvas(self.hpane, bg=theme.CANVAS_BG,
-                               highlightthickness=0)
-        self.graph.bind('<Configure>', self._draw_graph_placeholder)
+        # centre: tab strip above the graph canvas
+        self.center = ttk.Frame(self.hpane)
+        self.tabstrip = ttk.Frame(self.center, style='Panel.TFrame')
+        self.tabstrip.pack(fill='x')
+        self.tab_labels = {}
+        self.graph = GraphView(self.center)
+        self.graph.pack(fill='both', expand=True)
+        self.graph.before_change = self.push_undo
+        self.graph.after_change = self._after_change
+        self.graph.on_select = self._update_status
+        self.graph.on_edge_drop_empty = self._edge_drop_empty
+        self.graph.bind('<Configure>', self._draw_graph_placeholder, add='+')
 
         self.side = ttk.PanedWindow(self.hpane, orient='vertical')
         self.inspector = self._placeholder(self.side, 'panel.inspector', 3)
@@ -213,24 +261,22 @@ class App:
 
     def _apply_panels(self, initial=False):
         v = self.vars
-        # vertical: timeline above, hpane below
         for w in (self.timeline, self.hpane):
             if str(w) in self.vpane.panes():
                 self.vpane.forget(w)
         if v['timeline'].get():
             self.vpane.add(self.timeline, weight=0)
         self.vpane.add(self.hpane, weight=1)
-        # horizontal: palette | graph | side
-        for w in (self.palette, self.graph, self.side):
+        for w in (self.palette, self.center, self.side):
             if str(w) in self.hpane.panes():
                 self.hpane.forget(w)
         if v['palette'].get():
             self.hpane.add(self.palette, weight=0)
-        self.hpane.add(self.graph, weight=1)
+        self.hpane.add(self.center, weight=1)
         show_side = v['inspector'].get() or v['coach'].get()
         if show_side:
             self.hpane.add(self.side, weight=0)
-            for w, key in ((self.inspector, 'inspector'), (self.coach, 'coach')):
+            for w in (self.inspector, self.coach):
                 if str(w) in self.side.panes():
                     self.side.forget(w)
             if v['inspector'].get():
@@ -255,10 +301,156 @@ class App:
         c = self.graph
         c.delete('placeholder')
         if self.quest is None:
-            c.create_text(c.winfo_width() // 2, c.winfo_height() // 2,
+            c.create_text(c.canvasx(c.winfo_width() // 2),
+                          c.canvasy(c.winfo_height() // 2),
                           text=t('graph.empty'), fill=theme.MUT,
                           font=theme.FONT, justify='center',
                           tags='placeholder')
+
+    def _build_tabs(self):
+        for w in self.tabstrip.winfo_children():
+            w.destroy()
+        self.tab_labels = {}
+        if not self.quest:
+            return
+        for key in self.quest.tab_keys():
+            lbl = ttk.Label(self.tabstrip, text=t('tab.' + key),
+                            style='Menubar.TLabel', cursor='hand2')
+            lbl.pack(side='left')
+            lbl.bind('<Button-1>', lambda e, k=key: self.show_tab(k))
+            self.tab_labels[key] = lbl
+        self._mark_tab()
+
+    def _mark_tab(self):
+        for key, lbl in self.tab_labels.items():
+            on = key == self.tab_key
+            lbl.configure(foreground=theme.GOLD if on else theme.MUT,
+                          font=theme.FONT_BOLD if on else theme.FONT)
+
+    def show_tab(self, key):
+        if not self.quest or key not in self.quest.tabs:
+            return
+        self.tab_key = key
+        self._mark_tab()
+        self.graph.set_graph(self.quest.tabs[key])
+        self._update_status()
+
+    # -- quest --------------------------------------------------------------
+
+    def open_quest(self, quest):
+        self.quest = quest
+        self.undo.clear()
+        self.tab_key = model.DEFAULT_TABS[0]
+        self._build_tabs()
+        self.graph.set_graph(quest.tabs[self.tab_key] if quest else None)
+        self._draw_graph_placeholder()
+        self._update_status()
+
+    def new_quest(self):
+        if not self.project:
+            return
+        taken = {q.id for q in self.project.quests if q.id}
+        free = self.index.free_ids(taken) if self.index else [
+            i for i in range(data.MIN_QUEST_ID, data.MAX_QUEST_ID + 1)
+            if i not in taken]
+        if not free:
+            messagebox.showwarning(APP_NAME, t('quest.noid'), parent=self.root)
+            return
+        q = Quest(free[0])
+        self.project.quests.append(q)
+        self.mark_dirty()
+        self.open_quest(q)
+
+    def debug_nodes(self):
+        """300 chained nodes to prove the canvas stays fluid (plan M2)."""
+        if not self.quest:
+            return
+        tab = self.quest.tabs[self.tab_key]
+        self.push_undo('debug')
+        rnd = random.Random(1)
+        prev = model.ENTRY_ID
+        words = ('Hallo', 'Held', 'Gold', 'Yamalin', 'Zwerge', 'Turm',
+                 'Sumpf', 'Ferid', 'Tago', 'Gandohar')
+        for i in range(300):
+            n = model.make_node('node', 0, 0, f'Node {i + 1}')
+            n['lines'] = [{'text': ' '.join(rnd.choice(words)
+                                            for _ in range(rnd.randint(2, 7)))}
+                          for _ in range(rnd.randint(1, 3))]
+            n['color'] = theme.SPEAKER_COLORS[i % len(theme.SPEAKER_COLORS)]
+            nid = model.add_node(tab, n)
+            model.connect(tab, prev, rnd.randrange(model.out_port_count(
+                tab['nodes'][prev])), nid)
+            if rnd.random() < 0.3:
+                prev = rnd.choice(list(tab['nodes']))
+                if tab['nodes'][prev]['type'] == 'comment':
+                    prev = nid
+            else:
+                prev = nid
+        model.auto_layout(tab)
+        t0 = time.perf_counter()
+        self.graph.set_graph(tab)
+        ms = (time.perf_counter() - t0) * 1000
+        self.graph.fit()
+        self._after_change()
+        self.set_info(f'300 nodes: redraw {ms:.0f} ms', 'StatusOk.TLabel')
+
+    def _edge_drop_empty(self, frm, port, wx, wy):
+        """Dragging an edge into the void creates a node there and connects
+        it (plan 5.3; milestone 3 turns this into the speaker popup)."""
+        tab = self.quest.tabs[self.tab_key]
+        self.push_undo('add')
+        node = model.make_node('node', int(wx), int(wy - model.HEADER_H / 2))
+        nid = model.add_node(tab, node)
+        model.connect(tab, frm, port, nid)
+        self.graph.draw_node(nid)
+        self.graph.draw_node(frm)
+        self.graph.draw_edge(frm, port, nid)
+        self._after_change()
+        self.graph.select([nid])
+
+    # -- undo / clipboard ---------------------------------------------------
+
+    def push_undo(self, label=''):
+        if self.quest:
+            self.undo.push(self.quest.tabs, label)
+
+    def _after_change(self):
+        self.mark_dirty()
+        self._update_status()
+
+    def _restore(self, state):
+        if state is None:
+            return
+        self.quest.tabs = state
+        if self.tab_key not in state:
+            self.tab_key = model.DEFAULT_TABS[0]
+        self._build_tabs()
+        self.graph.set_graph(state[self.tab_key])
+        self._after_change()
+
+    def do_undo(self):
+        if self.quest:
+            self._restore(self.undo.undo(self.quest.tabs))
+
+    def do_redo(self):
+        if self.quest:
+            self._restore(self.undo.redo(self.quest.tabs))
+
+    def copy(self):
+        if not self.quest:
+            return
+        clip = model.copy_nodes(self.quest.tabs[self.tab_key],
+                                self.graph.selected)
+        if clip['nodes']:
+            self.clipboard = clip
+
+    def cut(self):
+        self.copy()
+        self.graph.delete_selection()
+
+    def paste(self):
+        if self.quest and self.clipboard:
+            self.graph.paste(self.clipboard)
 
     # -- status bar ---------------------------------------------------------
 
@@ -291,7 +483,10 @@ class App:
         s['quest'].configure(text=f'Q_{self.quest.id}' if self.quest
                              and self.quest.id else t('status.noquest'))
         n = self.quest.node_count() if self.quest else 0
-        s['nodes'].configure(text=t('status.nodes', n=n))
+        text = t('status.nodes', n=n)
+        if DEBUG and self.graph.last_frame_ms:
+            text += '   ' + t('status.frame', ms=self.graph.last_frame_ms)
+        s['nodes'].configure(text=text)
         s['validation'].configure(text=t('status.validation.none'))
         self._update_title()
 
@@ -306,12 +501,35 @@ class App:
 
     # -- keys ---------------------------------------------------------------
 
+    def _typing(self):
+        w = self.root.focus_get()
+        return isinstance(w, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox))
+
+    def _key(self, fn):
+        def handler(ev):
+            if self._typing():
+                return None
+            fn()
+            return 'break'
+        return handler
+
     def _bind_keys(self):
         r = self.root
         r.bind('<Control-n>', lambda e: self.new_project())
         r.bind('<Control-o>', lambda e: self.open_project())
         r.bind('<Control-s>', lambda e: self.save_project())
         r.bind('<Control-S>', lambda e: self.save_project_as())
+        g = self.graph
+        for seq, fn in (('<Control-z>', self.do_undo),
+                        ('<Control-y>', self.do_redo),
+                        ('<Control-x>', self.cut), ('<Control-c>', self.copy),
+                        ('<Control-v>', self.paste),
+                        ('<Control-d>', g.duplicate_selection),
+                        ('<Control-l>', g.auto_layout),
+                        ('<Control-plus>', g.zoom_in),
+                        ('<Control-minus>', g.zoom_out),
+                        ('<Control-0>', g.zoom_reset)):
+            r.bind(seq, self._key(fn))
 
     # -- start-up -----------------------------------------------------------
 
@@ -359,8 +577,7 @@ class App:
     def _load_index(self, game):
         """Read the cache, or rebuild it in a thread with a progress window."""
         self.set_info(t('status.index.loading'))
-        cached = self._try_cache(game)
-        if cached:
+        if self._try_cache(game):
             return
         win = _ProgressWindow(self.root)
         result = {}
@@ -436,9 +653,8 @@ class App:
 
     def _set_project(self, project):
         self.project = project
-        self.quest = None
-        self._update_status()
-        self._draw_graph_placeholder()
+        self.clipboard = None
+        self.open_quest(project.quests[0] if project.quests else None)
 
     def new_project(self, ask=True):
         if ask and not self._confirm_discard():
