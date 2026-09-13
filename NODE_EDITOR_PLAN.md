@@ -282,8 +282,10 @@ NotTaken, und beim naechsten Gespraech spielen die `0x2`-Zeilen (Ebene
 "Bekannt"). Gibt es dort keine, spielen die NotSolved-Zeilen der Ebene
 "Laeuft" (die sind im freigeschalteten Zustand ebenfalls spielbar).
 Der Haken "Nimmt die Quest an" bleibt; das Tool setzt das Bit auf den
-ganzen Pfad ab der angehakten Zeile. **[PRUEFEN] Spieltest** bleibt als
-Bestaetigung (6.3, Schritt 4a).
+ganzen Pfad ab der angehakten Zeile. **Spieltest 4a bestanden
+(Marco 2026-09-14, 12.53):** Ablehnen nimmt die Quest nicht an, beim
+naechsten Gespraech spielt die Ebene "Bekannt", die Annahme dort traegt die
+Quest ein, Abgabe und Belohnung laufen.
 
 **Kommentar-Node** (scharfe Ecken, grau, halbtransparent, groessenverstellbar,
 Farbe waehlbar): kein Port, keine Wirkung im Export. Kann per "Kommentar
@@ -946,6 +948,11 @@ Entschieden am 2026-09-13 (Umsetzung M5):
     Q_385 freigeschaltet), Aufgabe 10 Gold bringen, Belohnung 1234 Gold als
     sichtbarer Beweis, Zielarchiv Yamalin.wd. Alle Dialogzeilen tragen
     `[TEST 4a]`/`[TEST 4b]` als Ladungsmarker.
+    Nachtrag 2026-09-14 (Marco): Q_385 "Der Schutzgelderpresser" war eine
+    Testquest des alten Tools und ist aus Yamalin.wd entfernt (Block, AOQ in
+    Q_4, Texte, Dialogbaum, `ZZ_TagoQuest.lan`; Original in
+    `Yamalin.wd.qf2backup`). Beide Testprojekte haengen jetzt an "nach Q_4
+    angenommen".
 
 Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
 
@@ -1039,6 +1046,15 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       abgeschnitten.
     - Scrollbalken-Schieber hellgrau (`SCROLL_THUMB` #7a7061), gold bei
       Hover und Ziehen; vorher PANEL auf BG, kaum sichtbar.
+53. Spieltest 4a bestanden (Marco 2026-09-14). Testprojekt 4a mit dem Tool
+    exportiert in Yamalin.wd (Q_386 bei Tago, nach Q_4 angenommen, 10 Gold
+    bringen, 1234 Gold Belohnung), neues Spiel: laeuft sauber durch.
+    Bestaetigt damit: Ablehnen im Angebot ohne Annahme-Haken nimmt nicht an,
+    die Ebene "Bekannt" spielt danach, der Annahme-Haken traegt die Quest
+    ein (5.2, Hypothese A); `AOQ PROMOTE TAKE` in Q_4 schaltet frei (6.4);
+    Export mit AOQ-Einfuegen, Overlay-`.lan`, `FC BRING_GOLD` und
+    `REWARD GLD CLOSE` wirken im Spiel. Damit ist auch die erste
+    Tool-Quest (M5) im Spiel geprueft. Vorher entfernt: Q_385 (siehe 12.38).
 
 Offen:
 
@@ -1049,16 +1065,18 @@ Offen:
   sonst geklaert):
   - Bedingungen/Aktionen pro Zeile (6.3): **per SDK geklaert**, Spieltest
     4a/4b/4c als Bestaetigung.
-  - Annahme/Ablehnen (5.2): **Hypothese A per SDK**, Spieltest 4a.
+  - Annahme/Ablehnen (5.2): **Hypothese A, im Spiel bestaetigt** (4a,
+    12.53).
   - Kanten ueber Ebenen (5.1): **geklaert, erlaubt**.
-  - `AOQ TAKE TAKE` gegen `PROMOTE TAKE` (6.4): offen, beide Wege sind im
-    Tool waehlbar (Quest-Panel "Start").
+  - `AOQ TAKE TAKE` gegen `PROMOTE TAKE` (6.4): `PROMOTE TAKE` funktioniert
+    im Spiel (4a, 12.53); `TAKE TAKE` ungetestet, beide Wege bleiben
+    waehlbar.
   - Startzeilen-Regel der Engine (6.3): offen; der Export haelt die
     getestete Reihenfolge ein.
   - `ACTION NPC_DIALOG` (6.3): offen, im Tool nicht angeboten.
   - NPC-Block neuer NPCs (12.34): offen, Spalten 7 bis 12 von der Vorlage.
-- Spieltests (Marco): Testprojekte 4a und 4b (12.38), danach die erste
-  Tool-Quest (M5) und eine geaenderte Retail-Quest (M6).
+- Spieltests (Marco): 4a bestanden (12.53). Offen: 4b (Annahme erst mit
+  der letzten Zeile) und eine geaenderte Retail-Quest (M6).
 
 ---
 
