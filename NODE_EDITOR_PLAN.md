@@ -160,7 +160,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.1.0 (2.0.0 bis M10, 2.1.0 mit 12.52); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.1.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -529,10 +529,12 @@ sind in allen 9799 Zeilen 1. `anim1 == anim2` in allen Zeilen (13 Werte,
 0 bis 17); `cams` ist immer leer oder ein einzelner Wert 1, 2, 6, 7. Nichts
 davon traegt versteckte Bedingungen.
 
-*Schritt 4, Spieltest (Marco, offen):* a) Angebot mit zwei Held-Zeilen, nur
+*Schritt 4, Spieltest (Marco):* a) Angebot mit zwei Held-Zeilen, nur
 eine mit TakeNow, Ablehnen waehlen, danach muss eine NotTaken-Zeile (`0x2`)
-spielen und das Tagebuch leer bleiben. b) TakeNow nur auf der letzten Zeile
-statt auf dem ganzen Pfad. c) `ACTION NPC_DIALOG`.
+spielen und das Tagebuch leer bleiben. **Bestanden 2026-09-14 (12.53).**
+b) TakeNow nur auf der letzten Zeile statt auf dem ganzen Pfad.
+**Bestanden 2026-09-14 (12.55).** c) `ACTION NPC_DIALOG`: offen, im Tool
+nicht angeboten.
 
 **Folge fuer den Bau (Bauweise "nur Zustands-Flags" aus der Tabelle unten,
 mit Praezisierung):** NPC-Nodes bekommen keinen Bedingungs-Port. Die
@@ -724,7 +726,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 | M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final. **Fertig 2026-09-13:** `graph.py`; bei 300 Nodes (4449 Canvas-Items) ein Node ziehen 1,7 ms/Frame, alle 300 zusammen 13 ms/Frame, Zoomstufe wechseln 92 ms, Undo 107 ms. **Tkinter bleibt (final).** 21 Tests gruen |
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen. **Fertig 2026-09-13:** Pruefung in 6.3 eingetragen; `palette.py` (Sprecher-Box mit Dialog Vorhandener/Neuer NPC, Ziehen und Doppelklick), `inspector.py` (Formulare je Node-Typ, Quest-Panel, Cue-Suche), Modell auf einen Graphen pro Quest umgestellt; Beispiel-Dialog mit Angebot/Frage/Annahme, Laeuft, Erfuellt gebaut, gespeichert, wieder geoeffnet, byte-gleich; 27 Tests gruen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich. **Fertig 2026-09-13:** `export.py` (`tree_to_graph`, `graph_to_tree`, `preview_text`), "Quest > Dialog aus dem Spiel laden", "Vorschau als Text", "Quest wechseln". Round-Trip byte-gleich fuer **alle 378 Retail-Quest-Baeume** der Basis-`.lan` sowie alle 457 Baeume aus Yamalin.wd und Content02_Lan.wd, auch nach Speichern und Laden des Projekts; Import des groessten Baums (DQ_359, 74 Zeilen) 1 ms. 31 Tests gruen |
-| M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet). **Code fertig 2026-09-13, Spieltest steht aus:** Aufgabe-Node, angedockte Aktionen und Bedingungen, Aktionen ohne Dialog, `mappicker.py`, `.qtx`-Block und AOQ-Einfuegen, volle `.lan` plus `ZZ_`-Overlay, Packen mit Verifikation, Registry. Einmischen in eine Kopie von Yamalin.wd: 2,9 s, alle 47 unberuehrten Eintraege samt `.lnd`/`.par`-Metadaten identisch. Testprojekte fuer 6.3 Schritt 4a/4b in `testprojekte/`. 38 Tests gruen |
+| M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet). **Code fertig 2026-09-13, Spieltest bestanden 2026-09-14 (12.53, 12.55):** Aufgabe-Node, angedockte Aktionen und Bedingungen, Aktionen ohne Dialog, `mappicker.py`, `.qtx`-Block und AOQ-Einfuegen, volle `.lan` plus `ZZ_`-Overlay, Packen mit Verifikation, Registry. Einmischen in eine Kopie von Yamalin.wd: 2,9 s, alle 47 unberuehrten Eintraege samt `.lnd`/`.par`-Metadaten identisch. Testprojekte fuer 6.3 Schritt 4a/4b in `testprojekte/`. 38 Tests gruen |
 | M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen. **Code fertig 2026-09-13, Spieltest steht aus:** `timeline.py`, `retail.py`; Ansicht mit Rueckfrage bei der ersten Aenderung, Duplizieren, Loeschen, Einzelexport, Vorlagen; alle 500 Bloecke und 378 Baeume unveraendert byte-gleich; Aenderung an Q_4 in eine Yamalin-Kopie exportiert, restliche `.qtx` identisch (12.40 bis 12.43) |
 | M7 | Validierung komplett | Alle Regeln aus Abschnitt 8 mit Sprung zum Node. **Fertig 2026-09-13:** `validate.py`, F7-Fenster, Statusleiste, Sprung zu Node, Aktion ohne Dialog oder Quest-Panel (12.44) |
 | M8 | Rundgang und Tutorial | Tutorial fuehrt ohne Vorwissen zur laufenden Test-Quest. **Code fertig 2026-09-13:** `guide.py`; Tutorial ohne Fenster komplett durchgespielt bis zum Export; ob die Test-Quest im Spiel laeuft, klaert Marcos Spieltest (12.45) |
@@ -1055,6 +1057,23 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     Export mit AOQ-Einfuegen, Overlay-`.lan`, `FC BRING_GOLD` und
     `REWARD GLD CLOSE` wirken im Spiel. Damit ist auch die erste
     Tool-Quest (M5) im Spiel geprueft. Vorher entfernt: Q_385 (siehe 12.38).
+54. Export-Fehler beim Wechsel 4a auf 4b gefunden und behoben (2026-09-14,
+    Version 2.1.1): Exportierte ein zweites Projekt dieselbe Quest-ID ins
+    selbe Archiv, blieb die `ZZ_QF_<anderes Projekt>.lan` mit Titel,
+    Tagebuch und Dialogbaum derselben ID liegen und konkurrierte mit dem
+    neuen Overlay (das Spiel nimmt das zuletzt geladene). Der Export
+    entfernt jetzt aus fremden `ZZ_QF_*.lan` des Zielarchivs alle Schluessel,
+    Aliase und Baeume der exportierten Quest-IDs; bleibt nichts uebrig, wird
+    die Datei aus dem Archiv geloescht (`export.clean_other_overlays`,
+    `pack_archive(remove=...)`, geprueft wie alle anderen Eintraege, Test
+    `test_other_project_overlay_cleaned`). Nur `ZZ_QF_`-Dateien des Tools
+    werden angefasst, fremde Overlays nie.
+55. Spieltest 4b bestanden (Marco 2026-09-14). Testprojekt 4b mit Version
+    2.1.1 in Yamalin.wd exportiert (dabei `ZZ_QF_Test_4a_Ablehnen.lan`
+    automatisch entfernt, 12.54), neues Spiel: laeuft sauber durch.
+    Bestaetigt: TakeNow (`0x20000`) nur auf der letzten NPC-Zeile des
+    Angebots reicht; die Held-Zeile "Warum?" davor ohne TakeNow nimmt nicht
+    an. Der Annahme-Haken muss also nicht auf dem ganzen Pfad sitzen.
 
 Offen:
 
@@ -1063,8 +1082,8 @@ Offen:
   entschieden).
 - `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,
   sonst geklaert):
-  - Bedingungen/Aktionen pro Zeile (6.3): **per SDK geklaert**, Spieltest
-    4a/4b/4c als Bestaetigung.
+  - Bedingungen/Aktionen pro Zeile (6.3): **per SDK geklaert, im Spiel
+    bestaetigt** (4a, 4b; 12.53, 12.55).
   - Annahme/Ablehnen (5.2): **Hypothese A, im Spiel bestaetigt** (4a,
     12.53).
   - Kanten ueber Ebenen (5.1): **geklaert, erlaubt**.
@@ -1075,8 +1094,8 @@ Offen:
     getestete Reihenfolge ein.
   - `ACTION NPC_DIALOG` (6.3): offen, im Tool nicht angeboten.
   - NPC-Block neuer NPCs (12.34): offen, Spalten 7 bis 12 von der Vorlage.
-- Spieltests (Marco): 4a bestanden (12.53). Offen: 4b (Annahme erst mit
-  der letzten Zeile) und eine geaenderte Retail-Quest (M6).
+- Spieltests (Marco): 4a und 4b bestanden (12.53, 12.55). Offen: eine
+  geaenderte Retail-Quest (M6).
 
 ---
 

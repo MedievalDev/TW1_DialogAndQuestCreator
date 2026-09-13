@@ -734,19 +734,26 @@ def _entries(path):
     return {e.path: e for e in tw1_wd.read(path)}
 
 
-def pack_archive(archive, files, log=print):
+def pack_archive(archive, files, log=print, remove=()):
     """Merge ``files`` into ``archive`` (or create it) with buglord's wdio,
-    verify content byte for byte and the directory metadata of every
-    untouched entry, then replace the archive. A one-time backup
-    ``<archive>.qf2backup`` keeps the state before the first export."""
+    drop the entries in ``remove``, verify content byte for byte and the
+    directory metadata of every untouched entry, then replace the archive.
+    A one-time backup ``<archive>.qf2backup`` keeps the state before the
+    first export."""
     stage = tempfile.mkdtemp(prefix='qf2_')
     new = archive + '.new'
+    remove = set(remove) - set(files)
     try:
         before = _entries(archive) if os.path.isfile(archive) else {}
         if before:
             log(('unpack', os.path.basename(archive), len(before)))
             with contextlib.redirect_stdout(io.StringIO()):
                 wdio.unpack_single(archive, stage)
+        for inner in remove:
+            path = os.path.join(stage, *inner.split('\\'))
+            if os.path.isfile(path):
+                os.remove(path)
+                log(('removed', inner))
         for inner, blob in files.items():
             dest = os.path.join(stage, *inner.split('\\'))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -762,8 +769,11 @@ def pack_archive(archive, files, log=print):
         for inner, blob in files.items():
             if inner not in after or after[inner].data != blob:
                 problems.append(f'{inner}: content differs')
+        for inner in remove:
+            if inner in after:
+                problems.append(f'{inner}: not removed')
         for inner, e in before.items():
-            if inner in files:
+            if inner in files or inner in remove:
                 continue
             a = after.get(inner)
             if a is None:
@@ -807,6 +817,44 @@ def build_files(project, base_qtx, master_lan, index=None, overlay_name=None):
     return files
 
 
+def clean_other_overlays(entries, project, own_overlay):
+    """Tool overlays (``ZZ_QF_*.lan``) of other projects in the same archive
+    that still carry texts or dialog trees of this project's quest ids
+    would compete with the new overlay (the game keeps the last loaded
+    one). Returns ({inner: stripped lan}, [inner paths to remove])."""
+    ids = {q.id for q in project.quests}
+    if not ids:
+        return {}, []
+    pat = re.compile(r'^translateD?Q_(%s)(?![0-9])'
+                     % '|'.join(str(i) for i in sorted(ids)))
+    replace, remove = {}, []
+    for inner, e in entries.items():
+        low = inner.lower()
+        if (not low.startswith('language\\zz_qf_') or not low.endswith('.lan')
+                or low == own_overlay.lower()):
+            continue
+        try:
+            tr, aliases, rest = tw1_lan.read(e.data)
+            trees = tw1_lan.parse_trees(rest)
+        except Exception:        # not a readable .lan: leave it alone
+            continue
+        keys = [k for k in tr if pat.match(k)]
+        trees2 = [t for t in trees if not pat.match(t.id)]
+        aliases2 = [(k, v) for k, v in aliases
+                    if not pat.match(k) and not pat.match(v)]
+        if not keys and len(trees2) == len(trees) \
+                and len(aliases2) == len(aliases):
+            continue
+        for k in keys:
+            del tr[k]
+        if not tr and not trees2 and not aliases2:
+            remove.append(inner)
+        else:
+            replace[inner] = tw1_lan.build(tr, aliases2,
+                                           tw1_lan.build_trees(trees2))
+    return replace, remove
+
+
 def overlay_stem(project):
     """ZZ_ overlay name: QF_<project>, never the name of an archive's own
     overlay."""
@@ -831,6 +879,8 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
     name = archive_name(project)
     archive = os.path.join(game_dir, 'Mods', name)
     base_qtx = master_lan = None
+    own_overlay = f'Language\\ZZ_{overlay_stem(project)}.lan'
+    stale, remove = {}, []
     if os.path.isfile(archive):
         ents = _entries(archive)
         if INNER_QTX in ents:
@@ -839,6 +889,7 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
         if INNER_LAN in ents:
             master_lan = ents[INNER_LAN].data
             log(('base', 'lan', name))
+        stale, remove = clean_other_overlays(ents, project, own_overlay)
         del ents
     if base_qtx is None:
         with open(os.path.join(base_dir, 'TwoWorldsQuests.qtx'), 'rb') as f:
@@ -860,7 +911,9 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
                 f.write(blob)
         return {'archive': None, 'files': list(files)}
     os.makedirs(os.path.dirname(archive), exist_ok=True)
-    pack_archive(archive, files, log)
+    for inner in list(stale) + remove:
+        log(('overlay_cleaned', inner))
+    pack_archive(archive, {**files, **stale}, log, remove)
     old = None
     if register:
         old = enable_mod(name)

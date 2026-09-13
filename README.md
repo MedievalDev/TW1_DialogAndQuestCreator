@@ -479,7 +479,9 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
    Questblock ein bzw. ersetzt ihn, trägt die `AOQ PROMOTE`- (oder `TAKE`-)
    Zeilen in die Vorgängerquests ein, legt NPC-Blöcke für neue NPCs an und
    schreibt Titel, Tagebuch, Dialogbaum und NPC-Namen in die Master-`.lan`
-   und in `Language\ZZ_QF_<Projekt>.lan`.
+   und in `Language\ZZ_QF_<Projekt>.lan`. Liegen im Archiv
+   `ZZ_QF_`-Dateien anderer Projekte mit denselben Quest-IDs, werden deren
+   Texte dieser IDs entfernt, leere Dateien fliegen raus.
 5. Packt mit `wdio.py`, liest das Archiv wieder ein und vergleicht alle
    Dateien byte-genau sowie Flags, Namen, Klassen-IDs und GUIDs aller
    unberührten Einträge. Erst dann wird das Archiv ersetzt. Vor dem ersten

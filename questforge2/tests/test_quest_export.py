@@ -220,6 +220,54 @@ class Packing(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(
                 out, 'Scripts', 'Quests', 'TwoWorldsQuests.qtx')))
 
+    def test_other_project_overlay_cleaned(self):
+        """Exporting a quest id that another project already put into the
+        same archive removes that project's stale texts (game test 4a/4b)."""
+        with tempfile.TemporaryDirectory() as d:
+            base = os.path.join(d, 'base')
+            os.makedirs(base)
+            with open(os.path.join(base, 'TwoWorldsQuests.qtx'), 'wb') as f:
+                f.write(QTX.encode('latin-1'))
+            with open(os.path.join(base, 'TwoWorldsQuests.lan'), 'wb') as f:
+                f.write(tw1_lan.build({'translateQ_4': 'Alt'}, [],
+                                      tw1_lan.build_trees([])))
+            game = os.path.join(d, 'game')
+            os.makedirs(os.path.join(game, 'Mods'))
+            arch = os.path.join(game, 'Mods', 'Shared.wd')
+
+            def project(name, *qids):
+                p = Project(name)
+                p.target_archive = 'Shared.wd'
+                p.quests.extend(make_quest(q) for q in qids)
+                return p
+
+            # project A holds Q_390 and Q_391, project B only Q_392
+            export.export_mod(project('A', 390, 391), game, base, _Index(),
+                              lambda m: None, register=False)
+            export.export_mod(project('B', 392), game, base, _Index(),
+                              lambda m: None, register=False)
+            # project C re-exports Q_390: A keeps only Q_391, B untouched
+            logs = []
+            export.export_mod(project('C', 390), game, base, _Index(),
+                              logs.append, register=False)
+            ents = {e.path: e.data for e in tw1_wd.read(arch)}
+            tr_a, _, rest_a = tw1_lan.read(ents['Language\\ZZ_QF_A.lan'])
+            self.assertFalse([k for k in tr_a if 'Q_390' in k])
+            self.assertTrue([k for k in tr_a if 'Q_391' in k])
+            self.assertEqual([t.id for t in tw1_lan.parse_trees(rest_a)],
+                             ['translateDQ_391'])
+            tr_b, _, _ = tw1_lan.read(ents['Language\\ZZ_QF_B.lan'])
+            self.assertTrue([k for k in tr_b if 'Q_392' in k])
+            self.assertIn(('overlay_cleaned', 'Language\\ZZ_QF_A.lan'), logs)
+            # project D re-exports Q_391 and Q_392: A and B become empty
+            export.export_mod(project('D', 391, 392), game, base, _Index(),
+                              lambda m: None, register=False)
+            ents = {e.path for e in tw1_wd.read(arch)}
+            self.assertNotIn('Language\\ZZ_QF_A.lan', ents)
+            self.assertNotIn('Language\\ZZ_QF_B.lan', ents)
+            self.assertIn('Language\\ZZ_QF_C.lan', ents)
+            self.assertIn('Language\\ZZ_QF_D.lan', ents)
+
     def test_archive_name(self):
         p = Project('Meine Mod!')
         self.assertEqual(export.archive_name(p), 'MeineMod.wd')

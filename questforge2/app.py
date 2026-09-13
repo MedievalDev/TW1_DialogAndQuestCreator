@@ -1792,6 +1792,10 @@ class ExportWindow:
             text = t('export.log.backup', name=msg[1])
         elif kind == 'registry':
             text = t('export.log.registry', name=msg[1], old=msg[2])
+        elif kind == 'overlay_cleaned':
+            text = t('export.log.overlay', inner=msg[1])
+        elif kind == 'removed':
+            text = t('export.log.removed', inner=msg[1])
         else:
             text = ' '.join(str(x) for x in msg)
         self._put(text)
