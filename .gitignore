@@ -22,3 +22,7 @@ DIALOG_STIMMEN.md
 build_campaign.py
 MARKER_REFERENZ.md
 swap_yamalin.ps1
+
+# QuestForge 2 index cache (derived game data)
+cache/
+*.tw1proj.tmp

@@ -1,7 +1,8 @@
 # Plan: Node-basierter Dialog- und Quest-Editor (QuestForge 2)
 
-Stand: 2026-09-13, **Plan freigegeben (Marco)**. Noch kein Code. Umsetzung
-startet mit Meilenstein 1 auf Branch `questforge2`.
+Stand: 2026-09-13, **Plan freigegeben (Marco)**. Umsetzung laeuft auf Branch
+`questforge2` im Clone `C:\Users\marco\Desktop\TW1QuestCreator`.
+**M1 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -593,7 +594,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 
 | M | Inhalt | Fertig wenn |
 |---|---|---|
-| M1 | Fenster, Menues, Statusleiste, Projekt neu/oeffnen/speichern, `qf2_data` mit Cache | Start unter 1 s beim zweiten Mal, Projektdatei round-trippt |
+| M1 | Fenster, Menues, Statusleiste, Projekt neu/oeffnen/speichern, `data.py` mit Cache | Start unter 1 s beim zweiten Mal, Projektdatei round-trippt. **Fertig 2026-09-13:** Start 0,3 s (Cache 0,01 s), Vollaufbau des Index 0,8 bis 1,4 s, 14 Tests gruen, Projektdatei byte-gleich nach Speichern/Oeffnen/Speichern |
 | M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final |
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich |
@@ -621,6 +622,36 @@ Entschieden am 2026-09-13:
 4. Neubau als Paket `questforge2/` auf eigenem Branch, altes Tool bleibt
    unangetastet (Abschnitt 2.3).
 5. Exe heisst `TW1QuestCreator.exe`.
+
+Entschieden am 2026-09-13 (Umsetzung M1):
+
+6. Arbeitsort ist ein frischer Clone `C:\Users\marco\Desktop\TW1QuestCreator`,
+   TwStuff bleibt unangetastet. Start: `py -3.12 -m questforge2` vom Repo-Root
+   (der `python`-Alias fehlt auf Marcos Rechner). Tests:
+   `py -3.12 -m unittest discover -s questforge2/tests -t .`
+7. Ablageort fuer Konfig, `base/` und `cache/index.json`: aus dem Quellcode
+   gestartet der Repo-Root (kompatibel zum alten Tool), als Exe
+   `%LOCALAPPDATA%\TW1QuestCreator\` (`data.app_dir()`).
+8. Index-Cache: `cache/index.json` mit mtime/Groesse von `Update16.wd`,
+   `Language.wd`, `Content01/02_Lan.wd` und allen `Mods\*.wd`; `INDEX_FORMAT`
+   wird bei jeder Inhaltsaenderung hochgezaehlt. Inhalt: Quests (Titel, Gruppe,
+   Giver, FC, AOQ-Liste, Zeilenzahl und Flag-Menge des Dialogbaums, Herkunft),
+   NPCs (Name, Kachel, Lector), Gruppen, Locations, Kacheln, Objekte,
+   Marker-Nummern je Art und Kachel, Cues (Lector, Text, Baum), Lectors.
+   Dialogbaeume selbst werden nicht gecacht.
+9. Mod-Semantik im Index: Ein Mod liefert die volle `.qtx`, daher ersetzen
+   seine Bloecke die Retail-Bloecke. Unveraenderte Retail-Quests behalten
+   `source='retail'`, veraenderte bekommen zusaetzlich `modified_by=<Mod>`
+   (Grundlage fuer die gold-gestrichelte Karte in der Zeitleiste), neue IDs
+   tragen den Mod als `source`. `.lan`-Titel und Baeume: spaeterer gewinnt
+   (README 3.2). Beispiel Yamalin.wd: Q_1, Q_3, Q_4, Q_18, Q_21, Q_91,
+   Q_100, Q_192, Q_291 sind `modified_by`.
+10. Menueleiste als thematisierte `Menubar.TFrame` mit `tk.Menu`-Popups
+    (Windows zeichnet die native Leiste hell), alle Eintraege aus 3.1 sind
+    angelegt, M1-fremde ausgegraut. Sprache wirkt nach Neustart.
+11. Projektdatei `*.tw1proj`: JSON, `format: 1`, `tool_version`, `name`,
+    `target_archive`, `quests[]`; unbekannte Schluessel werden beim Laden
+    bewahrt und beim Speichern zurueckgeschrieben (Vorwaertskompatibilitaet).
 
 Offen:
 
