@@ -2,7 +2,7 @@
 
 Stand: 2026-09-13, **Plan freigegeben (Marco)**. Umsetzung laeuft auf Branch
 `questforge2` im Clone `C:\Users\marco\Desktop\TW1QuestCreator`.
-**M1 bis M3 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
+**M1 bis M4 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -711,7 +711,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 | M1 | Fenster, Menues, Statusleiste, Projekt neu/oeffnen/speichern, `data.py` mit Cache | Start unter 1 s beim zweiten Mal, Projektdatei round-trippt. **Fertig 2026-09-13:** Start 0,3 s (Cache 0,01 s), Vollaufbau des Index 0,8 bis 1,4 s, 14 Tests gruen, Projektdatei byte-gleich nach Speichern/Oeffnen/Speichern |
 | M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final. **Fertig 2026-09-13:** `graph.py`; bei 300 Nodes (4449 Canvas-Items) ein Node ziehen 1,7 ms/Frame, alle 300 zusammen 13 ms/Frame, Zoomstufe wechseln 92 ms, Undo 107 ms. **Tkinter bleibt (final).** 21 Tests gruen |
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen. **Fertig 2026-09-13:** Pruefung in 6.3 eingetragen; `palette.py` (Sprecher-Box mit Dialog Vorhandener/Neuer NPC, Ziehen und Doppelklick), `inspector.py` (Formulare je Node-Typ, Quest-Panel, Cue-Suche), Modell auf einen Graphen pro Quest umgestellt; Beispiel-Dialog mit Angebot/Frage/Annahme, Laeuft, Erfuellt gebaut, gespeichert, wieder geoeffnet, byte-gleich; 27 Tests gruen |
-| M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich |
+| M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich. **Fertig 2026-09-13:** `export.py` (`tree_to_graph`, `graph_to_tree`, `preview_text`), "Quest > Dialog aus dem Spiel laden", "Vorschau als Text", "Quest wechseln". Round-Trip byte-gleich fuer **alle 378 Retail-Quest-Baeume** der Basis-`.lan` sowie alle 457 Baeume aus Yamalin.wd und Content02_Lan.wd, auch nach Speichern und Laden des Projekts; Import des groessten Baums (DQ_359, 74 Zeilen) 1 ms. 31 Tests gruen |
 | M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet) |
 | M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen |
 | M7 | Validierung komplett | Alle Regeln aus Abschnitt 8 mit Sprung zum Node |
@@ -721,6 +721,9 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 
 Reihenfolge der Tests im Spiel: nach M4 die beiden `[PRUEFEN]` zu `1.TAKE`
 und Ablehnen; nach M5 die erste Tool-Quest; nach M6 eine Retail-Aenderung.
+Stand 2026-09-13: Die Tests zu 1.TAKE und Ablehnen (6.3, Schritt 4a/4b)
+brauchen einen Export ins Archiv; der kommt mit M5. Sie werden deshalb
+zusammen mit der ersten Tool-Quest nach M5 gefahren.
 
 ---
 
@@ -837,6 +840,39 @@ Entschieden am 2026-09-13 (Umsetzung M3):
     "leer"; der Export setzt 2 fuer NPC und 7 fuer Held (wie das alte Tool).
 24. Kante ins Leere ziehen oeffnet das Popup Spieler / Sprecher... /
     Kommentar und verbindet sofort (Plan 5.3 umgesetzt).
+
+Entschieden am 2026-09-13 (Umsetzung M4):
+
+25. Import-Abbildung: jede NPC-Zeile wird ein NPC-Node, ein Antwortmenue
+    (die `next`-Liste einer Zeile, alle Ziele Held-Zeilen) wird ein
+    Spieler-Frage-Node mit einer Zeile je Option, einzelne Held-Zeilen
+    werden Antwort-Nodes. Jede Zeile merkt sich `order` (Index im Baum) und
+    `tid` (Textschluessel); Export sortiert importierte Zeilen nach `order`
+    und haengt neue Zeilen nach Ebene (Angebot ... Abgeschlossen) und
+    Gespraechsfluss an.
+26. Was sich nicht ueber Ebene und Haken ausdruecken laesst, bleibt roh an
+    der Zeile: `raw_flags` (z. B. `0x20` LowRep allein, `0x10000` Fight
+    ohne Zustand), `cams` bei leerer oder mehrfacher Kamera, `anim2` wenn
+    abweichend, und `next_ref` = {Zielnode, Zeilenauswahl, negative
+    Indizes} fuer Referenzen, die vom Standard abweichen (Teilmenge eines
+    Menues, Rueckschleife mit negativem Index). `next_ref` gilt nur,
+    solange die Kante auf denselben Node zeigt; wird sie umgehaengt, gilt
+    wieder der Standard. Negative Indizes erzeugt das Tool selbst nie.
+27. TakeNow-Pfad (6.3): beim Export bekommen neue Zeilen derselben Ebene
+    hinter einer "Nimmt die Quest an"-Zeile ebenfalls das Bit;
+    importierte Zeilen behalten ihre exakten Retail-Flags.
+28. Sprecher beim Import: Lector wird ueber den Index einem NPC
+    zugeordnet, bevorzugt dem Questgeber der Quest; ohne Treffer entsteht
+    ein Platzhalter-Sprecher `L<lector>`. Beim Laden aus dem Spiel werden
+    Titel, Tagebuchtexte, Gruppe, Giver, Giver-Typ und Level aus Index und
+    `.lan` uebernommen, die Quest ist `retail=True`.
+29. Baumquelle `data.load_trees`: Basis-`.lan`, `Content01/02_Lan.wd`, alle
+    `Mods\*.wd`, spaeterer gewinnt (README 3.2), einmal pro Sitzung
+    geparst (0,8 s). Die Retail-Zeitleiste (M6) ersetzt den Auswahldialog.
+30. Neue Textschluessel: `translateDQ_<id>_<ebene>_<n>` mit den Suffixen
+    `0.FT`, `0.FT.AS` (Angebot mit Annahme), `0.QNT`, `0.QNS.AE`, `0.QT`,
+    `0.QS.AE`, `0.QC`, `0.QF`, `0.LR`, `0.X` (neutral). Nur Namenskonvention,
+    das Spiel liest die Schluessel nicht aus.
 
 Offen:
 

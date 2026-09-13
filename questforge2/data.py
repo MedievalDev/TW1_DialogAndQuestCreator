@@ -493,6 +493,49 @@ def build_index(game_dir, progress=None):
     return idx
 
 
+_TREES = {}
+
+
+def load_trees(game_dir, force=False):
+    """{tree id: (DialogTree, translations)} from the base .lan and every
+    Mods\\*.wd (later wins, README 3.2). Parsed once per session."""
+    key = os.path.normcase(game_dir)
+    if key in _TREES and not force:
+        return _TREES[key]
+    out = {}
+    qtx_path, lan_path = ensure_base(game_dir)
+    sources = [('retail', open(lan_path, 'rb').read())]
+    for n in ('Content01_Lan.wd', 'Content02_Lan.wd'):
+        p = os.path.join(game_dir, 'WDFiles', n)
+        if os.path.isfile(p):
+            try:
+                for e in tw1_wd.read(p):
+                    if e.path.lower().endswith('.lan'):
+                        sources.append((n, e.data))
+            except Exception:
+                pass
+    for p in sorted(glob.glob(os.path.join(game_dir, 'Mods', '*.wd'))):
+        try:
+            _, lans = _read_mod(p)
+        except Exception:
+            continue
+        for d in lans:
+            sources.append((os.path.basename(p), d))
+    merged_tr = {}
+    for name, data in sources:
+        try:
+            tr, _, rest = tw1_lan.read(data)
+            trees = tw1_lan.parse_trees(rest)
+        except Exception:
+            continue
+        merged_tr.update(tr)
+        for tree in trees:
+            out[tree.id] = (tree, name)
+    result = {tid: (tree, merged_tr, src) for tid, (tree, src) in out.items()}
+    _TREES[key] = result
+    return result
+
+
 def cache_valid(idx, game_dir):
     if not isinstance(idx, dict) or idx.get('format') != INDEX_FORMAT:
         return False

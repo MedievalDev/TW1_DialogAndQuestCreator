@@ -17,7 +17,7 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from . import APP_NAME, VERSION, data, model, theme
+from . import APP_NAME, VERSION, data, export, model, theme
 from .graph import GraphView
 from .i18n import t, set_lang, get_lang, detect_lang
 from .inspector import Inspector
@@ -199,12 +199,24 @@ class App:
     def _fill_quest(self, m):
         m.add_command(label=t('quest.new'), command=self.new_quest,
                       state=self._state(self.project is not None))
+        m.add_command(label=t('quest.loadretail'), command=self.load_retail,
+                      state=self._state(self.project is not None
+                                        and self.cfg.get('game_dir')))
+        if self.project and len(self.project.quests) > 1:
+            sub = tk.Menu(m, tearoff=0)
+            for qq in self.project.quests:
+                sub.add_radiobutton(
+                    label=f'Q_{qq.id}  {qq.title}', value=id(qq),
+                    variable=tk.IntVar(value=id(self.quest)),
+                    command=lambda qq=qq: self.open_quest(qq))
+            m.add_cascade(label=t('quest.switch'), menu=sub)
         m.add_command(label=t('quest.duplicate'), state='disabled')
         m.add_command(label=t('quest.delete'), state='disabled')
         m.add_separator()
         m.add_command(label=t('quest.validate'), accelerator='F7',
                       state='disabled')
-        m.add_command(label=t('quest.preview'), state='disabled')
+        m.add_command(label=t('quest.preview'), command=self.show_preview,
+                      state=self._state(self.quest is not None))
         m.add_command(label=t('quest.template'), state='disabled')
         if DEBUG:
             m.add_separator()
@@ -406,6 +418,89 @@ class App:
         self.project.quests.append(q)
         self.mark_dirty()
         self.open_quest(q)
+
+    def load_retail(self):
+        """Pick a dialog tree of the game (or a mod) and open it as a quest
+        of the project (plan 10; the timeline replaces this in M6)."""
+        game = self.cfg.get('game_dir')
+        if not self.project or not game:
+            return
+        self.root.configure(cursor='watch')
+        self.root.update_idletasks()
+        try:
+            trees = data.load_trees(game)
+        except Exception as e:
+            messagebox.showerror(t('error'), t('index.error', err=e),
+                                 parent=self.root)
+            return
+        finally:
+            self.root.configure(cursor='')
+        dlg = RetailDialog(self, trees)
+        self.root.wait_window(dlg.win)
+        if not dlg.result:
+            return
+        tid = dlg.result
+        tree, tr, src = trees[tid]
+        qid = int(tid.split('_')[1])
+        existing = self.project.quest_by_id(qid)
+        if existing:
+            if not messagebox.askyesno(APP_NAME, t('retail.exists', id=qid),
+                                       parent=self.root):
+                self.open_quest(existing)
+                return
+            self.project.quests.remove(existing)
+        q = Quest(qid, tr.get(f'translateQ_{qid}', ''))
+        q.retail = True
+        q.journal = {'take': tr.get(f'translateQ_{qid}_QTD', ''),
+                     'solve': tr.get(f'translateQ_{qid}_QSD', ''),
+                     'close': tr.get(f'translateQ_{qid}_QCD', '')}
+        info = self.index.quest(qid) if self.index else None
+        if info:
+            q.group = info['group']
+            q.giver = info['giver']
+            q.giver_type = info['giver_type'] or 'PASSIVE'
+            q.enable_level = info['enable_level']
+        if q.giver is not None and self.index and self.index.npc(q.giver):
+            npc = self.index.npc(q.giver)
+            q.add_speaker({'id': q.giver, 'name': npc['name'],
+                           'lector': npc['lector'], 'tile': npc['tile'],
+                           'new': False})
+        t0 = time.perf_counter()
+        rep = export.tree_to_graph(q, tree, tr, self.index, qid)
+        ms = (time.perf_counter() - t0) * 1000
+        self.project.quests.append(q)
+        self.mark_dirty()
+        self.open_quest(q)
+        self.show_tab(None)
+        self.graph.fit()
+        note = t('retail.loaded', tid=tid, src=src, n=rep.entries,
+                 menus=rep.menus, ms=ms)
+        if rep.lossy:
+            note += '   ' + t('retail.notes', n=len(rep.lossy))
+        self.set_info(note, 'StatusOk.TLabel' if not rep.lossy
+                      else 'Status.TLabel')
+
+    def show_preview(self):
+        if not self.quest:
+            return
+        win = tk.Toplevel(self.root)
+        win.title(t('preview.title', id=self.quest.id))
+        win.geometry('900x640')
+        win.transient(self.root)
+        theme.dark_titlebar(win)
+        f = ttk.Frame(win, padding=8)
+        f.pack(fill='both', expand=True)
+        txt = tk.Text(f, wrap='none', font=theme.FONT_MONO)
+        sy = ttk.Scrollbar(f, orient='vertical', command=txt.yview)
+        sx = ttk.Scrollbar(f, orient='horizontal', command=txt.xview)
+        txt.configure(yscrollcommand=sy.set, xscrollcommand=sx.set)
+        sy.pack(side='right', fill='y')
+        sx.pack(side='bottom', fill='x')
+        txt.pack(fill='both', expand=True)
+        txt.insert('1.0', export.preview_text(self.quest, self.index, t))
+        txt.configure(state='disabled')
+        ttk.Button(win, text=t('close'), command=win.destroy
+                   ).pack(anchor='e', padx=8, pady=(0, 8))
 
     def node_style(self, node):
         """(title, header colour) for a dialog node."""
@@ -927,6 +1022,89 @@ class App:
 
     def run(self):
         self.root.mainloop()
+
+
+class RetailDialog:
+    """Pick one ``translateDQ_<n>`` tree: filter by text, single/multi
+    player, source."""
+
+    def __init__(self, app, trees):
+        self.result = None
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('retail.title'))
+        self.win.transient(app.root)
+        self.win.geometry('680x560')
+        theme.dark_titlebar(self.win)
+        f = ttk.Frame(self.win, padding=10)
+        f.pack(fill='both', expand=True)
+        top = ttk.Frame(f)
+        top.pack(fill='x')
+        ttk.Label(top, text=t('retail.filter')).pack(side='left')
+        self.q = tk.StringVar()
+        ent = ttk.Entry(top, textvariable=self.q)
+        ent.pack(side='left', fill='x', expand=True, padx=6)
+        ent.bind('<KeyRelease>', lambda e: self._filter())
+        ent.bind('<Down>', lambda e: self.lst.focus_set())
+        self.kind = tk.StringVar(value='sp')
+        for key in ('sp', 'mp', 'all'):
+            ttk.Radiobutton(top, text=t('retail.kind.' + key), value=key,
+                            variable=self.kind, command=self._filter
+                            ).pack(side='left')
+        box = ttk.Frame(f)
+        box.pack(fill='both', expand=True, pady=6)
+        self.lst = tk.Listbox(box, font=theme.FONT, activestyle='none')
+        sb = ttk.Scrollbar(box, orient='vertical', command=self.lst.yview)
+        self.lst.configure(yscrollcommand=sb.set)
+        self.lst.pack(side='left', fill='both', expand=True)
+        sb.pack(side='right', fill='y')
+        self.lst.bind('<Double-Button-1>', lambda e: self._ok())
+        self.lst.bind('<Return>', lambda e: self._ok())
+        self.rows = []
+        for tid, (tree, tr, src) in trees.items():
+            if not tid.startswith('translateDQ_'):
+                continue
+            try:
+                qid = int(tid.split('_')[1])
+            except ValueError:
+                continue
+            title = tr.get(f'translateQ_{qid}', '')
+            label = (f'Q_{qid:<4} {title}   ({len(tree.entries)} '
+                     f'{t("retail.lines")}, {src})')
+            self.rows.append((qid, tid, label))
+        self.rows.sort()
+        self.shown = []
+        b = ttk.Frame(f)
+        b.pack(anchor='e')
+        ttk.Button(b, text=t('ok'), style='Accent.TButton',
+                   command=self._ok).pack(side='left', padx=(0, 6))
+        ttk.Button(b, text=t('cancel'), command=self.win.destroy
+                   ).pack(side='left')
+        self.win.bind('<Escape>', lambda e: self.win.destroy())
+        self._filter()
+        ent.focus_set()
+        self.win.grab_set()
+
+    def _filter(self):
+        q = self.q.get().strip().lower()
+        kind = self.kind.get()
+        self.lst.delete(0, 'end')
+        self.shown = []
+        for qid, tid, label in self.rows:
+            mp = qid >= 700
+            if (kind == 'sp' and mp) or (kind == 'mp' and not mp):
+                continue
+            if q and q not in label.lower():
+                continue
+            self.shown.append(tid)
+            self.lst.insert('end', label)
+        if self.shown:
+            self.lst.selection_set(0)
+
+    def _ok(self):
+        sel = self.lst.curselection()
+        if sel:
+            self.result = self.shown[sel[0]]
+            self.win.destroy()
 
 
 class _ProgressWindow:

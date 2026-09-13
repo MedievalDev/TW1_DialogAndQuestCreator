@@ -278,8 +278,10 @@ def is_entry(nid):
 
 
 def line_flags(state, line):
-    """Engine flags of one line (plan 12.19)."""
-    f = STATE_BITS.get(state, 0)
+    """Engine flags of one line (plan 12.19). A line may override the
+    node's level (``line['state']``, used by imported reply menus whose
+    options belong to different levels)."""
+    f = STATE_BITS.get(line.get('state') or state, 0)
     for k, bit in EVENT_BITS.items():
         if line.get(k):
             f |= bit

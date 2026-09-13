@@ -209,6 +209,18 @@ _DE = {
     'cue.lector.speaker': 'nur Stimme des Sprechers (Lector {n})',
     'cue.count': '{n} Treffer (max. 500)',
     'ctx.newnode': 'Neuer Node',
+    'quest.loadretail': 'Dialog aus dem Spiel laden...',
+    'quest.switch': 'Quest wechseln',
+    'retail.title': 'Dialog aus dem Spiel laden',
+    'retail.filter': 'Suche:', 'retail.lines': 'Zeilen',
+    'retail.kind.sp': 'Einzelspieler', 'retail.kind.mp': 'Mehrspieler',
+    'retail.kind.all': 'Alle',
+    'retail.exists': 'Q_{id} ist schon im Projekt. Durch den Spiel-Dialog '
+                     'ersetzen? (Nein oeffnet die vorhandene Quest)',
+    'retail.loaded': '{tid} aus {src}: {n} Zeilen, {menus} Antwortmenues '
+                     '({ms:.0f} ms)',
+    'retail.notes': '{n} Hinweise beim Import (lose Startzeilen)',
+    'preview.title': 'Vorschau Q_{id}',
 }
 
 _EN = {
@@ -395,6 +407,18 @@ _EN = {
     'cue.lector.speaker': 'only the speaker\'s voice (lector {n})',
     'cue.count': '{n} matches (max. 500)',
     'ctx.newnode': 'New node',
+    'quest.loadretail': 'Load dialog from the game...',
+    'quest.switch': 'Switch quest',
+    'retail.title': 'Load dialog from the game',
+    'retail.filter': 'Search:', 'retail.lines': 'lines',
+    'retail.kind.sp': 'Single player', 'retail.kind.mp': 'Multiplayer',
+    'retail.kind.all': 'All',
+    'retail.exists': 'Q_{id} is already in the project. Replace it with the '
+                     'game dialog? (No opens the existing quest)',
+    'retail.loaded': '{tid} from {src}: {n} lines, {menus} reply menus '
+                     '({ms:.0f} ms)',
+    'retail.notes': '{n} import notes (loose start lines)',
+    'preview.title': 'Preview Q_{id}',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}
