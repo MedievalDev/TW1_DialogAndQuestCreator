@@ -1,11 +1,14 @@
-"""The node graph canvas (plan section 5.3 and 2.2).
+"""The node graph canvas (plan sections 5, 12.12 and 12.18).
 
 Tag based drawing: every node is a group of items tagged ``n:<id>``, every
-edge is one line tagged ``e:<from>:<port>``. Dragging moves only the node
-group and its edges; nothing is deleted and redrawn per frame. Zoom is in
-fixed steps with fonts precomputed per step. World coordinates (the model)
-map to canvas coordinates by multiplying with the zoom factor; panning is
-the canvas' own scan/scroll.
+edge is one line tagged ``e:<from>:<port>``. Dragging moves one 'sel' tag
+per frame; edges are updated through an item table. Zoom is in fixed steps
+with fonts precomputed per step. World coordinates (the model) map to
+canvas coordinates by multiplying with the zoom factor; panning is the
+canvas' own scan/scroll.
+
+One graph per quest: nodes carry a level (``state``); ``set_filter`` dims
+the nodes of other levels (neutral ones stay visible).
 """
 
 import time
@@ -22,25 +25,29 @@ WORLD = (-1000, -1000, 6000, 4000)
 PORT_R = 5
 CORNER = 18
 END_CAP_W = 30
+EVENT_GLYPHS = (('take', '✔', theme.GOLD), ('close', '◆', theme.OK),
+                ('fight', '⚔', theme.ERR))
 
 
 class GraphView(tk.Canvas):
     def __init__(self, master, **kw):
         super().__init__(master, bg=theme.CANVAS_BG, highlightthickness=0,
                          **kw)
-        self.tab = None
+        self.graph = None
         self.zoom_i = DEFAULT_ZOOM
         self.show_grid = True
         self.edge_style = 'curve'
+        self.filter_state = None
         self.selected = set()
         self.selected_edge = None          # (from, port)
         # callbacks set by the app
         self.before_change = lambda label: None
         self.after_change = lambda: None
         self.on_select = lambda: None
-        self.on_edge_drop_empty = lambda frm, port, wx, wy: None
+        self.on_edge_drop_empty = lambda frm, port, wx, wy, ev: None
         self.on_open_node = lambda nid: None
-        self.on_context = None             # (menu, kind, nid) -> None
+        self.fill_add_menu = None          # (menu, wx, wy) -> None
+        self.node_style = lambda node: ('', theme.SPEAKER_COLORS[0])
         self.last_frame_ms = 0.0
         self._drag = None
         self._space = False
@@ -113,11 +120,16 @@ class GraphView(tk.Canvas):
 
     # -- public API ---------------------------------------------------------
 
-    def set_graph(self, tab):
-        self.tab = tab
-        self.selected = {i for i in self.selected if tab and i in tab['nodes']}
+    def set_graph(self, graph):
+        self.graph = graph
+        self.selected = {i for i in self.selected
+                         if graph and i in graph['nodes']}
         self.selected_edge = None
         self._drag = None
+        self.redraw()
+
+    def set_filter(self, state):
+        self.filter_state = state
         self.redraw()
 
     def redraw(self):
@@ -126,11 +138,11 @@ class GraphView(tk.Canvas):
         self._edge_items.clear()
         self.configure(scrollregion=self._scrollregion())
         self._draw_grid()
-        if not self.tab:
+        if not self.graph:
             return
-        for nid in self.tab['nodes']:
+        for nid in self.graph['nodes']:
             self.draw_node(nid)
-        for frm, port, to in self.tab['edges']:
+        for frm, port, to in self.graph['edges']:
             self.draw_edge(frm, port, to)
         self._apply_selection()
 
@@ -162,8 +174,13 @@ class GraphView(tk.Canvas):
         self.xview_moveto((cx - screen[0] - sr[0]) / w)
         self.yview_moveto((cy - screen[1] - sr[1]) / h)
 
+    def scroll_to_node(self, nid, margin=60):
+        n = self.graph['nodes'].get(nid) if self.graph else None
+        if n:
+            self._scroll_world_to(n['x'] - margin, n['y'] - margin, (0, 0))
+
     def fit(self):
-        if not self.tab or not self.tab['nodes']:
+        if not self.graph or not self.graph['nodes']:
             return
         x1, y1, x2, y2 = self.content_bbox()
         vw, vh = max(self.winfo_width(), 50), max(self.winfo_height(), 50)
@@ -178,10 +195,14 @@ class GraphView(tk.Canvas):
 
     def content_bbox(self):
         xs, ys, xe, ye = [], [], [], []
-        for n in self.tab['nodes'].values():
+        for n in self.graph['nodes'].values():
+            if self._dimmed(n):
+                continue
             w, h = model.node_size(n)
             xs.append(n['x']); ys.append(n['y'])
             xe.append(n['x'] + w); ye.append(n['y'] + h)
+        if not xs:
+            return 0, 0, 100, 100
         return min(xs), min(ys), max(xe), max(ye)
 
     def set_grid(self, on):
@@ -190,8 +211,8 @@ class GraphView(tk.Canvas):
 
     def set_edge_style(self, style):
         self.edge_style = style
-        if self.tab:
-            for frm, port, to in self.tab['edges']:
+        if self.graph:
+            for frm, port, to in self.graph['edges']:
                 self.draw_edge(frm, port, to)
 
     def select(self, ids, edge=None):
@@ -201,28 +222,29 @@ class GraphView(tk.Canvas):
         self.on_select()
 
     def select_all(self):
-        if self.tab:
-            self.select([i for i in self.tab['nodes'] if i != model.ENTRY_ID])
+        if self.graph:
+            self.select([i for i, n in self.graph['nodes'].items()
+                         if not model.is_entry(i) and not self._dimmed(n)])
 
     def delete_selection(self):
-        if not self.tab:
+        if not self.graph:
             return
         if self.selected_edge and not self.selected:
             frm, port = self.selected_edge
             self.before_change('disconnect')
-            model.disconnect(self.tab, frm, port)
+            model.disconnect(self.graph, frm, port)
             self._delete_edge(frm, port)
             self.draw_node(frm)
             self.selected_edge = None
             self.after_change()
             return
-        ids = {i for i in self.selected if i != model.ENTRY_ID}
+        ids = {i for i in self.selected if not model.is_entry(i)}
         if not ids:
             return
         self.before_change('delete')
-        touched = {e[0] for e in self.tab['edges'] if e[2] in ids}
-        gone = [e for e in self.tab['edges'] if e[0] in ids or e[2] in ids]
-        model.remove_nodes(self.tab, ids)
+        touched = {e[0] for e in self.graph['edges'] if e[2] in ids}
+        gone = [e for e in self.graph['edges'] if e[0] in ids or e[2] in ids]
+        model.remove_nodes(self.graph, ids)
         for i in ids:
             self.delete(f'n:{i}')
             self._body.pop(i, None)
@@ -234,10 +256,17 @@ class GraphView(tk.Canvas):
         self.after_change()
         self.on_select()
 
-    def add_node_at(self, ntype, wx, wy, title=''):
+    def add_node_at(self, ntype, wx, wy, speaker=None, state=None,
+                    connect_from=None):
+        """Create a node; ``connect_from`` = (from_id, port) links it."""
         self.before_change('add')
-        node = model.make_node(ntype, int(wx), int(wy), title)
-        nid = model.add_node(self.tab, node)
+        state = state or self.filter_state or 'first'
+        node = model.make_node(ntype, int(wx), int(wy), state, speaker)
+        nid = model.add_node(self.graph, node)
+        if connect_from and model.connect(self.graph, connect_from[0],
+                                          connect_from[1], nid):
+            self.draw_node(connect_from[0])
+            self.draw_edge(connect_from[0], connect_from[1], nid)
         self.draw_node(nid)
         self.after_change()
         self.select([nid])
@@ -245,13 +274,20 @@ class GraphView(tk.Canvas):
 
     def redraw_node(self, nid):
         """Public: node data changed (text, colour, size, lines)."""
+        if not self.graph or nid not in self.graph['nodes']:
+            return
         self.draw_node(nid)
-        for e in self.tab['edges']:
+        for e in self.graph['edges']:
             if e[0] == nid or e[2] == nid:
                 self.draw_edge(*e)
         self._apply_selection()
 
     # -- drawing ------------------------------------------------------------
+
+    def _dimmed(self, node):
+        if not self.filter_state or node.get('type') == 'comment':
+            return False
+        return node.get('state') not in (self.filter_state, 'neutral')
 
     def _draw_grid(self):
         self.delete('grid')
@@ -291,7 +327,7 @@ class GraphView(tk.Canvas):
 
     def draw_node(self, nid):
         self.delete(f'n:{nid}')
-        node = self.tab['nodes'].get(nid)
+        node = self.graph['nodes'].get(nid)
         if not node:
             return
         z = self.zoom
@@ -300,6 +336,9 @@ class GraphView(tk.Canvas):
         x2, y2 = self.w2c(node['x'] + w, node['y'] + h)
         tags = ('node', f'n:{nid}')
         kind = node['type']
+        dim = self._dimmed(node)
+        ink = theme.DIM if dim else theme.INK
+        stip = 'gray25' if dim else ''
         if kind == 'comment':
             color = node.get('color') or theme.COMMENT_COLOR
             body = self.create_rectangle(
@@ -314,46 +353,97 @@ class GraphView(tk.Canvas):
                                 fill=theme.MUT, outline='',
                                 tags=tags + ('grip',))
         elif kind == 'entry':
+            col = theme.STATE_COLORS.get(node.get('state'), theme.ENTRY_COLOR)
             body = self.create_polygon(
                 self._rr(x1, y1, x2, y2, h * z / 2), smooth=True,
-                fill='#1d3a26', outline=theme.ENTRY_COLOR, width=1.5,
+                fill='#1d3a26' if not dim else theme.PANEL,
+                outline=theme.DIM if dim else col, width=1.5,
                 tags=tags + ('body',))
-            self.create_text((x1 + x2) / 2, (y1 + y2) / 2,
-                             text=t('node.entry'), fill=theme.ENTRY_COLOR,
+            label = t('node.entry') + ' ' + t('state.' + node.get('state', ''))
+            self.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=label,
+                             fill=theme.DIM if dim else col,
                              font=self._font('title'), tags=tags + ('body',))
-            self._draw_out_port(nid, 0, tags)
+            self._draw_out_port(nid, 0, tags, dim)
             self._draw_port(x1 + (x2 - x1) / 2, y2, 'cond', nid, tags)
         else:
-            color = node.get('color') or theme.SPEAKER_COLORS[0]
+            title, color = self.node_style(node)
+            if dim:
+                color = theme.PANEL
             body = self.create_polygon(
                 self._rr(x1, y1, x2, y2, CORNER * z), smooth=True,
                 fill=theme.FIELD, outline=theme.LINE, width=1,
-                tags=tags + ('body',))
+                stipple=stip, tags=tags + ('body',))
             hy = y1 + model.HEADER_H * z
             self.create_polygon(
                 self._rr(x1, y1, x2, hy, CORNER * z,
                          (True, True, False, False)), smooth=True,
-                fill=color, outline='', tags=tags + ('body',))
-            title = self._fit_text(node.get('title') or t('node.dialog'),
-                                   self._font('title'), (w - 30) * z)
+                fill=color, outline='', stipple=stip, tags=tags + ('body',))
+            font_t = self._font('title')
+            band = t('state.short.' + node.get('state', ''))
+            band_w = font_t.measure(band) + 10 * z
+            if kind == 'player':
+                title = t('node.player')
+                kind_lbl = t('insp.kind.' + node.get('kind', 'answer')) + ' ▾'
+                kw_ = font_t.measure(kind_lbl) + 8 * z
+                self.create_text(x2 - band_w - 6 * z, (y1 + hy) / 2,
+                                 text=kind_lbl, anchor='e',
+                                 fill='#17130b' if not dim else theme.DIM,
+                                 font=self._font('small'),
+                                 tags=tags + ('kind',))
+            else:
+                kw_ = 0
+            title = self._fit_text(title or t('node.dialog'), font_t,
+                                   (w - 30) * z - band_w - kw_)
             self.create_text(x1 + 12 * z, (y1 + hy) / 2, text=title,
-                             anchor='w', fill='#17130b',
-                             font=self._font('title'), tags=tags + ('body',))
+                             anchor='w', fill='#17130b' if not dim
+                             else theme.DIM, font=font_t,
+                             tags=tags + ('body',))
+            # state band at the right of the header
+            bx1, by1 = x2 - band_w - 2 * z, y1 + 4 * z
+            self.create_polygon(
+                self._rr(bx1, by1, x2 - 3 * z, hy - 4 * z, 8 * z),
+                smooth=True, fill=theme.BG, outline='',
+                tags=tags + ('body',))
+            self.create_text((bx1 + x2 - 3 * z) / 2, (by1 + hy - 4 * z) / 2,
+                             text=band, fill=theme.STATE_COLORS.get(
+                                 node.get('state'), theme.MUT)
+                             if not dim else theme.DIM,
+                             font=self._font('small'), tags=tags + ('body',))
             self._draw_port(x1, (y1 + hy) / 2, 'in', nid, tags)
             self._draw_port((x1 + x2) / 2, y1, 'act', nid, tags)
-            self._draw_port((x1 + x2) / 2, y2, 'cond', nid, tags)
-            lines = node.get('lines') or [{'text': ''}]
+            lines = node.get('lines') or [model.new_line()]
             font = self._font('line')
+            many = kind == 'player' and node.get('kind') == 'question'
             for i, line in enumerate(lines):
                 ly = hy + (model.NODE_PAD / 2 + i * model.LINE_H
                            + model.LINE_H / 2) * z
+                glyphs = ''.join(g for k, g, c in EVENT_GLYPHS if line.get(k))
+                gw = font.measure(glyphs) + 6 * z if glyphs else 0
+                dw = 22 * z if many and len(lines) > 1 else 0
                 text = self._fit_text(line.get('text') or '…', font,
-                                      (w - 30) * z)
+                                      (w - 30) * z - gw - dw)
                 self.create_text(x1 + 12 * z, ly, text=text, anchor='w',
-                                 fill=theme.INK if line.get('text')
-                                 else theme.MUT, font=font,
-                                 tags=tags + ('body',))
-                self._draw_out_port(nid, i, tags)
+                                 fill=ink if line.get('text') else theme.DIM,
+                                 font=font, tags=tags + ('body',))
+                gx = x2 - 12 * z - dw
+                for k, g, c in reversed(EVENT_GLYPHS):
+                    if line.get(k):
+                        self.create_text(gx, ly, text=g, anchor='e',
+                                         fill=c if not dim else theme.DIM,
+                                         font=font, tags=tags + ('body',))
+                        gx -= font.measure(g) + 2 * z
+                if dw:
+                    self.create_text(x2 - 18 * z, ly, text='×', anchor='e',
+                                     fill=theme.MUT, font=font,
+                                     tags=tags + (f'delline:{i}',))
+                self._draw_out_port(nid, i, tags, dim)
+            if many:
+                ly = hy + (model.NODE_PAD / 2 + len(lines) * model.LINE_H
+                           + model.LINE_H / 2) * z
+                self.create_text(x1 + 12 * z, ly, text='+ ' + t('insp.addline'),
+                                 anchor='w', fill=theme.GOLD if not dim
+                                 else theme.DIM, font=self._font('small'),
+                                 tags=tags + ('addline',))
         self._body[nid] = body
         if nid in self.selected:
             self._outline(nid, True)
@@ -369,14 +459,15 @@ class GraphView(tk.Canvas):
                                   outline=theme.BG,
                                   tags=tags + (f'port:{role}',))
 
-    def _draw_out_port(self, nid, port, tags):
+    def _draw_out_port(self, nid, port, tags, dim=False):
         z = self.zoom
         wx, wy = self.out_pos(nid, port)
         cx, cy = self.w2c(wx, wy)
         r = PORT_R * z
-        self.create_oval(cx - r, cy - r, cx + r, cy + r, fill=theme.INK,
+        self.create_oval(cx - r, cy - r, cx + r, cy + r,
+                         fill=theme.DIM if dim else theme.INK,
                          outline=theme.BG, tags=tags + (f'port:out:{port}',))
-        if model.edge_from(self.tab, nid, port) is None:
+        if model.edge_from(self.graph, nid, port) is None and not dim:
             # open end: small grey "end" cap so the user sees where the
             # conversation runs out (plan 5.2, no end node)
             cw, ch = END_CAP_W * z, 14 * z
@@ -389,7 +480,7 @@ class GraphView(tk.Canvas):
                              tags=tags + ('cap',))
 
     def out_pos(self, nid, port):
-        node = self.tab['nodes'][nid]
+        node = self.graph['nodes'][nid]
         w, h = model.node_size(node)
         if node['type'] == 'entry':
             return node['x'] + w, node['y'] + h / 2
@@ -397,7 +488,7 @@ class GraphView(tk.Canvas):
                 + port * model.LINE_H + model.LINE_H / 2)
 
     def in_pos(self, nid):
-        node = self.tab['nodes'][nid]
+        node = self.graph['nodes'][nid]
         return node['x'], node['y'] + model.HEADER_H / 2
 
     def _edge_points(self, frm, port, to):
@@ -415,15 +506,19 @@ class GraphView(tk.Canvas):
 
     def draw_edge(self, frm, port, to):
         self._delete_edge(frm, port)
-        if frm not in self.tab['nodes'] or to not in self.tab['nodes']:
+        nodes = self.graph['nodes']
+        if frm not in nodes or to not in nodes:
             return
         pts = self._edge_points(frm, port, to)
         sel = self.selected_edge == (frm, port)
+        dim = self._dimmed(nodes[frm]) or self._dimmed(nodes[to])
         z = self.zoom
-        kw = dict(fill=theme.GOLD if sel else theme.MUT,
+        kw = dict(fill=theme.GOLD if sel else (theme.DIM if dim else theme.MUT),
                   width=(2.5 if sel else 1.5) * z, arrow='last',
                   arrowshape=(10 * z, 12 * z, 4 * z),
                   tags=('edge', f'e:{frm}:{port}'))
+        if dim:
+            kw['dash'] = (4, 4)
         if self.edge_style == 'curve':
             item = self.create_line(*pts, smooth='raw', splinesteps=24, **kw)
         else:
@@ -432,7 +527,7 @@ class GraphView(tk.Canvas):
         self.tag_lower(item, 'node')
 
     def _update_edges_of(self, nid):
-        for frm, port, to in self.tab['edges']:
+        for frm, port, to in self.graph['edges']:
             if frm == nid or to == nid:
                 item = self._edge_items.get((frm, port))
                 if item:
@@ -441,23 +536,32 @@ class GraphView(tk.Canvas):
     def _outline(self, nid, on):
         body = self._body.get(nid)
         if body:
-            node = self.tab['nodes'].get(nid, {})
+            node = self.graph['nodes'].get(nid, {})
             if node.get('type') == 'entry':
-                self.itemconfigure(body, outline=theme.GOLD if on
-                                   else theme.ENTRY_COLOR, width=2 if on else 1.5)
+                col = theme.STATE_COLORS.get(node.get('state'),
+                                             theme.ENTRY_COLOR)
+                self.itemconfigure(body, outline=theme.GOLD if on else col,
+                                   width=2.5 if on else 1.5)
             else:
-                self.itemconfigure(body, outline=theme.GOLD if on else theme.LINE,
-                                   width=2 if on else 1)
+                self.itemconfigure(body, outline=theme.GOLD if on
+                                   else theme.LINE, width=2 if on else 1)
 
     def _apply_selection(self):
-        if not self.tab:
+        if not self.graph:
             return
-        for nid in self.tab['nodes']:
+        for nid in self.graph['nodes']:
             self._outline(nid, nid in self.selected)
-        for (frm, port), item in self._edge_items.items():
-            sel = self.selected_edge == (frm, port)
-            self.itemconfigure(item, fill=theme.GOLD if sel else theme.MUT,
-                               width=(2.5 if sel else 1.5) * self.zoom)
+        nodes = self.graph['nodes']
+        for frm, port, to in self.graph['edges']:
+            item = self._edge_items.get((frm, port))
+            if not item:
+                continue
+            if self.selected_edge == (frm, port):
+                self.itemconfigure(item, fill=theme.GOLD, width=2.5 * self.zoom)
+            else:
+                dim = self._dimmed(nodes[frm]) or self._dimmed(nodes[to])
+                self.itemconfigure(item, fill=theme.DIM if dim else theme.MUT,
+                                   width=1.5 * self.zoom)
 
     # -- hit testing --------------------------------------------------------
 
@@ -475,14 +579,16 @@ class GraphView(tk.Canvas):
             for tg in tags:
                 if tg.startswith('n:'):
                     nid = tg[2:]
-                elif tg.startswith('port:') or tg in ('grip', 'body', 'cap'):
+                elif (tg.startswith('port:') or tg.startswith('delline:')
+                      or tg in ('grip', 'body', 'cap', 'addline', 'kind')):
                     role = tg
                 elif tg.startswith('e:'):
                     _, frm, port = tg.split(':')
                     edge = (frm, int(port))
             hit = {'nid': nid, 'role': role, 'edge': edge}
-            # ports win over bodies, nodes win over edges
-            if role and role.startswith('port:'):
+            # ports and buttons win over bodies, nodes win over edges
+            if role and (role.startswith('port:') or role in ('addline', 'kind')
+                         or role.startswith('delline:') or role == 'grip'):
                 return hit
             if best is None or (best['nid'] is None and nid):
                 best = hit
@@ -496,7 +602,7 @@ class GraphView(tk.Canvas):
 
     def _press(self, ev):
         self.focus_set()
-        if not self.tab:
+        if not self.graph:
             return
         if self._space:
             self.scan_mark(ev.x, ev.y)
@@ -512,9 +618,19 @@ class GraphView(tk.Canvas):
                           'line': None}
             return
         if nid and role == 'grip':
-            node = self.tab['nodes'][nid]
+            node = self.graph['nodes'][nid]
             self._drag = {'kind': 'resize', 'nid': nid, 'wx': wx, 'wy': wy,
                           'w': node['w'], 'h': node['h'], 'pushed': False}
+            return
+        if nid and role == 'addline':
+            self._add_line(nid)
+            return
+        if nid and role and role.startswith('delline:'):
+            self._remove_line(nid, int(role.split(':')[1]))
+            return
+        if nid and role == 'kind':
+            self.select([nid])
+            self._kind_menu(nid, ev)
             return
         if nid:
             if ctrl:
@@ -545,9 +661,9 @@ class GraphView(tk.Canvas):
                       'y': self.canvasy(ev.y), 'rect': None, 'add': ctrl}
 
     def _movable(self, ids):
-        """Selected nodes plus comments attached to them, minus the entry."""
-        out = {i for i in ids if i != model.ENTRY_ID}
-        for nid, n in self.tab['nodes'].items():
+        """Selected nodes plus comments attached to them, minus entries."""
+        out = {i for i in ids if not model.is_entry(i)}
+        for nid, n in self.graph['nodes'].items():
             if n.get('attached_to') in out:
                 out.add(nid)
         return out
@@ -562,7 +678,7 @@ class GraphView(tk.Canvas):
         for nid in ids:
             self.addtag_withtag('sel', f'n:{nid}')
         border = []
-        for frm, port, to in self.tab['edges']:
+        for frm, port, to in self.graph['edges']:
             a, b = frm in ids, to in ids
             item = self._edge_items.get((frm, port))
             if not item:
@@ -598,7 +714,7 @@ class GraphView(tk.Canvas):
             d['wy'] += dy
             z = self.zoom
             for nid in d['ids']:
-                n = self.tab['nodes'][nid]
+                n = self.graph['nodes'][nid]
                 n['x'] += dx
                 n['y'] += dy
             self.move('sel', dx * z, dy * z)
@@ -618,7 +734,7 @@ class GraphView(tk.Canvas):
             if not d['pushed']:
                 self.before_change('resize')
                 d['pushed'] = True
-            n = self.tab['nodes'][d['nid']]
+            n = self.graph['nodes'][d['nid']]
             n['w'] = int(max(model.COMMENT_MIN_W, d['w'] + wx - d['wx']))
             n['h'] = int(max(model.COMMENT_MIN_H, d['h'] + wy - d['wy']))
             self.draw_node(d['nid'])
@@ -635,7 +751,7 @@ class GraphView(tk.Canvas):
     def _release(self, ev):
         d = self._drag
         self._drag = None
-        if not d or not self.tab:
+        if not d or not self.graph:
             return
         if d['kind'] == 'move':
             self.dtag('all', 'sel')
@@ -648,14 +764,14 @@ class GraphView(tk.Canvas):
             wx, wy = self.event_world(ev)
             to = hit['nid']
             if to and to != d['frm'] and model.can_connect(
-                    self.tab, d['frm'], d['port'], to):
+                    self.graph, d['frm'], d['port'], to):
                 self.before_change('connect')
-                model.connect(self.tab, d['frm'], d['port'], to)
+                model.connect(self.graph, d['frm'], d['port'], to)
                 self.draw_node(d['frm'])
                 self.draw_edge(d['frm'], d['port'], to)
                 self.after_change()
             elif not to and not hit['edge']:
-                self.on_edge_drop_empty(d['frm'], d['port'], wx, wy)
+                self.on_edge_drop_empty(d['frm'], d['port'], wx, wy, ev)
         elif d['kind'] == 'resize':
             if d['pushed']:
                 self.after_change()
@@ -667,7 +783,9 @@ class GraphView(tk.Canvas):
                 x2, y2 = self.c2w(max(d['x'], self.canvasx(ev.x)),
                                   max(d['y'], self.canvasy(ev.y)))
                 hits = set()
-                for nid, n in self.tab['nodes'].items():
+                for nid, n in self.graph['nodes'].items():
+                    if self._dimmed(n):
+                        continue
                     w, h = model.node_size(n)
                     if (n['x'] < x2 and n['x'] + w > x1 and n['y'] < y2
                             and n['y'] + h > y1):
@@ -678,7 +796,7 @@ class GraphView(tk.Canvas):
 
     def _double(self, ev):
         hit = self._hit(ev)
-        if hit['nid']:
+        if hit['nid'] and hit['role'] in ('body', 'cap', None):
             self.on_open_node(hit['nid'])
 
     def _pan_start(self, ev):
@@ -696,10 +814,56 @@ class GraphView(tk.Canvas):
     def _wheel_zoom(self, ev):
         self.set_zoom(self.zoom_i + (1 if ev.delta > 0 else -1), (ev.x, ev.y))
 
+    # -- node buttons -------------------------------------------------------
+
+    def _add_line(self, nid):
+        self.before_change('addline')
+        model.add_line(self.graph, nid)
+        self.redraw_node(nid)
+        self.after_change()
+
+    def _remove_line(self, nid, index):
+        self.before_change('delline')
+        if model.remove_line(self.graph, nid, index):
+            self.redraw_node(nid)
+            self.after_change()
+
+    def _kind_menu(self, nid, ev):
+        menu = tk.Menu(self, tearoff=0)
+        for kind in ('answer', 'question'):
+            menu.add_command(label=t('insp.kind.' + kind),
+                             command=lambda k=kind: self.set_kind(nid, k))
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+
+    def set_kind(self, nid, kind):
+        node = self.graph['nodes'][nid]
+        if node.get('kind') == kind:
+            return
+        self.before_change('kind')
+        node['kind'] = kind
+        if kind == 'answer':
+            while len(node['lines']) > 1:
+                model.remove_line(self.graph, nid, len(node['lines']) - 1)
+        self.redraw_node(nid)
+        self.after_change()
+
+    def set_state(self, nid, state):
+        node = self.graph['nodes'][nid]
+        if node.get('state') == state or node.get('type') in ('entry',
+                                                              'comment'):
+            return
+        self.before_change('state')
+        node['state'] = state
+        self.redraw_node(nid)
+        self.after_change()
+
     # -- context menu -------------------------------------------------------
 
     def _context(self, ev):
-        if not self.tab:
+        if not self.graph:
             return
         self.focus_set()
         hit = self._hit(ev)
@@ -709,7 +873,7 @@ class GraphView(tk.Canvas):
         if nid:
             if nid not in self.selected:
                 self.select([nid])
-            node = self.tab['nodes'][nid]
+            node = self.graph['nodes'][nid]
             if node['type'] != 'entry':
                 menu.add_command(label=t('edit.duplicate'),
                                  command=self.duplicate_selection)
@@ -721,9 +885,9 @@ class GraphView(tk.Canvas):
                                      command=lambda: self._attach(nid, None))
                 else:
                     sub = tk.Menu(menu, tearoff=0)
-                    for oid, o in self.tab['nodes'].items():
-                        if o['type'] == 'node':
-                            label = o.get('title') or oid
+                    for oid, o in self.graph['nodes'].items():
+                        if o['type'] in ('npc', 'player'):
+                            label = self.node_style(o)[0] or oid
                             sub.add_command(
                                 label=f'{label}  ({oid})',
                                 command=lambda o=oid: self._attach(nid, o))
@@ -736,11 +900,16 @@ class GraphView(tk.Canvas):
             else:
                 menu.add_command(label=t('ctx.disconnect'),
                                  command=lambda: self._disconnect_node(nid))
-                if node['type'] == 'node':
+                if node['type'] in ('npc', 'player'):
+                    st = tk.Menu(menu, tearoff=0)
+                    for s in model.STATES:
+                        st.add_radiobutton(
+                            label=t('state.' + s), value=s,
+                            variable=tk.StringVar(value=node.get('state')),
+                            command=lambda s=s: self.set_state(nid, s))
+                    menu.add_cascade(label=t('insp.state'), menu=st)
                     menu.add_command(label=t('ctx.attach_comment'),
                                      command=lambda: self._new_comment_for(nid))
-            if self.on_context:
-                self.on_context(menu, 'node', nid)
         elif hit['edge']:
             self.selected_edge = hit['edge']
             self.selected = set()
@@ -749,13 +918,15 @@ class GraphView(tk.Canvas):
                              command=self.delete_selection)
         else:
             add = tk.Menu(menu, tearoff=0)
-            add.add_command(label=t('node.dialog'),
-                            command=lambda: self.add_node_at('node', wx, wy))
+            if self.fill_add_menu:
+                self.fill_add_menu(add, wx, wy)
+            else:
+                add.add_command(label=t('node.player'), command=lambda:
+                                self.add_node_at('player', wx, wy))
+            add.add_separator()
             add.add_command(label=t('node.comment'),
                             command=lambda: self.add_node_at('comment', wx, wy))
             menu.add_cascade(label=t('ctx.add'), menu=add)
-            if self.on_context:
-                self.on_context(menu, 'empty', None)
             menu.add_separator()
             menu.add_command(label=t('edit.autolayout'),
                              command=self.auto_layout)
@@ -767,20 +938,20 @@ class GraphView(tk.Canvas):
 
     def _attach(self, cid, target):
         self.before_change('attach')
-        self.tab['nodes'][cid]['attached_to'] = target
+        self.graph['nodes'][cid]['attached_to'] = target
         self.after_change()
 
     def _set_color(self, nid, color):
         self.before_change('color')
-        self.tab['nodes'][nid]['color'] = color
+        self.graph['nodes'][nid]['color'] = color
         self.redraw_node(nid)
         self.after_change()
 
     def _disconnect_node(self, nid):
         self.before_change('disconnect')
-        touched = {e[0] for e in self.tab['edges'] if e[2] == nid} | {nid}
-        gone = [e for e in self.tab['edges'] if e[0] == nid or e[2] == nid]
-        model.disconnect_node(self.tab, nid)
+        touched = {e[0] for e in self.graph['edges'] if e[2] == nid} | {nid}
+        gone = [e for e in self.graph['edges'] if e[0] == nid or e[2] == nid]
+        model.disconnect_node(self.graph, nid)
         for frm, port, to in gone:
             self._delete_edge(frm, port)
         for i in touched:
@@ -788,43 +959,43 @@ class GraphView(tk.Canvas):
         self.after_change()
 
     def _new_comment_for(self, nid):
-        n = self.tab['nodes'][nid]
+        n = self.graph['nodes'][nid]
         w, h = model.node_size(n)
         cid = self.add_node_at('comment', n['x'], n['y'] + h + 12)
-        self.tab['nodes'][cid]['attached_to'] = nid
+        self.graph['nodes'][cid]['attached_to'] = nid
 
     def duplicate_selection(self):
-        ids = {i for i in self.selected if i != model.ENTRY_ID}
+        ids = {i for i in self.selected if not model.is_entry(i)}
         if not ids:
             return
         self.before_change('duplicate')
-        new = model.duplicate_nodes(self.tab, ids)
+        new = model.duplicate_nodes(self.graph, ids)
         for nid in new:
             self.draw_node(nid)
-        for e in self.tab['edges']:
+        for e in self.graph['edges']:
             if e[0] in new:
                 self.draw_edge(*e)
         self.after_change()
         self.select(new)
 
     def paste(self, clip):
-        if not self.tab or not clip or not clip['nodes']:
+        if not self.graph or not clip or not clip['nodes']:
             return
         self.before_change('paste')
-        new = model.paste_nodes(self.tab, clip)
+        new = model.paste_nodes(self.graph, clip)
         for nid in new:
             self.draw_node(nid)
-        for e in self.tab['edges']:
+        for e in self.graph['edges']:
             if e[0] in new:
                 self.draw_edge(*e)
         self.after_change()
         self.select(new)
 
     def auto_layout(self):
-        if not self.tab:
+        if not self.graph:
             return
         self.before_change('layout')
-        model.auto_layout(self.tab)
+        model.auto_layout(self.graph)
         self.redraw()
         self.after_change()
         self.fit()

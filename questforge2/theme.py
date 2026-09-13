@@ -28,6 +28,12 @@ SPEAKER_COLORS = ['#e06c60', '#7fbf7f', '#e0a050', '#c090e0',
 PLAYER_COLOR = '#6ca0e0'
 ENTRY_COLOR = '#43b563'
 COMMENT_COLOR = '#4a453d'
+DIM = '#5c564c'
+# One colour per conversation level (state band on the node header).
+STATE_COLORS = {'first': '#d2a044', 'known': '#b08850', 'running': '#6ca0e0',
+                'taken': '#5a88c0', 'solved': '#43b563', 'closed': '#9a938a',
+                'failed': '#e06c60', 'lowrep': '#c090e0',
+                'neutral': '#7a746a'}
 
 FONT = ('Segoe UI', 9)
 FONT_BOLD = ('Segoe UI', 9, 'bold')
@@ -144,6 +150,16 @@ def apply_dark_theme(root):
                     font=FONT_BOLD, padding=(8, 5))
     style.configure('Muted.TLabel', foreground=MUT)
     style.configure('PanelMuted.TLabel', background=PANEL, foreground=MUT)
+    style.configure('Panel.TCheckbutton', background=PANEL, foreground=INK,
+                    indicatorbackground=FIELD, indicatorforeground=GOLD,
+                    focuscolor=PANEL)
+    style.map('Panel.TCheckbutton',
+              background=[('active', PANEL), ('pressed', PANEL),
+                          ('selected', PANEL)],
+              foreground=[('active', GOLD_HI)],
+              indicatorbackground=[('selected', GOLD), ('pressed', SEL),
+                                   ('active', FIELD)],
+              indicatorforeground=[('selected', '#17130b')])
     style.configure('Status.TFrame', background=PANEL)
     style.configure('Status.TLabel', background=PANEL, foreground=MUT,
                     padding=(8, 3), font=FONT_SMALL)

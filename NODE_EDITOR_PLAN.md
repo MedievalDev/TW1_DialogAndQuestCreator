@@ -2,7 +2,7 @@
 
 Stand: 2026-09-13, **Plan freigegeben (Marco)**. Umsetzung laeuft auf Branch
 `questforge2` im Clone `C:\Users\marco\Desktop\TW1QuestCreator`.
-**M1 und M2 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
+**M1 bis M3 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -710,7 +710,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 |---|---|---|
 | M1 | Fenster, Menues, Statusleiste, Projekt neu/oeffnen/speichern, `data.py` mit Cache | Start unter 1 s beim zweiten Mal, Projektdatei round-trippt. **Fertig 2026-09-13:** Start 0,3 s (Cache 0,01 s), Vollaufbau des Index 0,8 bis 1,4 s, 14 Tests gruen, Projektdatei byte-gleich nach Speichern/Oeffnen/Speichern |
 | M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final. **Fertig 2026-09-13:** `graph.py`; bei 300 Nodes (4449 Canvas-Items) ein Node ziehen 1,7 ms/Frame, alle 300 zusammen 13 ms/Frame, Zoomstufe wechseln 92 ms, Undo 107 ms. **Tkinter bleibt (final).** 21 Tests gruen |
-| M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen |
+| M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen. **Fertig 2026-09-13:** Pruefung in 6.3 eingetragen; `palette.py` (Sprecher-Box mit Dialog Vorhandener/Neuer NPC, Ziehen und Doppelklick), `inspector.py` (Formulare je Node-Typ, Quest-Panel, Cue-Suche), Modell auf einen Graphen pro Quest umgestellt; Beispiel-Dialog mit Angebot/Frage/Annahme, Laeuft, Erfuellt gebaut, gespeichert, wieder geoeffnet, byte-gleich; 27 Tests gruen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich |
 | M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet) |
 | M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen |
@@ -813,6 +813,30 @@ Entschieden am 2026-09-13 (nach der Pruefung 6.3, vor M3):
     `taken` (0x4, 137 Retail-Zeilen) wird beim Laden als eigene Ebene
     "Angenommen" gefuehrt, im Tool aber nicht angeboten (Laeuft deckt den
     Fall ab).
+
+Entschieden am 2026-09-13 (Umsetzung M3):
+
+20. Sprecher gelten pro Quest: `{'id', 'name', 'lector', 'tile', 'new'}`,
+    der Spieler ist implizit (`speaker: 'player'`, Lector 1). "Neuer NPC"
+    prueft die ID gegen den Index **inklusive Mod-NPCs** (Yamalin belegt
+    z. B. NPC_700 bis 701). Lector-Dropdown listet jeden Retail-Lector mit
+    den Namen seiner NPCs. Heimat-Kachel ist bis zum Kachel-Picker (M5)
+    Freitext.
+21. Node-Kopf: Sprecherfarbe aus der Palette (Spieler blau), rechts ein
+    Zustandsband in der Ebenenfarbe. Je Zeile Ereignis-Glyphen (Haken =
+    annehmen, Raute = abschliessen, Schwerter = Kampf). Frage-Nodes haben
+    "+ Zeile" und ein x je Zeile direkt im Node, die Art (Antwort/Frage)
+    haengt als Dropdown im Kopf. NPC-Nodes haben genau eine Zeile; die
+    "Ebene" ist im Kontextmenue und im Panel umstellbar.
+22. Panel-Aenderungen: ein Undo-Snapshot je Feld-Fokus, Live-Uebernahme in
+    den Graph bei jedem Tastendruck; der Snapshot umfasst den ganzen Quest
+    (Graph, Sprecher, Kopffelder).
+23. Cue-Suche: Filter nach dem Lector des Sprechers (abschaltbar) und
+    Textsuche ueber Cue-Name und Aufnahmetext, Vorschau, Warnung im Panel,
+    wenn der Untertitel von der Aufnahme abweicht. Kamera-Standard ist
+    "leer"; der Export setzt 2 fuer NPC und 7 fuer Held (wie das alte Tool).
+24. Kante ins Leere ziehen oeffnet das Popup Spieler / Sprecher... /
+    Kommentar und verbindet sofort (Plan 5.3 umgesetzt).
 
 Offen:
 

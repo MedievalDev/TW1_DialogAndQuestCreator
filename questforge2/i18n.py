@@ -114,6 +114,101 @@ _DE = {
     'quest.debug300': 'Debug: 300 Test-Nodes',
     'quest.noquest': 'Keine Quest geoeffnet.',
     'quest.noid': 'Keine freie Quest-ID mehr (381 bis 399 sind belegt).',
+    # levels (states)
+    'state.first': 'Angebot', 'state.known': 'Bekannt',
+    'state.running': 'Laeuft', 'state.taken': 'Angenommen',
+    'state.solved': 'Erfuellt', 'state.closed': 'Abgeschlossen',
+    'state.failed': 'Fehlgeschlagen', 'state.lowrep': 'Ruf zu niedrig',
+    'state.neutral': 'Immer',
+    'state.short.first': 'Angebot', 'state.short.known': 'Bekannt',
+    'state.short.running': 'Laeuft', 'state.short.taken': 'Angen.',
+    'state.short.solved': 'Erfuellt', 'state.short.closed': 'Abgeschl.',
+    'state.short.failed': 'Fehlgeschl.', 'state.short.lowrep': 'Ruf',
+    'state.short.neutral': 'Immer',
+    'state.help.first': 'Spielt beim ersten Ansprechen. Endet das Gespraech '
+                        'ueber eine Zeile mit "Nimmt die Quest an", ist die '
+                        'Quest angenommen.',
+    'state.help.known': 'Spielt, wenn der Spieler das Angebot gehoert und '
+                        'nicht angenommen hat.',
+    'state.help.running': 'Spielt, solange die Aufgabe nicht erledigt ist '
+                          '(auch schon vor der Annahme).',
+    'state.help.taken': 'Spielt nach der Annahme, egal ob erledigt oder '
+                        'nicht (Retail-Ebene, selten noetig).',
+    'state.help.solved': 'Spielt, wenn die Aufgabe erledigt ist. '
+                         '"Schliesst die Quest ab" gibt die Belohnung.',
+    'state.help.closed': 'Spielt nach dem Abschluss der Quest.',
+    'state.help.failed': 'Spielt, wenn die Quest fehlgeschlagen ist.',
+    'state.help.lowrep': 'Spielt statt des Angebots, wenn der Ruf unter dem '
+                         'Mindestruf der Quest liegt.',
+    'state.help.neutral': 'Spielt in jedem Zustand (Fragemenues, Smalltalk).',
+    'tab.more': '+', 'tab.all': 'Alle',
+    # speakers
+    'speaker.player': 'Spieler', 'speaker.new': '+ Neuer Sprecher',
+    'speaker.dialog.title': 'Neuer Sprecher',
+    'speaker.existing': 'Vorhandener NPC', 'speaker.newnpc': 'Neuer NPC',
+    'speaker.search': 'Name oder NPC-ID tippen:',
+    'speaker.own': 'Eigene', 'speaker.id': 'NPC-ID (Two Worlds Editor)',
+    'speaker.name': 'Anzeigename', 'speaker.lector': 'Stimme (Lector)',
+    'speaker.lector.none': 'stumm / eigener Lector',
+    'speaker.lector.of': 'Stimme von {names} (Lector {n})',
+    'speaker.tile': 'Heimat-Kachel (z. B. F05)',
+    'speaker.hint': 'Der NPC braucht im Two Worlds Editor einen Q_Giver-'
+                    'Marker mit derselben Nummer in dieser Kachel, sonst '
+                    'friert das Spiel beim Laden der Kachel ein.',
+    'speaker.id.invalid': 'Bitte eine Zahl eingeben (z. B. 700).',
+    'speaker.id.taken': 'NPC_{id} ist im Spiel schon vergeben ({name}). '
+                        'Fuer einen vorhandenen NPC die erste Karte benutzen.',
+    'speaker.rename': 'Umbenennen', 'speaker.remove': 'Entfernen',
+    'speaker.remove.used': 'Dieser Sprecher wird noch von Nodes benutzt.',
+    'speaker.mark': 'Alle Zeilen dieses Sprechers markieren',
+    'node.player': 'Spieler', 'node.npc': 'NPC',
+    # inspector
+    'insp.quest': 'QUEST', 'insp.id': 'Quest-ID',
+    'insp.id.hint': 'Frei sind 381 bis 399 (das Spiel kennt nur 19 eigene '
+                    'IDs).',
+    'insp.title': 'Titel', 'insp.group': 'Tagebuchgruppe',
+    'insp.journal.take': 'Tagebuch: Annahme',
+    'insp.journal.solve': 'Tagebuch: Erfuellt',
+    'insp.journal.close': 'Tagebuch: Abgeschlossen',
+    'insp.giver': 'Questgeber', 'insp.giver_type': 'Giver-Typ',
+    'insp.map_sign': 'Kartenmarker',
+    'insp.map_sign.hint': 'BACK_TO_GIVER_MAP_SIGN setzt den Marker nach '
+                          'Erfuellung zurueck zum Questgeber.',
+    'insp.offered': 'Start', 'insp.offered.check':
+    'Quest wird angeboten (Gespraech). Aus = startet automatisch.',
+    'insp.archive': 'Zielarchiv (Mods\\*.wd)',
+    'insp.speaker': 'Sprecher', 'insp.state': 'Ebene', 'insp.text': 'Text',
+    'insp.take': 'Nimmt die Quest an', 'insp.close': 'Schliesst die Quest ab',
+    'insp.fight': 'Kampf beginnt', 'insp.advanced': 'Erweitert',
+    'insp.cue': 'Voice-Cue', 'insp.cue.search': 'Suchen...',
+    'insp.cue.text': 'Aufnahme:',
+    'insp.cue.mismatch': 'Untertitel weicht von der Aufnahme ab. Der Text '
+                         'muss zur Aufnahme passen.',
+    'insp.cam': 'Kamera', 'insp.anim': 'Animation (0 bis 17)',
+    'insp.kind': 'Art', 'insp.kind.answer': 'Antwort',
+    'insp.kind.question': 'Frage',
+    'insp.line': 'Zeile {n}', 'insp.addline': 'Zeile',
+    'insp.color': 'Farbe', 'insp.multi': '{n} Nodes gewaehlt',
+    'insp.entry.first': 'Hier beginnt das Gespraech beim ersten Ansprechen.',
+    'insp.entry.known': 'Hier beginnt das Gespraech, wenn das Angebot '
+                        'abgelehnt wurde.',
+    'insp.entry.running': 'Hier beginnt das Gespraech, solange die Aufgabe '
+                          'nicht erledigt ist.',
+    'insp.entry.taken': 'Hier beginnt das Gespraech nach der Annahme.',
+    'insp.entry.solved': 'Hier beginnt das Belohnungsgespraech.',
+    'insp.entry.closed': 'Hier beginnt jedes Gespraech nach dem Abschluss.',
+    'insp.entry.failed': 'Hier beginnt das Gespraech nach dem Scheitern.',
+    'insp.entry.lowrep': 'Hier beginnt das Gespraech bei zu niedrigem Ruf.',
+    'insp.entry.neutral': 'Neutrale Zeilen haben keinen eigenen Einstieg.',
+    'insp.entry.cond': 'Bedingungen (Vorgaengerquest, Mindest-Level, Gilde) '
+                       'docken hier an (Meilenstein 5).',
+    'cam.default': 'Standard', 'cam.npc': 'auf NPC (2)',
+    'cam.npc2': 'auf NPC, Variante (1)', 'cam.hero': 'auf Held (7)',
+    'cam.hero2': 'auf Held, Variante (6)',
+    'cue.title': 'Voice-Cue suchen', 'cue.filter': 'Text:',
+    'cue.lector.speaker': 'nur Stimme des Sprechers (Lector {n})',
+    'cue.count': '{n} Treffer (max. 500)',
+    'ctx.newnode': 'Neuer Node',
 }
 
 _EN = {
@@ -208,6 +303,98 @@ _EN = {
     'quest.debug300': 'Debug: 300 test nodes',
     'quest.noquest': 'No quest open.',
     'quest.noid': 'No free quest id left (381 to 399 are taken).',
+    'state.first': 'Offer', 'state.known': 'Known',
+    'state.running': 'Running', 'state.taken': 'Taken',
+    'state.solved': 'Solved', 'state.closed': 'Closed',
+    'state.failed': 'Failed', 'state.lowrep': 'Low reputation',
+    'state.neutral': 'Always',
+    'state.short.first': 'Offer', 'state.short.known': 'Known',
+    'state.short.running': 'Running', 'state.short.taken': 'Taken',
+    'state.short.solved': 'Solved', 'state.short.closed': 'Closed',
+    'state.short.failed': 'Failed', 'state.short.lowrep': 'Rep',
+    'state.short.neutral': 'Always',
+    'state.help.first': 'Plays on the first talk. If the conversation ends '
+                        'through a line marked "Takes the quest", the quest '
+                        'is taken.',
+    'state.help.known': 'Plays when the player heard the offer and did not '
+                        'take it.',
+    'state.help.running': 'Plays while the task is not done (also before '
+                          'the quest is taken).',
+    'state.help.taken': 'Plays after taking, solved or not (retail level, '
+                        'rarely needed).',
+    'state.help.solved': 'Plays when the task is done. "Closes the quest" '
+                         'hands out the reward.',
+    'state.help.closed': 'Plays after the quest is closed.',
+    'state.help.failed': 'Plays when the quest failed.',
+    'state.help.lowrep': 'Plays instead of the offer when reputation is '
+                         'below the quest minimum.',
+    'state.help.neutral': 'Plays in every state (question menus, small talk).',
+    'tab.more': '+', 'tab.all': 'All',
+    'speaker.player': 'Player', 'speaker.new': '+ New speaker',
+    'speaker.dialog.title': 'New speaker',
+    'speaker.existing': 'Existing NPC', 'speaker.newnpc': 'New NPC',
+    'speaker.search': 'Type a name or NPC id:',
+    'speaker.own': 'Own', 'speaker.id': 'NPC id (Two Worlds Editor)',
+    'speaker.name': 'Display name', 'speaker.lector': 'Voice (lector)',
+    'speaker.lector.none': 'silent / own lector',
+    'speaker.lector.of': 'Voice of {names} (lector {n})',
+    'speaker.tile': 'Home tile (e.g. F05)',
+    'speaker.hint': 'The NPC needs a Q_Giver marker with the same number in '
+                    'this tile in the Two Worlds Editor, otherwise the game '
+                    'freezes when the tile loads.',
+    'speaker.id.invalid': 'Please enter a number (e.g. 700).',
+    'speaker.id.taken': 'NPC_{id} already exists in the game ({name}). Use '
+                        'the first card for an existing NPC.',
+    'speaker.rename': 'Rename', 'speaker.remove': 'Remove',
+    'speaker.remove.used': 'This speaker is still used by nodes.',
+    'speaker.mark': 'Select all lines of this speaker',
+    'node.player': 'Player', 'node.npc': 'NPC',
+    'insp.quest': 'QUEST', 'insp.id': 'Quest id',
+    'insp.id.hint': 'Free ids are 381 to 399 (the game allows only 19 '
+                    'custom ids).',
+    'insp.title': 'Title', 'insp.group': 'Journal group',
+    'insp.journal.take': 'Journal: taken',
+    'insp.journal.solve': 'Journal: solved',
+    'insp.journal.close': 'Journal: closed',
+    'insp.giver': 'Quest giver', 'insp.giver_type': 'Giver type',
+    'insp.map_sign': 'Map marker',
+    'insp.map_sign.hint': 'BACK_TO_GIVER_MAP_SIGN moves the marker back to '
+                          'the giver once the task is done.',
+    'insp.offered': 'Start', 'insp.offered.check':
+    'Quest is offered in a conversation. Off = starts automatically.',
+    'insp.archive': 'Target archive (Mods\\*.wd)',
+    'insp.speaker': 'Speaker', 'insp.state': 'Level', 'insp.text': 'Text',
+    'insp.take': 'Takes the quest', 'insp.close': 'Closes the quest',
+    'insp.fight': 'Fight starts', 'insp.advanced': 'Advanced',
+    'insp.cue': 'Voice cue', 'insp.cue.search': 'Search...',
+    'insp.cue.text': 'Recording:',
+    'insp.cue.mismatch': 'The subtitle differs from the recording. The text '
+                         'must match the recording.',
+    'insp.cam': 'Camera', 'insp.anim': 'Animation (0 to 17)',
+    'insp.kind': 'Kind', 'insp.kind.answer': 'Answer',
+    'insp.kind.question': 'Question',
+    'insp.line': 'Line {n}', 'insp.addline': 'line',
+    'insp.color': 'Colour', 'insp.multi': '{n} nodes selected',
+    'insp.entry.first': 'The conversation starts here on the first talk.',
+    'insp.entry.known': 'The conversation starts here after the offer was '
+                        'declined.',
+    'insp.entry.running': 'The conversation starts here while the task is '
+                          'not done.',
+    'insp.entry.taken': 'The conversation starts here after taking.',
+    'insp.entry.solved': 'The reward conversation starts here.',
+    'insp.entry.closed': 'Every conversation after closing starts here.',
+    'insp.entry.failed': 'The conversation starts here after failing.',
+    'insp.entry.lowrep': 'The conversation starts here with low reputation.',
+    'insp.entry.neutral': 'Neutral lines have no entry of their own.',
+    'insp.entry.cond': 'Conditions (previous quest, minimum level, guild) '
+                       'dock here (milestone 5).',
+    'cam.default': 'Default', 'cam.npc': 'on NPC (2)',
+    'cam.npc2': 'on NPC, variant (1)', 'cam.hero': 'on hero (7)',
+    'cam.hero2': 'on hero, variant (6)',
+    'cue.title': 'Search voice cue', 'cue.filter': 'Text:',
+    'cue.lector.speaker': 'only the speaker\'s voice (lector {n})',
+    'cue.count': '{n} matches (max. 500)',
+    'ctx.newnode': 'New node',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

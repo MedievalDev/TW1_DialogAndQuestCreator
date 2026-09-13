@@ -1,11 +1,12 @@
 """Main window: menu bar, panels, status bar, project handling, graph.
 
-Milestone 1 built the frame; milestone 2 adds the node graph (graph.py),
-the conversation tabs above it, undo/redo and the clipboard. Panels that
+Milestone 1 built the frame, milestone 2 the node graph, milestone 3 the
+speaker box, the dialog node types and the property panel. Panels that
 belong to later milestones are still placeholders; their menu entries
 exist but are disabled so the final structure (plan section 3) is visible.
 """
 
+import glob
 import json
 import os
 import random
@@ -19,7 +20,9 @@ from tkinter import filedialog, messagebox, ttk
 from . import APP_NAME, VERSION, data, model, theme
 from .graph import GraphView
 from .i18n import t, set_lang, get_lang, detect_lang
+from .inspector import Inspector
 from .model import Project, Quest, ModelError, PROJECT_EXT
+from .palette import SpeakerBox
 
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
@@ -35,7 +38,7 @@ class App:
         self.index = None
         self.project = None
         self.quest = None
-        self.tab_key = model.DEFAULT_TABS[0]
+        self.tab_state = model.DEFAULT_STATES[0]
         self.undo = model.UndoStack()
         self.clipboard = None
 
@@ -127,7 +130,7 @@ class App:
     def _fill_edit(self, m):
         g = self.graph
         has_q = self.quest is not None
-        has_sel = has_q and bool(g.selected - {model.ENTRY_ID})
+        has_sel = has_q and any(not model.is_entry(i) for i in g.selected)
         m.add_command(label=t('edit.undo'), accelerator=self._acc('Ctrl+Z'),
                       command=self.do_undo,
                       state=self._state(has_q and self.undo.can_undo()))
@@ -224,13 +227,8 @@ class App:
         self.timeline = self._placeholder(self.vpane, 'panel.timeline', 6)
         self.hpane = ttk.PanedWindow(self.vpane, orient='horizontal')
 
-        self.palette = ttk.PanedWindow(self.hpane, orient='vertical')
-        self.speakers = self._placeholder(self.palette, 'panel.speakers', 3)
-        self.actions = self._placeholder(self.palette, 'panel.actions', 5)
-        self.palette.add(self.speakers, weight=1)
-        self.palette.add(self.actions, weight=1)
-
-        # centre: tab strip above the graph canvas
+        # centre: tab strip above the graph canvas (built before the boxes
+        # that reference the graph)
         self.center = ttk.Frame(self.hpane)
         self.tabstrip = ttk.Frame(self.center, style='Panel.TFrame')
         self.tabstrip.pack(fill='x')
@@ -238,15 +236,24 @@ class App:
         self.graph = GraphView(self.center)
         self.graph.pack(fill='both', expand=True)
         self.graph.before_change = self.push_undo
-        self.graph.after_change = self._after_change
-        self.graph.on_select = self._update_status
+        self.graph.after_change = self.changed
+        self.graph.on_select = self._selection_changed
         self.graph.on_edge_drop_empty = self._edge_drop_empty
+        self.graph.on_open_node = self._open_node
+        self.graph.fill_add_menu = self._fill_add_menu
+        self.graph.node_style = self.node_style
         self.graph.bind('<Configure>', self._draw_graph_placeholder, add='+')
 
+        self.palette = ttk.PanedWindow(self.hpane, orient='vertical')
+        self.speakers = SpeakerBox(self.palette, self)
+        self.actions = self._placeholder(self.palette, 'panel.actions', 5)
+        self.palette.add(self.speakers, weight=1)
+        self.palette.add(self.actions, weight=1)
+
         self.side = ttk.PanedWindow(self.hpane, orient='vertical')
-        self.inspector = self._placeholder(self.side, 'panel.inspector', 3)
+        self.inspector = Inspector(self.side, self)
         self.coach = self._placeholder(self.side, 'panel.coach', 8)
-        self.side.add(self.inspector, weight=2)
+        self.side.add(self.inspector, weight=3)
         self.side.add(self.coach, weight=1)
 
         self._apply_panels(initial=True)
@@ -280,7 +287,7 @@ class App:
                 if str(w) in self.side.panes():
                     self.side.forget(w)
             if v['inspector'].get():
-                self.side.add(self.inspector, weight=2)
+                self.side.add(self.inspector, weight=3)
             if v['coach'].get():
                 self.side.add(self.coach, weight=1)
         if initial:
@@ -292,7 +299,7 @@ class App:
                     self.hpane.sashpos(0, 240)
                 if show_side:
                     self.hpane.sashpos(len(self.hpane.panes()) - 2,
-                                       self.root.winfo_width() - 300)
+                                       self.root.winfo_width() - 320)
             except tk.TclError:
                 pass
         self.cfg.set('panels', {k: var.get() for k, var in v.items()})
@@ -307,32 +314,66 @@ class App:
                           font=theme.FONT, justify='center',
                           tags='placeholder')
 
+    # -- tabs (level filters) -----------------------------------------------
+
     def _build_tabs(self):
         for w in self.tabstrip.winfo_children():
             w.destroy()
         self.tab_labels = {}
         if not self.quest:
             return
-        for key in self.quest.tab_keys():
-            lbl = ttk.Label(self.tabstrip, text=t('tab.' + key),
+        for key in self.quest.states_present():
+            lbl = ttk.Label(self.tabstrip, text=t('state.' + key),
                             style='Menubar.TLabel', cursor='hand2')
             lbl.pack(side='left')
             lbl.bind('<Button-1>', lambda e, k=key: self.show_tab(k))
             self.tab_labels[key] = lbl
+        more = ttk.Label(self.tabstrip, text=t('tab.more'),
+                         style='Menubar.TLabel', cursor='hand2')
+        more.pack(side='left')
+        more.bind('<Button-1>', self._more_tabs)
+        alls = ttk.Label(self.tabstrip, text=t('tab.all'),
+                         style='Menubar.TLabel', cursor='hand2')
+        alls.pack(side='right')
+        alls.bind('<Button-1>', lambda e: self.show_tab(None))
+        self.tab_labels[None] = alls
         self._mark_tab()
+
+    def _more_tabs(self, ev):
+        menu = tk.Menu(self.root, tearoff=0)
+        present = self.quest.states_present()
+        for s in model.STATES:
+            if s not in present:
+                menu.add_command(label=t('state.' + s),
+                                 command=lambda s=s: self._add_level(s))
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+
+    def _add_level(self, state):
+        if state != 'neutral':
+            self.push_undo('level')
+            model.ensure_entry(self.quest.graph, state)
+            self.changed()
+        self.show_tab(state)
 
     def _mark_tab(self):
         for key, lbl in self.tab_labels.items():
-            on = key == self.tab_key
+            on = key == self.tab_state
             lbl.configure(foreground=theme.GOLD if on else theme.MUT,
                           font=theme.FONT_BOLD if on else theme.FONT)
 
-    def show_tab(self, key):
-        if not self.quest or key not in self.quest.tabs:
+    def show_tab(self, state):
+        if not self.quest:
             return
-        self.tab_key = key
+        self.tab_state = state
+        if state and state not in self.tab_labels:
+            self._build_tabs()
         self._mark_tab()
-        self.graph.set_graph(self.quest.tabs[key])
+        self.graph.set_filter(state)
+        if state:
+            self.graph.scroll_to_node(model.entry_id(state))
         self._update_status()
 
     # -- quest --------------------------------------------------------------
@@ -340,10 +381,15 @@ class App:
     def open_quest(self, quest):
         self.quest = quest
         self.undo.clear()
-        self.tab_key = model.DEFAULT_TABS[0]
+        self.tab_state = model.DEFAULT_STATES[0]
+        self.graph.filter_state = self.tab_state if quest else None
         self._build_tabs()
-        self.graph.set_graph(quest.tabs[self.tab_key] if quest else None)
+        self.graph.set_graph(quest.graph if quest else None)
+        if quest:
+            self.graph.scroll_to_node(model.entry_id(self.tab_state))
         self._draw_graph_placeholder()
+        self.speakers.refresh()
+        self.inspector.show(set())
         self._update_status()
 
     def new_quest(self):
@@ -361,86 +407,190 @@ class App:
         self.mark_dirty()
         self.open_quest(q)
 
+    def node_style(self, node):
+        """(title, header colour) for a dialog node."""
+        if node.get('type') == 'player' or node.get('speaker') == model.PLAYER:
+            return t('node.player'), theme.PLAYER_COLOR
+        return self.speaker_style(node.get('speaker'))
+
+    def speaker_style(self, sid):
+        if sid == model.PLAYER:
+            return t('node.player'), theme.PLAYER_COLOR
+        if not self.quest:
+            return '?', theme.SPEAKER_COLORS[0]
+        for i, s in enumerate(self.quest.speakers):
+            if s['id'] == sid:
+                return s['name'], theme.SPEAKER_COLORS[
+                    i % len(theme.SPEAKER_COLORS)]
+        return f'NPC_{sid}' if sid is not None else '?', theme.MUT
+
+    def add_speaker(self, spk):
+        if not self.quest:
+            return
+        self.push_undo('speaker')
+        self.quest.add_speaker(spk)
+        self.changed()
+
+    def add_speaker_node(self, sid, wx, wy, connect_from=None):
+        if not self.quest:
+            return None
+        ntype = 'player' if sid == model.PLAYER else 'npc'
+        return self.graph.add_node_at(ntype, wx, wy, speaker=sid,
+                                      state=self.tab_state or 'first',
+                                      connect_from=connect_from)
+
+    def insert_speaker_node(self, sid):
+        """Double click in the speaker box: right of the selected node,
+        connected to its first free out port (plan 5.3)."""
+        if not self.quest:
+            return
+        g = self.quest.graph
+        sel = [i for i in self.graph.selected if i in g['nodes']]
+        src = sel[0] if len(sel) == 1 else None
+        if src is None or g['nodes'][src]['type'] == 'comment':
+            ent = model.entry_id(self.tab_state or 'first')
+            src = ent if ent in g['nodes'] else None
+        if src is None:
+            self.add_speaker_node(sid, 300, 200)
+            return
+        n = g['nodes'][src]
+        w, h = model.node_size(n)
+        port = 0
+        for p in range(model.out_port_count(n)):
+            if model.edge_from(g, src, p) is None:
+                port = p
+                break
+        self.add_speaker_node(sid, n['x'] + w + 80, n['y'] + port * 40,
+                              connect_from=(src, port))
+
+    def mark_speaker_lines(self, sid):
+        if self.quest:
+            ids = [i for i, n in self.quest.graph['nodes'].items()
+                   if n.get('speaker') == sid]
+            self.graph.select(ids)
+
+    def _fill_add_menu(self, menu, wx, wy):
+        menu.add_command(label=t('node.player'), command=lambda:
+                         self.add_speaker_node(model.PLAYER, wx, wy))
+        for s in self.quest.speakers:
+            menu.add_command(label=self.speaker_style(s['id'])[0],
+                             command=lambda s=s: self.add_speaker_node(
+                                 s['id'], wx, wy))
+
+    def _edge_drop_empty(self, frm, port, wx, wy, ev):
+        """Dragging an edge into the void: popup Spieler / speakers /
+        Kommentar, the new node is connected at once (plan 5.3)."""
+        menu = tk.Menu(self.root, tearoff=0)
+        x, y = int(wx), int(wy - model.HEADER_H / 2)
+        menu.add_command(label=t('node.player'), command=lambda:
+                         self.add_speaker_node(model.PLAYER, x, y, (frm, port)))
+        for s in self.quest.speakers:
+            menu.add_command(label=self.speaker_style(s['id'])[0],
+                             command=lambda s=s: self.add_speaker_node(
+                                 s['id'], x, y, (frm, port)))
+        menu.add_separator()
+        menu.add_command(label=t('node.comment'), command=lambda:
+                         self.graph.add_node_at('comment', x, y))
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+
+    def _open_node(self, nid):
+        self.graph.select([nid])
+        self.inspector.focus_text()
+
+    def _selection_changed(self):
+        self.inspector.show(self.graph.selected)
+        self._update_status()
+
+    def mod_archives(self):
+        game = self.cfg.get('game_dir')
+        if not game:
+            return []
+        return sorted(os.path.basename(p) for p in
+                      glob.glob(os.path.join(game, 'Mods', '*.wd')))
+
     def debug_nodes(self):
         """300 chained nodes to prove the canvas stays fluid (plan M2)."""
         if not self.quest:
             return
-        tab = self.quest.tabs[self.tab_key]
+        g = self.quest.graph
         self.push_undo('debug')
         rnd = random.Random(1)
-        prev = model.ENTRY_ID
+        state = self.tab_state or 'first'
+        prev = model.entry_id(state)
+        model.ensure_entry(g, state)
         words = ('Hallo', 'Held', 'Gold', 'Yamalin', 'Zwerge', 'Turm',
                  'Sumpf', 'Ferid', 'Tago', 'Gandohar')
+        if not self.quest.speakers:
+            self.quest.add_speaker({'id': 3, 'name': 'Tago', 'lector': 4,
+                                    'tile': 'F5', 'new': False})
         for i in range(300):
-            n = model.make_node('node', 0, 0, f'Node {i + 1}')
-            n['lines'] = [{'text': ' '.join(rnd.choice(words)
-                                            for _ in range(rnd.randint(2, 7)))}
-                          for _ in range(rnd.randint(1, 3))]
-            n['color'] = theme.SPEAKER_COLORS[i % len(theme.SPEAKER_COLORS)]
-            nid = model.add_node(tab, n)
-            model.connect(tab, prev, rnd.randrange(model.out_port_count(
-                tab['nodes'][prev])), nid)
+            if i % 2:
+                n = model.make_node('player', 0, 0, state)
+                n['kind'] = 'question'
+                n['lines'] = [dict(model.new_line(state), text=' '.join(
+                    rnd.choice(words) for _ in range(rnd.randint(2, 6))))
+                    for _ in range(rnd.randint(1, 3))]
+            else:
+                n = model.make_node('npc', 0, 0, state,
+                                    self.quest.speakers[0]['id'])
+                n['lines'][0]['text'] = ' '.join(
+                    rnd.choice(words) for _ in range(rnd.randint(3, 9)))
+            nid = model.add_node(g, n)
+            model.connect(g, prev, rnd.randrange(model.out_port_count(
+                g['nodes'][prev])), nid)
             if rnd.random() < 0.3:
-                prev = rnd.choice(list(tab['nodes']))
-                if tab['nodes'][prev]['type'] == 'comment':
+                prev = rnd.choice(list(g['nodes']))
+                if g['nodes'][prev]['type'] == 'comment':
                     prev = nid
             else:
                 prev = nid
-        model.auto_layout(tab)
+        model.auto_layout(g)
         t0 = time.perf_counter()
-        self.graph.set_graph(tab)
+        self.graph.set_graph(g)
         ms = (time.perf_counter() - t0) * 1000
         self.graph.fit()
-        self._after_change()
+        self.changed()
         self.set_info(f'300 nodes: redraw {ms:.0f} ms', 'StatusOk.TLabel')
-
-    def _edge_drop_empty(self, frm, port, wx, wy):
-        """Dragging an edge into the void creates a node there and connects
-        it (plan 5.3; milestone 3 turns this into the speaker popup)."""
-        tab = self.quest.tabs[self.tab_key]
-        self.push_undo('add')
-        node = model.make_node('node', int(wx), int(wy - model.HEADER_H / 2))
-        nid = model.add_node(tab, node)
-        model.connect(tab, frm, port, nid)
-        self.graph.draw_node(nid)
-        self.graph.draw_node(frm)
-        self.graph.draw_edge(frm, port, nid)
-        self._after_change()
-        self.graph.select([nid])
 
     # -- undo / clipboard ---------------------------------------------------
 
     def push_undo(self, label=''):
         if self.quest:
-            self.undo.push(self.quest.tabs, label)
+            self.undo.push(self.quest.snapshot(), label)
 
-    def _after_change(self):
+    def changed(self, from_inspector=False):
+        """Model changed: dirty flag, status, panels."""
         self.mark_dirty()
         self._update_status()
+        if not from_inspector:
+            self.inspector.refresh()
+        self.speakers.refresh()
+        if self.quest and set(self.tab_labels) - {None} != set(
+                self.quest.states_present()):
+            self._build_tabs()
 
-    def _restore(self, state):
-        if state is None:
+    def _restore(self, snap):
+        if snap is None:
             return
-        self.quest.tabs = state
-        if self.tab_key not in state:
-            self.tab_key = model.DEFAULT_TABS[0]
-        self._build_tabs()
-        self.graph.set_graph(state[self.tab_key])
-        self._after_change()
+        self.quest.restore(snap)
+        self.graph.set_graph(self.quest.graph)
+        self.changed()
 
     def do_undo(self):
         if self.quest:
-            self._restore(self.undo.undo(self.quest.tabs))
+            self._restore(self.undo.undo(self.quest.snapshot()))
 
     def do_redo(self):
         if self.quest:
-            self._restore(self.undo.redo(self.quest.tabs))
+            self._restore(self.undo.redo(self.quest.snapshot()))
 
     def copy(self):
         if not self.quest:
             return
-        clip = model.copy_nodes(self.quest.tabs[self.tab_key],
-                                self.graph.selected)
+        clip = model.copy_nodes(self.quest.graph, self.graph.selected)
         if clip['nodes']:
             self.clipboard = clip
 
@@ -503,7 +653,8 @@ class App:
 
     def _typing(self):
         w = self.root.focus_get()
-        return isinstance(w, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox))
+        return isinstance(w, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox,
+                              ttk.Spinbox, tk.Listbox))
 
     def _key(self, fn):
         def handler(ev):
@@ -633,6 +784,7 @@ class App:
                   c=len(index.cues), f=len(index.free_ids()))
         self.set_info(f'{stats}   {how}   {t("status.start", s=total)}',
                       'StatusOk.TLabel')
+        self.inspector.refresh()
 
     # -- project ------------------------------------------------------------
 

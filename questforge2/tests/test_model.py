@@ -8,6 +8,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from questforge2 import model  # noqa: E402
 from questforge2.model import Project, Quest, ModelError, FORMAT  # noqa: E402
 
 
@@ -25,10 +26,12 @@ class ModelRoundTrip(unittest.TestCase):
         q.journal = {'take': 'Tago bittet um Hilfe.', 'solve': 'Erledigt.',
                      'close': 'Belohnung erhalten.'}
         q.giver = 3
-        q.speakers = [{'id': 3, 'name': 'Tago', 'lector': 4}]
-        q.tabs['0.FT.AS']['nodes']['n1'] = {
-            'type': 'npc', 'speaker': 3, 'text': 'Hallo!', 'x': 10, 'y': 20}
-        q.tabs['0.FT.AS']['edges'].append(['entry', 0, 'n1'])
+        q.speakers = [{'id': 3, 'name': 'Tago', 'lector': 4, 'tile': 'F5',
+                       'new': False}]
+        n = model.make_node('npc', 10, 20, 'first', 3)
+        n['lines'][0]['text'] = 'Hallo!'
+        q.graph['nodes']['n1'] = n
+        q.graph['edges'].append([model.entry_id('first'), 0, 'n1'])
         q.task = {'type': 'BRING_GOLD', 'amount': 100}
         p.quests.append(q)
         return p
@@ -39,8 +42,8 @@ class ModelRoundTrip(unittest.TestCase):
         p2 = Project.from_json(text)
         self.assertEqual(p2.to_json(), text)
         self.assertEqual(p2.quests[0].id, 385)
-        self.assertEqual(p2.quests[0].tabs['0.FT.AS']['nodes']['n1']['text'],
-                         'Hallo!')
+        self.assertEqual(
+            p2.quests[0].graph['nodes']['n1']['lines'][0]['text'], 'Hallo!')
         self.assertEqual(p2.quests[0].node_count(), 1)
         self.assertTrue(text.endswith('\n'))
         self.assertIn('"format": %d' % FORMAT, text)
@@ -75,9 +78,9 @@ class ModelRoundTrip(unittest.TestCase):
         with self.assertRaises(ModelError):
             Project.from_json('not json')
 
-    def test_missing_tabs_are_added(self):
-        q = Quest.from_dict({'id': 390, 'tabs': {}})
-        self.assertIn('0.QC', q.tabs)
+    def test_missing_entries_are_added(self):
+        q = Quest.from_dict({'id': 390, 'graph': {'nodes': {}, 'edges': []}})
+        self.assertIn(model.entry_id('closed'), q.graph['nodes'])
         self.assertEqual(q.node_count(), 0)
 
 
