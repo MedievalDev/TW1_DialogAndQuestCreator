@@ -1,6 +1,7 @@
 # Plan: Node-basierter Dialog- und Quest-Editor (QuestForge 2)
 
-Stand: 2026-09-13, Planungsphase. Noch kein Code.
+Stand: 2026-09-13, **Plan freigegeben (Marco)**. Noch kein Code. Umsetzung
+startet mit Meilenstein 1 auf Branch `questforge2`.
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -815,5 +816,28 @@ Zwischenstand PR #1 geprueft: mergebar, keine CI-Checks, keine Kommentare.
 
 Diesen Anhang angelegt, committet und gepusht.
 
-**Freigabe des Plans steht noch aus.** Naechster Schritt nach Freigabe:
-neue Session, Branch `questforge2` von `main`, Meilenstein 1.
+### A.10 Marco
+
+> Plan steht, Freigabe erteilt
+
+### A.11 Claude
+
+Freigabe im Kopf des Dokuments vermerkt. Damit ist die Planungssession
+abgeschlossen.
+
+## Anhang B: Uebergabe an die Umsetzungssession
+
+Startanweisung fuer die naechste Session:
+
+1. `git fetch origin main && git checkout -b questforge2 origin/main`,
+   dann diesen Plan von Branch `claude/dialog-quest-editor-tool-mwopwi`
+   (PR #1) uebernehmen oder PR #1 vorher nach `main` mergen.
+2. Diesen Plan komplett lesen, danach `README.md` und
+   `tw1-quest-modding/SKILL.md`.
+3. Meilenstein 1 (Abschnitt 11) beginnen. Vor M3 die Pflichtpruefung aus
+   6.3 durchfuehren und das Ergebnis hier eintragen.
+4. Jede Aenderung an Entscheidungen in Abschnitt 12 nachfuehren, jeder
+   aufgeloeste [PRUEFEN]-Punkt bekommt sein Ergebnis direkt an der Stelle
+   im Text.
+5. Build/Compile/Test streng nacheinander, ein Befehl, Ergebnis lesen, dann
+   weiter (Marcos Arbeitsregel).
