@@ -57,25 +57,41 @@ Multiplayer-Questsystem.
   Praefix, keine Neu-Erzeugung der Widgets pro Tastendruck.
 - Build/Export laeuft in einem Thread, Log-Ausgabe im UI wie bisher.
 
-### 2.3 Dateien (neu, Repo-Root)
+### 2.3 Neubau auf eigenem Branch
 
-Der bestehende `quest_creator_gui.py` bleibt unangetastet bis das neue Tool
-im Spiel getestet ist. Danach entscheiden, ob er entfaellt (offener Punkt 4).
+Entscheidung (Marco, 2026-09-13): **Das Tool wird neu gebaut, nicht aus
+`quest_creator_gui.py` weiterentwickelt.** Die Umsetzung laeuft auf einem
+eigenen Branch (`questforge2`), `main` bleibt bis zum ersten Spieltest
+unberuehrt. Der alte `quest_creator_gui.py` wird nicht angefasst und dient
+nur als Nachschlagewerk (Dark-Theme, `DataHub`-Parsing, `_convert_tree`,
+`_do_build`, `_pack_into_archive`), aus dem man Logik **abschreibt**, nicht
+importiert.
+
+**Annahme:** Neubau meint die GUI. Die Format-Module `tw1_qtx.py`,
+`tw1_lan.py`, `tw1_wd.py`, `wdio.py` sind byte-exakt gegen Retail
+verifiziert und werden unveraendert importiert. Sie neu zu schreiben waere
+nur Risiko ohne Nutzen.
+
+Layout auf dem Branch: ein Unterordner `questforge2/` als Paket, damit das
+neue Tool nicht mit den Root-Skripten vermischt wird.
 
 | Datei | Inhalt |
 |---|---|
-| `qf2_app.py` | Einstieg, Hauptfenster, Menueleiste, Kontextmenues, Statusleiste, Fensterlayout |
-| `qf2_model.py` | Datenmodell: Projekt, Quest, Sprecher, Node-Typen, Kanten; JSON laden/speichern; Undo-Stack |
-| `qf2_graph.py` | Der Canvas-Node-Editor: Nodes zeichnen, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Auto-Layout |
-| `qf2_inspector.py` | Rechte Seitenleiste: Eigenschaften-Formulare pro Node-Typ |
-| `qf2_palette.py` | Linke Box: Sprecher-Bereich oben, Aufgaben/Aktionen/Bedingungen unten |
-| `qf2_timeline.py` | Zeitleiste aller Quests |
-| `qf2_mappicker.py` | Kartenkachel-Fenster als Filter fuer IDs |
-| `qf2_data.py` | `DataHub` aus `quest_creator_gui.py` herausgeloest und um Cache, Locations, Marker-Index, Cue-Index erweitert |
-| `qf2_export.py` | Graph zu `.qtx`-Block und `.lan`-Baum; Packen; Registry. Nutzt `tw1_qtx`, `tw1_lan`, `wdio` |
-| `qf2_validate.py` | Regelpruefung vor dem Export (Abschnitt 8) |
-| `qf2_guide.py` | Rundgang-Guide und Tutorial-Quest |
-| `build_exe.spec`, `build_exe.bat` | Exe-Build |
+| `questforge2/__main__.py` | Einstieg (`python -m questforge2`), Start des Hauptfensters |
+| `questforge2/app.py` | Hauptfenster, Menueleiste, Kontextmenues, Statusleiste, Fensterlayout, `VERSION` |
+| `questforge2/theme.py` | Dark-Theme, Farben, Schriften, Node-Farbpalette |
+| `questforge2/model.py` | Datenmodell: Projekt, Quest, Sprecher, Node-Typen, Kanten; JSON laden/speichern; Undo-Stack |
+| `questforge2/graph.py` | Der Canvas-Node-Editor: Nodes zeichnen, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Auto-Layout |
+| `questforge2/inspector.py` | Rechte Seitenleiste: Eigenschaften-Formulare pro Node-Typ |
+| `questforge2/palette.py` | Linke Box: Sprecher-Bereich oben, Aufgaben/Aktionen/Bedingungen unten |
+| `questforge2/timeline.py` | Zeitleiste aller Quests |
+| `questforge2/mappicker.py` | Kartenkachel-Fenster als Filter fuer IDs |
+| `questforge2/data.py` | Spielpfad-Suche, Basisdaten extrahieren, Index-Cache, NPC/Quest/Location/Marker/Cue-Indizes |
+| `questforge2/export.py` | Graph zu `.qtx`-Block und `.lan`-Baum; Packen; Registry. Nutzt `tw1_qtx`, `tw1_lan`, `wdio` |
+| `questforge2/validate.py` | Regelpruefung vor dem Export (Abschnitt 8) |
+| `questforge2/guide.py` | Rundgang-Guide und Tutorial-Quest |
+| `questforge2/tests/` | Round-Trip-Tests (M4), Modell-Tests, Validierungs-Tests; laufen ohne Spieldaten mit kleinen Fixtures |
+| `build_exe.spec`, `build_exe.bat` | Exe-Build (Repo-Root) |
 
 ---
 
@@ -551,6 +567,7 @@ und Ablehnen; nach M5 die erste Tool-Quest; nach M6 eine Retail-Aenderung.
    nichts).
 3. Bedingungen nur am Einstieg (Abschnitt 6.3) statt an jeder NPC-Node:
    einverstanden?
-4. Bleibt `quest_creator_gui.py` als zweites Tool im Repo oder ersetzt das
-   neue Tool es nach M6?
+4. Geklaert: Neubau auf Branch `questforge2`, altes Tool bleibt unangetastet
+   (Abschnitt 2.3). Offen bleibt nur, ob `quest_creator_gui.py` nach dem
+   ersten erfolgreichen Spieltest aus `main` entfernt wird.
 5. Projektname der exe (`QuestForge.exe`, `TW1QuestCreator.exe`, ...).
