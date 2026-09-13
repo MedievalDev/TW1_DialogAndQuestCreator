@@ -359,10 +359,12 @@ Jede Maske zeigt in einer Zeile, **welche Marker-Art** die Aktion liest
 (z. B. "liest Marker: Q_Action_Teleport"), weil das die haeufigste Fehlerquelle
 ist.
 
-**Zeitpunkt der Aktion wird nicht abgefragt, sondern abgeleitet:** Das Spiel
-haengt Aktionen an Quest-Ereignisse (`TAKE, SOLVE, CLOSE, ENABLE, HEAR, FAIL,
-FIGHT`), nicht an Dialogzeilen. Die Ableitung aus dem Tab, in dem der Node
-haengt:
+**Zeitpunkt der Aktion wird nicht abgefragt, sondern abgeleitet (vorlaeufig,
+siehe Pruefung in 6.3):** Nach heutigem Wissen haengt das Spiel Aktionen an
+Quest-Ereignisse (`TAKE, SOLVE, CLOSE, ENABLE, HEAR, FAIL, FIGHT`), nicht an
+Dialogzeilen. Falls die Pruefung einen Zeilen-Hook findet, entfaellt die
+Ableitung und die Aktion haengt echt an der Zeile. Bis dahin: Ableitung aus
+dem Tab, in dem der Node haengt:
 
 | Node haengt im Tab | Zeitpunkt |
 |---|---|
@@ -383,11 +385,49 @@ reines Aktions-Listen-Panel pro Ereignis; das Modell bleibt gleich.
 
 ### 6.3 Bedingungen
 
-Das Spiel hat **keine freien Bedingungen an einzelnen Dialogzeilen** (README
-Abschnitt 6 und 7: Zeilen tragen nur das Zustands-Flag, Spruenge zwischen
-Baeumen existieren nicht). **[PRUEFEN]** Der Implementierer verifiziert das
-nochmal gegen `tw1_qtx.py`, `tw1_lan.py` und die Retail-Daten, bevor er die
-Bedingungs-Palette baut. Was es gibt und wie es im Tool erscheint:
+**Vorlaeufige Annahme, nicht bewiesen:** Das Spiel hat keine freien
+Bedingungen an einzelnen Dialogzeilen. Diese Annahme stammt aus README
+Abschnitt 6 und 7 (Zeilen tragen nur das Zustands-Flag, Spruenge zwischen
+Baeumen existieren nicht) und aus dem, was das alte Tool kann. Das alte Tool
+deckt aber nur einen Teil dessen ab, was seither ueber das Questsystem
+herausgefunden wurde, und der Planer konnte nichts am Spiel testen.
+
+**[PRUEFEN] Pflichtaufgabe vor M3, entscheidet den Aufbau der NPC-Node:**
+Kann eine Bedingung oder eine Aktion an einer **beliebigen** Dialogzeile
+haengen, oder nur am Gespraechsanfang bzw. am Quest-Ereignis? Der
+Implementierer prueft das in dieser Reihenfolge, bevor er Ports zeichnet:
+
+1. **Flag-Bits der Retail-Baeume auszaehlen.** Alle `DialogEntry.flags` der
+   3-MB-`.lan` sammeln (`tw1_lan.parse_trees`), jedes gesetzte Bit gegen die
+   bekannte Tabelle (`0x1, 0x2, 0x4, 0x8, 0x100, 0x200, 0x20000, 0x40000`)
+   halten. Jedes unbekannte Bit ist ein Kandidat fuer eine Zeilen-Bedingung
+   oder Zeilen-Aktion. Dazu die Zeilen listen, die es tragen, und deren
+   Quest-Kontext in der `.qtx` ansehen.
+2. **SDK-Quellen lesen.** Im Two Worlds SDK (`D:\Games\TwoWorldsSDK`,
+   EarthC-Kampagnencode, u. a. `PQuestActions.ech`) nach dem Code suchen, der
+   Dialogeintraege auswertet: Welche Felder liest er pro Zeile (flags, cams,
+   anim1/anim2), gibt es einen Hook, der beim Abspielen einer Zeile eine
+   Aktion feuert oder eine Bedingung prueft (Inventar, Gold, Ruf, Quest)?
+3. **Unbekannte Felder der `.lan`-Eintraege.** `next_pad`, `cam_pad` und
+   `anim1/anim2` in `tw1_lan.DialogEntry` sind beim Round-Trip nur
+   durchgereicht. Pruefen, ob eines davon in Retail-Zeilen Werte traegt, die
+   sich nicht als Animation erklaeren lassen.
+4. **Spieltest** (Marco): eine Zeile mit einem unbekannten Bit oder einem
+   im SDK gefundenen Hook in eine Testquest legen und im Spiel ansehen.
+
+Ergebnis in dieses Dokument eintragen. Danach gilt eine von zwei Bauweisen:
+
+| Ergebnis | NPC-Node | Bedingungs-Nodes |
+|---|---|---|
+| Zeilen-Bedingungen existieren | bekommt einen Bedingungs-Port unten, wie urspruenglich gewuenscht; die Palette listet genau die gefundenen Bedingungsarten | docken an jeder Zeile **und** am Einstieg |
+| Es gibt nur Zustands-Flags | kein Bedingungs-Port; nur der Aktions-Port oben | docken nur am Einstieg (Tabelle unten) |
+
+Gleiches gilt fuer Aktionen (6.2): Wenn das SDK einen Hook "Aktion beim
+Abspielen dieser Zeile" zeigt, wird der Zeitpunkt nicht mehr aus dem Tab
+abgeleitet, sondern die Aktion haengt echt an der Zeile. Bis zum Ergebnis
+wird nach der Tabelle unten gebaut, weil sie in jedem Fall gebraucht wird.
+
+Was nach heutigem Stand sicher existiert und wie es im Tool erscheint:
 
 | Bedingung im Tool | Engine | Wo andockbar |
 |---|---|---|
@@ -396,13 +436,10 @@ Bedingungs-Palette baut. Was es gibt und wie es im Tool erscheint:
 | "Gilde / Mindest-Ruf" | Kopfzeile `guild`, `minRep` | Einstieg Angebot |
 | "Aufgabe erledigt" | die `FC`-Zeile | ist implizit der Einstieg im Tab Erfuellt, keine Node noetig |
 
-Also (entschieden 2026-09-13): Bedingungs-Nodes (abgerundet, Schloss-Symbol)
-haengen **unten an der Einstiegs-Node**, nicht an beliebigen NPC-Nodes. NPC-Nodes bekommen deshalb
-**keinen** Bedingungs-Port, nur den Aktions-Port oben. Das weicht vom
-urspruenglichen Wunsch ab, ist aber ehrlich gegenueber dem Format: ein
-Bedingungs-Port an einer beliebigen Zeile wuerde etwas versprechen, das im
-Spiel nichts tut. Die Beschreibung im Coach erklaert das in einem Satz
-("Bedingungen entscheiden, ob ein Gespraech ueberhaupt beginnt").
+Diese Bedingungs-Nodes (abgerundet, Schloss-Symbol) haengen **unten an der
+Einstiegs-Node**. Ob NPC-Nodes zusaetzlich einen Bedingungs-Port bekommen,
+entscheidet die Pruefung oben. Der Coach erklaert den jeweiligen Stand in
+einem Satz.
 
 Standard bei neuer Quest: Bedingung "Quest angenommen: Q_4" ist vorbelegt
 (bewaehrter Haken, wie im bestehenden Tool), Level 1. "Auch nach" fuer alte
@@ -557,7 +594,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 |---|---|---|
 | M1 | Fenster, Menues, Statusleiste, Projekt neu/oeffnen/speichern, `qf2_data` mit Cache | Start unter 1 s beim zweiten Mal, Projektdatei round-trippt |
 | M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final |
-| M3 | Sprecher-Box, Spieler-/NPC-Nodes, vier Tabs, Eigenschaften-Panel, Cue-Suche | Ein Dialog laesst sich komplett bauen |
+| M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich |
 | M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet) |
 | M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen |
@@ -577,7 +614,9 @@ Entschieden am 2026-09-13:
 
 1. Tkinter-Canvas fuer den Graphen (Abschnitt 2.1).
 2. UI-Sprache umschaltbar Deutsch/Englisch (Abschnitt 2.1).
-3. Bedingungen docken nur am Einstieg (Abschnitt 6.3).
+3. Bedingungen docken vorerst am Einstieg (Abschnitt 6.3). Ob sie auch an
+   jeder NPC-Node moeglich sind, ist Pflichtpruefung vor M3; das alte Tool
+   ist dafuer kein Beweis, es deckt nur einen Teil des Systems ab.
 4. Neubau als Paket `questforge2/` auf eigenem Branch, altes Tool bleibt
    unangetastet (Abschnitt 2.3).
 5. Exe heisst `TW1QuestCreator.exe`.
@@ -586,6 +625,7 @@ Offen:
 
 - Ob `quest_creator_gui.py` nach dem ersten erfolgreichen Spieltest aus
   `main` entfernt wird.
-- Alle `[PRUEFEN]`-Punkte: Annahme/Ablehnen (5.2), Kanten ueber Tab-Grenzen
-  (5.1), Zeilen-Bedingungen (6.3), `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4).
-  Werden am Spiel getestet, Ergebnis kommt in dieses Dokument.
+- Alle `[PRUEFEN]`-Punkte: Bedingungen/Aktionen pro Zeile (6.3, vor M3,
+  Flag-Bits + SDK + Spieltest), Annahme/Ablehnen (5.2), Kanten ueber
+  Tab-Grenzen (5.1), `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4). Ergebnis
+  kommt in dieses Dokument.
