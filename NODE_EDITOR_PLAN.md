@@ -629,3 +629,191 @@ Offen:
   Flag-Bits + SDK + Spieltest), Annahme/Ablehnen (5.2), Kanten ueber
   Tab-Grenzen (5.1), `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4). Ergebnis
   kommt in dieses Dokument.
+
+---
+
+## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
+
+Vollstaendiger Verlauf zwischen Marco und Claude, aus dem dieser Plan
+entstanden ist. Marcos Nachrichten sind woertlich uebernommen (inklusive
+Tippfehler), Claudes Antworten ebenfalls. Die Widget-Fragen sind mit den
+gewaehlten Antworten aufgefuehrt.
+
+### A.1 Marco (Auftrag)
+
+> Können wir ein Plan für ein wirklich einfaches Tool erstellen mit dem man
+> die Dialoge und Quest erstellen kann? Ich hab mir das diesmal node basiert
+> vorgestellt zuerst klickt man auf new Questda drin ist es so das man links
+> so ne Box hat mit nodes die man rechts in den node graph rein zieht das
+> Tool soll ein richtig an der Hand nehmen und step für step durch führen
+> was ma für ein Dialog braucht erst würde ich vorschlagen das man links
+> spezifisch für diesen Dialog neue character anlegt oder bestehende wählt
+> dazu geht man auf new speaker dann kommt new oder exist npc bei new muss
+> man die ID angeben die er im two Worlds Editor hat bei. Exist werden alle
+> original im spiel angezeigt mit ihren namen beim eintippen der namen
+> autocompliet namensliste wird auch angezeigt dann bekommt man links also
+> eine neue node sagen wir ferid dann haben wir links den Player und ferid
+> zieht man die node vom Player rein und danach ferid kann man diese
+> verbinden auf der node gibt's ein dropdown beim Player Dialog und question
+> bei Dialog ganz normale Antwort oder Dialog bei question kann man in dieser
+> node mehrere lines hinzufügen erstmal ist nur eine da aber mit Add line
+> kommt eine weiter so viele man will jede bekommt dann ein andock punkt für
+> npc nodes... npc nodes sind glaub immer Dialog die fragen ja keine liste
+> jedoch haben die unten und oben einen speziellen andock punkt wo man
+> actions oben und conditions unten verbinden kann. Es sind mehrere möglich
+> die conditions und actions sind auch links in der Box jedoch unten in einem
+> abgetrennten Bereich dort ist auch ein new condition und ein new Action
+> Button actions gibt Aufgaben da kann man wenn man den rein zieht wählen was
+> der Spieler tun muss in einem dropdown zb kill bring Item usw und darunter
+> die ID vom Objekt da kann man aber auch zuerst auswählen über einen Button
+> Map tile wählen da kommt ein kleines Fenster mit der Map das fungiert als
+> Filter und zeigt dann eine Liste aller ids mit Namen von Objekten auf die
+> man die Action anwenden kann es gibt auch andere Szenarien in dem man zb
+> sagt über eine Action teleport npc3 zu Quest teleport marker 3 auf tile f05
+> dann muss beim teleport die Eingabemaske angepasst sein das man all dies
+> eingeben kann also immer abhängig von der Aktion ( der Claude Code den ich
+> das Tool später umsetzen lasse hat schon Quest gemacht und kennt das System
+> er soll dann entscheiden welche Felder man in der Maske braucht wir
+> entscheiden nur wie es am einfachsten zu bedienen ist) bei conditions ist
+> es das selbe nur das es keine Aktionen sind sondern dinge geprüft werden
+> wie zb ob der Player das Item im Inventar hat zb ach und beim vorher Dialog
+> anlegen hab ich noch ne idee wir machen so ne zeitleiste mit allen quests
+> im spiel die kann man alle ändern und bearbeiten die sind schon mit den
+> nodes alle aufgebaut sodass man einfach reingehen und eine Kleinigkeit
+> ändern könnte die zeitleiste kannst du wie bei so ner Foto Claude machen...
+> Zu den nodes nochmal in Dialogen mach alle mit abgerundeten Ecken und mach
+> eine node die comment heißt die hat Scharfe Ecken hab ich noch was
+> vergessen dann sagst einfach zum Tool selbst es muss übersichtlich sein am
+> besten in pyton aber am ende als exe gebaut das die Benutzer kein pyton
+> oder thinker brauchen wichtig ist das du auf gute Performance achtest am
+> besten ist es am ende eine einzige exe file wenn man die auf macht Kommt
+> erstmal ein ausführlicher guid der ein durch Tool begleitet und am ende
+> fragt ob man noch mit einem weiteren guid zusammen ein kleinen test quest
+> anlegen möchte der führt dann Schritt für Schritt durch die Erstellung von
+> Quest vom erstellen in der timeline bis hin zur fertigen exportierten Quest
+> ach und in den quests mit den nodes denkst du es sollte fertige nodes geben
+> wie eine Start node? Und fürs beenden noch eine exit Dialog links in der
+> Box die kann man dann verbinden wo der Dialog enden soll zb wenn man eine
+> Quest ablehnt? Schreib rein das geprüft werden muss ob das Sinn macht oder
+> man eher nach der letzten node wo keine neue mehr danach kommt es auslaufen
+> lässt und das dann beendet jetzt denk mal darüber nacht das Tool soll
+> übrigens ein sauberes Tool sein dit datei leiste oben Kontext Menüs oben in
+> datei leiste help mit über punkt und den 2 guids die am anfang kommen bei
+> über dann versiknsstand links zu meinen seiten und github repo link usw
+
+### A.2 Claude
+
+Hat README, SKILL, das bestehende `quest_creator_gui.py` und die
+Format-Module gelesen, den Plan als `NODE_EDITOR_PLAN.md` geschrieben,
+auf den Branch `claude/dialog-quest-editor-tool-mwopwi` gepusht und
+Draft-PR #1 angelegt. Erste Fassung enthielt: Tkinter-Empfehlung,
+Fensteraufbau, Menues, vier Gespraechs-Tabs statt freier Start-Node, keine
+Ende-Node, Aktionen mit abgeleitetem Zeitpunkt, Bedingungen am Einstieg,
+Kachel-Picker, Validierung, zwei Guides, Zeitleiste, Meilensteine M1 bis
+M10, offene Punkte.
+
+### A.3 Marco
+
+> Ich empfehle einen Neubau des Tools statt einer Änderung am bestehenden
+> der Neubau dann auf einem eigenen Branch
+
+### A.4 Claude
+
+> Eingetragen und gepusht: Neubau als Paket `questforge2/` auf eigenem
+> Branch, altes Tool bleibt unangetastet, nur die verifizierten
+> Format-Module (`tw1_qtx`, `tw1_lan`, `tw1_wd`, `wdio`) werden importiert.
+> Draft-PR #1 enthaelt den Plan.
+>
+> Die restlichen Entscheidungen aus Abschnitt 12 haengen nicht voneinander
+> ab, deshalb alle auf einmal:
+
+Widget-Fragen und Antworten:
+
+| Frage | Optionen | Marcos Antwort |
+|---|---|---|
+| Womit soll der Node-Graph gebaut werden? | Tkinter Canvas (empfohlen) / PySide6 Qt | Tkinter Canvas |
+| In welcher Sprache soll die Oberflaeche sein? | Deutsch / Englisch / Umschaltbar DE/EN | Umschaltbar DE/EN |
+| Bedingungen: Das Spiel kennt keine Bedingungen an einzelnen Dialogzeilen, nur am Gespraechsanfang. Wo sollen Bedingungs-Nodes andocken? | Nur am Einstieg (empfohlen) / An jeder NPC-Node | "Nur am Einstieg? Und wen man ableht wird es verworfen oder wie?" |
+| Wie soll die fertige exe heissen? | QuestForge.exe / TW1QuestCreator.exe | TW1QuestCreator.exe |
+
+### A.5 Claude
+
+> Kurz zur Ablehnen-Frage, bevor ich es in den Plan schreibe: Verworfen
+> wird die Quest nicht. Das Spiel kennt laut README den Zustand `0.QNT`
+> (Quest bekannt, nicht angenommen) und das Ereignis `HEAR` (Angebot
+> gehoert). Das spricht dafuer, dass Ablehnen ein eigener Zustand ist, in
+> dem der NPC beim naechsten Ansprechen eine "Bekannt"-Ebene spielt und dort
+> erneut anbieten kann. Unklar ist nur der Mechanismus: entweder markiert
+> das Flag `1.TAKE` die eine Annahme-Zeile und alle anderen Zeilen lehnen
+> ab, oder das Ende jeder Angebots-Kette nimmt die Quest automatisch an und
+> Ablehnen ist im Angebot gar nicht moeglich. Das ist genau der
+> [PRUEFEN]-Punkt vor Meilenstein 4. Der Plan deckt beide Faelle ab.
+
+Danach Plan aktualisiert (Abschnitt 2.1, 5.2, 6.3, 12) und gepusht.
+
+> Plan ist aktualisiert und gepusht (Draft-PR #1). Eingetragen:
+> Tkinter-Canvas, UI umschaltbar DE/EN ueber ein `i18n`-Modul,
+> `TW1QuestCreator.exe`, Bedingungen nur am Einstieg, Neubau als Paket
+> `questforge2/` auf eigenem Branch.
+>
+> Zum Ablehnen steht jetzt in Abschnitt 5.2: Die Quest wird nicht
+> verworfen, sondern landet im Zustand "bekannt, nicht angenommen" und kann
+> erneut angeboten werden. Zwei Hypothesen, wie das Spiel die Annahme
+> erkennt (Flag `1.TAKE` an der Annahme-Zeile, oder Ende der Angebots-Kette
+> nimmt immer an), mit einem konkreten Spieltest vor Meilenstein 4, der das
+> entscheidet. Bis dahin bekommt jede Spieler-Zeile im Angebot einen Haken
+> "Nimmt die Quest an" und es gibt einen fuenften Tab "Bekannt".
+>
+> Damit bleibt vor dem Start der Umsetzung nur noch die Frage, ob der Plan
+> so freigegeben ist. Die Umsetzung wuerde dann in einer neuen Session auf
+> Branch `questforge2` mit Meilenstein 1 beginnen.
+
+Widget-Frage: "Ist der Plan so freigegeben?" (Ja, Plan steht / Noch was
+aendern).
+
+### A.6 Marco
+
+> Mach rein das geprüft wird ob man bei jeder npc node conditions und
+> Action funktioniert oder ob es nur am anfang geht weil du kannst das spiel
+> ja nicht prüfen nur das alte Tool das enthält ja nur ein Teil von dem was
+> man wirklich machen kann wir haben viel seither herausgefunden
+
+### A.7 Claude
+
+> Drin und gepusht. Abschnitt 6.3 ist jetzt eine Pflichtpruefung vor
+> Meilenstein 3, mit der Begruendung, dass das alte Tool nur einen Teil des
+> Systems abdeckt und der Planer nichts am Spiel testen konnte. Die Pruefung
+> hat vier konkrete Schritte:
+>
+> 1. Alle Flag-Bits der Retail-Dialogbaeume auszaehlen und jedes unbekannte
+>    Bit als Kandidaten fuer Zeilen-Bedingung oder Zeilen-Aktion untersuchen.
+> 2. SDK-Quellen (EarthC, `PQuestActions.ech`) nach dem Code lesen, der
+>    Dialogzeilen auswertet, und nach Hooks fuer Aktionen oder Bedingungen
+>    pro Zeile suchen.
+> 3. Die bisher nur durchgereichten Felder der `.lan`-Eintraege auf
+>    unerklaerte Werte pruefen.
+> 4. Spieltest durch dich mit einer Testzeile.
+>
+> Je nach Ergebnis bekommt die NPC-Node einen Bedingungs-Port unten und
+> Aktionen haengen echt an der Zeile, oder es bleibt beim Einstieg mit
+> abgeleitetem Zeitpunkt. Beide Bauweisen stehen in einer Tabelle, die
+> Zeitpunkt-Ableitung in 6.2 ist als vorlaeufig markiert, und Meilenstein 3
+> beginnt mit dieser Pruefung.
+>
+> Stand: Plan in `NODE_EDITOR_PLAN.md`, Draft-PR #1, vier Commits auf dem
+> Branch. Offene [PRUEFEN]-Punkte sind in Abschnitt 12 gesammelt. Naechster
+> Schritt waere die Umsetzung von M1 auf Branch `questforge2` in einer neuen
+> Session.
+
+Zwischenstand PR #1 geprueft: mergebar, keine CI-Checks, keine Kommentare.
+
+### A.8 Marco
+
+> Füge den kompletten Verlauf von hier auch mit in die md
+
+### A.9 Claude
+
+Diesen Anhang angelegt, committet und gepusht.
+
+**Freigabe des Plans steht noch aus.** Naechster Schritt nach Freigabe:
+neue Session, Branch `questforge2` von `main`, Meilenstein 1.
