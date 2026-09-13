@@ -1,0 +1,368 @@
+{
+  "format": 1,
+  "tool_version": "2.0.0-m1",
+  "name": "Test_4a_Ablehnen",
+  "target_archive": "Yamalin.wd",
+  "quests": [
+    {
+      "id": 386,
+      "title": "[TEST 4a] Ablehnen",
+      "group": 190,
+      "journal": {
+        "take": "[TEST 4a] Tago moechte 10 Gold von dir.",
+        "solve": "[TEST 4a] Du hast 10 Gold. Bring sie zu Tago.",
+        "close": "[TEST 4a] Tago hat das Gold bekommen."
+      },
+      "giver": 3,
+      "giver_type": "ACTIVE",
+      "map_sign": "BACK_TO_GIVER_MAP_SIGN",
+      "offered": true,
+      "enable_level": 1,
+      "speakers": [
+        {
+          "id": 3,
+          "name": "Tago",
+          "lector": 123,
+          "tile": "E1",
+          "new": false
+        }
+      ],
+      "graph": {
+        "nodes": {
+          "entry:first": {
+            "type": "entry",
+            "state": "first",
+            "x": 40,
+            "y": 40
+          },
+          "entry:running": {
+            "type": "entry",
+            "state": "running",
+            "x": 40,
+            "y": 342
+          },
+          "entry:solved": {
+            "type": "entry",
+            "state": "solved",
+            "x": 40,
+            "y": 428
+          },
+          "entry:closed": {
+            "type": "entry",
+            "state": "closed",
+            "x": 40,
+            "y": 542
+          },
+          "task": {
+            "type": "task",
+            "fc": "BRING_GOLD",
+            "args": {
+              "gold": 10
+            },
+            "x": -230,
+            "y": 420.0
+          },
+          "n1": {
+            "type": "condition",
+            "cond": "after",
+            "attached_to": "entry:first",
+            "x": 40,
+            "y": 84,
+            "slot": 0,
+            "quest": 385,
+            "event": "CLOSE",
+            "level": 1,
+            "guild": "(null)",
+            "min_rep": 0
+          },
+          "n2": {
+            "type": "condition",
+            "cond": "level",
+            "attached_to": "entry:first",
+            "x": 40,
+            "y": 112,
+            "slot": 1,
+            "quest": 4,
+            "event": "TAKE",
+            "level": 1,
+            "guild": "(null)",
+            "min_rep": 0
+          },
+          "n3": {
+            "type": "npc",
+            "state": "first",
+            "x": 270,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Ich haette noch eine Kleinigkeit. Bringst du mir 10 Gold?",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n4": {
+            "type": "player",
+            "state": "first",
+            "x": 550,
+            "y": 40,
+            "speaker": "player",
+            "kind": "question",
+            "lines": [
+              {
+                "text": "Ja, mache ich.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false
+              },
+              {
+                "text": "Nein, jetzt nicht.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n5": {
+            "type": "npc",
+            "state": "first",
+            "x": 830,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Gut, ich warte.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n6": {
+            "type": "npc",
+            "state": "first",
+            "x": 830,
+            "y": 126,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Schade. Vielleicht spaeter.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "entry:known": {
+            "type": "entry",
+            "state": "known",
+            "x": 40,
+            "y": 212
+          },
+          "n7": {
+            "type": "npc",
+            "state": "known",
+            "x": 270,
+            "y": 212,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Hast du es dir ueberlegt? (Ebene Bekannt)",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n8": {
+            "type": "player",
+            "state": "known",
+            "x": 550,
+            "y": 212,
+            "speaker": "player",
+            "kind": "question",
+            "lines": [
+              {
+                "text": "Ja, gut.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false
+              },
+              {
+                "text": "Nein.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n9": {
+            "type": "npc",
+            "state": "known",
+            "x": 830,
+            "y": 212,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Gut, ich warte.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n10": {
+            "type": "npc",
+            "state": "running",
+            "x": 270,
+            "y": 342,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Wo bleiben die 10 Gold?",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n11": {
+            "type": "npc",
+            "state": "solved",
+            "x": 270,
+            "y": 456,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Danke fuer das Gold. Hier, 1234 fuer dich.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": true,
+                "fight": false
+              }
+            ]
+          },
+          "n12": {
+            "type": "npc",
+            "state": "closed",
+            "x": 270,
+            "y": 542,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4a] Danke nochmal fuer das Gold.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n13": {
+            "type": "action",
+            "kind": "REWARD",
+            "verb": "GLD",
+            "args": {
+              "amount": "1234"
+            },
+            "when": null,
+            "attached_to": "n11",
+            "x": 270,
+            "y": 424,
+            "slot": 0
+          }
+        },
+        "edges": [
+          [
+            "entry:first",
+            0,
+            "n3"
+          ],
+          [
+            "n3",
+            0,
+            "n4"
+          ],
+          [
+            "n4",
+            0,
+            "n5"
+          ],
+          [
+            "n4",
+            1,
+            "n6"
+          ],
+          [
+            "entry:known",
+            0,
+            "n7"
+          ],
+          [
+            "n7",
+            0,
+            "n8"
+          ],
+          [
+            "n8",
+            0,
+            "n9"
+          ],
+          [
+            "entry:running",
+            0,
+            "n10"
+          ],
+          [
+            "entry:solved",
+            0,
+            "n11"
+          ],
+          [
+            "entry:closed",
+            0,
+            "n12"
+          ]
+        ]
+      },
+      "actions": [],
+      "retail": false
+    }
+  ]
+}

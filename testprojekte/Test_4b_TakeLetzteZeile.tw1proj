@@ -1,0 +1,251 @@
+{
+  "format": 1,
+  "tool_version": "2.0.0-m1",
+  "name": "Test_4b_TakeLetzteZeile",
+  "target_archive": "Yamalin.wd",
+  "quests": [
+    {
+      "id": 386,
+      "title": "[TEST 4b] Annahme nur letzte Zeile",
+      "group": 190,
+      "journal": {
+        "take": "[TEST 4b] Tago moechte 10 Gold von dir.",
+        "solve": "[TEST 4b] Du hast 10 Gold. Bring sie zu Tago.",
+        "close": "[TEST 4b] Tago hat das Gold bekommen."
+      },
+      "giver": 3,
+      "giver_type": "ACTIVE",
+      "map_sign": "BACK_TO_GIVER_MAP_SIGN",
+      "offered": true,
+      "enable_level": 1,
+      "speakers": [
+        {
+          "id": 3,
+          "name": "Tago",
+          "lector": 123,
+          "tile": "E1",
+          "new": false
+        }
+      ],
+      "graph": {
+        "nodes": {
+          "entry:first": {
+            "type": "entry",
+            "state": "first",
+            "x": 40,
+            "y": 40
+          },
+          "entry:running": {
+            "type": "entry",
+            "state": "running",
+            "x": 40,
+            "y": 170
+          },
+          "entry:solved": {
+            "type": "entry",
+            "state": "solved",
+            "x": 40,
+            "y": 256
+          },
+          "entry:closed": {
+            "type": "entry",
+            "state": "closed",
+            "x": 40,
+            "y": 370
+          },
+          "task": {
+            "type": "task",
+            "fc": "BRING_GOLD",
+            "args": {
+              "gold": 10
+            },
+            "x": -230,
+            "y": 248.0
+          },
+          "n1": {
+            "type": "condition",
+            "cond": "after",
+            "attached_to": "entry:first",
+            "x": 40,
+            "y": 84,
+            "slot": 0,
+            "quest": 385,
+            "event": "CLOSE",
+            "level": 1,
+            "guild": "(null)",
+            "min_rep": 0
+          },
+          "n2": {
+            "type": "condition",
+            "cond": "level",
+            "attached_to": "entry:first",
+            "x": 40,
+            "y": 112,
+            "slot": 1,
+            "quest": 4,
+            "event": "TAKE",
+            "level": 1,
+            "guild": "(null)",
+            "min_rep": 0
+          },
+          "n3": {
+            "type": "npc",
+            "state": "first",
+            "x": 270,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4b] Bringst du mir 10 Gold?",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n4": {
+            "type": "player",
+            "state": "first",
+            "x": 550,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "Warum?",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n5": {
+            "type": "npc",
+            "state": "first",
+            "x": 830,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4b] Weil ich es brauche. Abgemacht.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n6": {
+            "type": "npc",
+            "state": "running",
+            "x": 270,
+            "y": 170,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4b] Wo bleiben die 10 Gold?",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n7": {
+            "type": "npc",
+            "state": "solved",
+            "x": 270,
+            "y": 284,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4b] Danke fuer das Gold. Hier, 1234 fuer dich.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": true,
+                "fight": false
+              }
+            ]
+          },
+          "n8": {
+            "type": "npc",
+            "state": "closed",
+            "x": 270,
+            "y": 370,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST 4b] Danke nochmal fuer das Gold.",
+                "cue": "",
+                "cam": null,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false
+              }
+            ]
+          },
+          "n9": {
+            "type": "action",
+            "kind": "REWARD",
+            "verb": "GLD",
+            "args": {
+              "amount": "1234"
+            },
+            "when": null,
+            "attached_to": "n7",
+            "x": 270,
+            "y": 252,
+            "slot": 0
+          }
+        },
+        "edges": [
+          [
+            "entry:first",
+            0,
+            "n3"
+          ],
+          [
+            "n3",
+            0,
+            "n4"
+          ],
+          [
+            "n4",
+            0,
+            "n5"
+          ],
+          [
+            "entry:running",
+            0,
+            "n6"
+          ],
+          [
+            "entry:solved",
+            0,
+            "n7"
+          ],
+          [
+            "entry:closed",
+            0,
+            "n8"
+          ]
+        ]
+      },
+      "actions": [],
+      "retail": false
+    }
+  ]
+}

@@ -378,3 +378,547 @@ def preview_text(quest, index=None, t=lambda k, **f: k):
         lines.append(f'      -> {nxt}   flags={hex(e.flags)}  cue={e.cue or "-"}'
                      f'  cam={e.cams}  anim={e.anim1}')
     return '\n'.join(lines)
+
+
+
+# ===========================================================================
+# quest export: .qtx block, texts, .lan, packing (milestone 5)
+# ===========================================================================
+
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+
+import tw1_lan  # noqa: E402,F811
+import tw1_qtx  # noqa: E402
+import tw1_wd  # noqa: E402
+import wdio  # noqa: E402
+
+INNER_QTX = 'Scripts\\Quests\\TwoWorldsQuests.qtx'
+INNER_LAN = 'Language\\TwoWorldsQuests.lan'
+REG_MODS = r'SOFTWARE\Reality Pump\TwoWorlds\Mods'
+GAME_EXES = ('twoworlds.exe', 'twoworlds_radeon.exe')
+
+
+def header_values(quest):
+    """(enable_level, guild, min_rep) from the condition nodes."""
+    level, guild, rep = quest.enable_level, '(null)', 0
+    for c in quest.conditions_list():
+        if c.get('cond') == 'level':
+            level = c.get('level', level)
+        elif c.get('cond') == 'guild':
+            guild = str(c.get('guild') or '(null)')
+            rep = c.get('min_rep', 0)
+    return level, guild, rep
+
+
+def all_actions(quest):
+    """[(action dict, when, node id or None)]: docked first, then free."""
+    g = quest.graph
+    out = [(n, model.action_when(g, n), nid)
+           for nid, n in quest.graph_actions()]
+    out += [(a, a.get('when'), None) for a in quest.actions]
+    return out
+
+
+def build_quest_block(quest):
+    """tw1_qtx.Quest for a project quest (retail quests: None)."""
+    if quest.retail:
+        return None
+    level, guild, rep = header_values(quest)
+    subs = [tw1_qtx.sub_giver(quest.giver, quest.giver_type, quest.map_sign,
+                              'NONE')]
+    task = quest.task()
+    subs.append(tw1_qtx.sub_fc(task['fc'], *model.op_tokens(
+        model.FC_SPECS[task['fc']], task['args'])))
+    acts, rewards = [], []
+    for a, when, _ in all_actions(quest):
+        toks = model.op_tokens(model.ACTION_SPECS[(a['kind'], a['verb'])],
+                               a['args'])
+        if a['kind'] == 'REWARD':
+            rewards.append(tw1_qtx.sub_reward(a['verb'], when, *toks))
+        else:
+            acts.append(tw1_qtx.sub_action(a['verb'], when, *toks))
+    return tw1_qtx.make_quest(quest.id, subs + acts + rewards,
+                              enable_level=level, group=quest.group,
+                              guild=guild, min_rep=rep, add_to_log=True)
+
+
+def validate_quest(quest, index=None, project=None, archive=None, t=None):
+    """(errors, warnings): lists of (message, node id or None). Minimal
+    rule set for the export; milestone 7 completes plan section 8."""
+    t = t or (lambda k, **f: k + (' ' + str(f) if f else ''))
+    E, W = [], []
+    g = quest.graph
+    nodes = g['nodes']
+    qid = quest.id
+    if not quest.retail:
+        if not isinstance(qid, int) or not 381 <= qid <= 399:
+            E.append((t('val.id.range', id=qid), None))
+        elif index and index.quest(qid):
+            src = index.quest(qid)['source']
+            if src == 'retail' or (archive and src != archive):
+                E.append((t('val.id.taken', id=qid, src=src), None))
+            else:
+                W.append((t('val.id.replace', id=qid, src=src), None))
+        if project and sum(1 for q in project.quests if q.id == qid) > 1:
+            E.append((t('val.id.twice', id=qid), None))
+        if not quest.title.strip():
+            E.append((t('val.title'), None))
+        if index and str(quest.group) not in index.groups:
+            W.append((t('warn.group', g=quest.group), None))
+        for key in ('take', 'solve', 'close'):
+            if not (quest.journal.get(key) or '').strip():
+                E.append((t('val.journal.' + key), None))
+        if quest.giver is None:
+            E.append((t('val.giver'), None))
+        task = quest.task()
+        if not task.get('fc'):
+            E.append((t('val.task'), model.TASK_ID))
+        else:
+            try:
+                model.op_tokens(model.FC_SPECS[task['fc']], task['args'])
+            except model.ModelError as e:
+                E.append((t('val.task.field', err=e), model.TASK_ID))
+        afters = [c for c in quest.conditions_list()
+                  if c.get('cond') == 'after']
+        if not afters:
+            E.append((t('val.after'), entry_id('first')))
+        for c in afters:
+            pq = c.get('quest')
+            known = (index and index.quest(pq)) or (
+                project and project.quest_by_id(pq))
+            if not isinstance(pq, int) or not known:
+                E.append((t('val.after.quest', id=pq), entry_id('first')))
+        first = model.edge_from(g, entry_id('first'), 0)
+        if not first:
+            E.append((t('val.offer.empty'), entry_id('first')))
+        elif nodes[first[2]]['type'] != 'npc':
+            E.append((t('val.offer.npc'), first[2]))
+        for a, when, nid in all_actions(quest):
+            if when is None:
+                E.append((t('val.action.level'), nid))
+                continue
+            allowed = (model.REWARD_WHEN if a['kind'] == 'REWARD'
+                       else model.ACTION_WHEN)
+            if when not in allowed:
+                E.append((t('val.action.when', when=when), nid))
+            try:
+                model.op_tokens(model.ACTION_SPECS[(a['kind'], a['verb'])],
+                                a['args'])
+            except model.ModelError as e:
+                E.append((t('val.action.field', err=e), nid))
+            if a['verb'] == 'NPC_TELEPORT' and '_' in str(
+                    a['args'].get('tile', '')):
+                W.append((t('warn.teleport.interior'), nid))
+            if a['verb'] == 'SHOW_LOCATION' and when != 'TAKE':
+                W.append((t('warn.showloc'), nid))
+            if a['verb'] == 'PLAY_CUTSCENE' and str(
+                    a['args'].get('number')) in ('7', '8'):
+                W.append((t('warn.cutscene'), nid))
+        if task.get('fc') == 'CLEAR_AREA':
+            party = str(task['args'].get('party'))
+            if not any(a['verb'] == 'ENEMY_CREATE'
+                       and str(a['args'].get('party')) == party
+                       for a, _, _ in all_actions(quest)):
+                W.append((t('warn.cleararea'), model.TASK_ID))
+            if party not in ('18', '19', '20', '21', '22', '23'):
+                W.append((t('warn.cleararea.party'), model.TASK_ID))
+        if task.get('fc') == 'TALK' and str(task['args'].get('npc')) == str(
+                quest.giver):
+            W.append((t('warn.talk.giver'), model.TASK_ID))
+    for nid, n in nodes.items():
+        if n.get('type') not in ('npc', 'player'):
+            continue
+        for ln in n.get('lines') or []:
+            text = ln.get('text') or ''
+            if '\r' in text:
+                E.append((t('val.cr'), nid))
+            if not text.strip() and ln.get('order') is None:
+                E.append((t('val.text.empty'), nid))
+        if n['type'] == 'npc' and quest.speaker(n.get('speaker')) is None:
+            E.append((t('val.speaker'), nid))
+    for key in ('take', 'solve', 'close'):
+        if '\r' in (quest.journal.get(key) or ''):
+            E.append((t('val.cr'), None))
+    return E, W
+
+
+# -- qtx ----------------------------------------------------------------------
+
+_BLOCK = r'^QUEST Q_%d [^\n]*\n.*?^END\n'
+
+
+def _find_block(text, qid):
+    return re.search(_BLOCK % qid, text, re.M | re.S)
+
+
+def insert_aoq(text, pred, line):
+    """Insert ``  <line>`` into the block of quest ``pred`` after its last
+    AOQ (else after FC, else GIVER, else the header)."""
+    m = _find_block(text, pred)
+    if not m:
+        raise model.ModelError(f'Q_{pred} not found in the qtx')
+    block = m.group(0)
+    if f'  {line}\n' in block:
+        return text
+    lines = block.split('\n')
+    pos = 1
+    for key in ('AOQ', 'FC', 'GIVER'):
+        idx = [i for i, ln in enumerate(lines)
+               if ln.startswith('  ' + key + ' ')]
+        if idx:
+            pos = idx[-1] + 1
+            break
+    lines.insert(pos, '  ' + line)
+    return text[:m.start()] + '\n'.join(lines) + text[m.end():]
+
+
+def remove_aoq_to(text, qid):
+    """Drop every ``AOQ PROMOTE|TAKE <event> Q_<qid>`` line (re-export)."""
+    return re.sub(r'^  AOQ (?:PROMOTE|TAKE) [A-Z_]+ Q_%d\n' % qid, '', text,
+                  flags=re.M)
+
+
+def npc_block(spk, index):
+    """NPC record for a new speaker: the record of a template NPC with id,
+    giver marker, tile, angle and lector replaced. [PRUEFEN] the remaining
+    columns (party, guild, size, flag, look, last int) are copied from the
+    template (plan 12.31)."""
+    tmpl = None
+    if spk.get('template') is not None and index:
+        tmpl = index.npc(spk['template'])
+    if tmpl is None and index and spk.get('lector') is not None:
+        for nid in index.lectors.get(str(spk['lector']), []):
+            if index.npc(nid):
+                tmpl = index.npc(nid)
+                break
+    if tmpl is None and index:
+        tmpl = index.npc(3)
+    rec = (tmpl or {}).get('record') or \
+        'NPC NPC_3 3 3 E1 0 123 25 (null) SMALL True CHAR_05(15) 0'
+    p = rec.split(' ')
+    nid = spk['id']
+    p[1] = f'NPC_{nid}'
+    p[2] = str(nid)
+    p[3] = str(spk.get('marker') or nid)
+    p[4] = (spk.get('tile') or '(null)').upper()
+    p[5] = str(spk.get('angle', 0))
+    p[6] = str(spk['lector']) if spk.get('lector') is not None else '(null)'
+    return ' '.join(p) + '\n  OBJECTS True\nEND\n'
+
+
+def patch_qtx(text, quests, index=None):
+    """Apply all project quests to a full .qtx text. Returns (text, log)."""
+    log = []
+    text = text.replace('\r\n', '\n')
+    if not text.endswith('\n'):
+        text += '\n'
+    for q in quests:
+        if q.retail:
+            continue
+        block = build_quest_block(q).emit()
+        npc_text = ''
+        for spk in q.speakers:
+            if spk.get('new') and isinstance(spk['id'], int) and not re.search(
+                    r'^NPC NPC_%d ' % spk['id'], text, re.M):
+                npc_text += npc_block(spk, index)
+                log.append(('npc', spk['id']))
+        m = _find_block(text, q.id)
+        if m:
+            text = text[:m.start()] + npc_text + block + text[m.end():]
+            log.append(('replace', q.id))
+        else:
+            text = text + npc_text + block
+            log.append(('append', q.id))
+        text = remove_aoq_to(text, q.id)
+        verb = 'PROMOTE' if q.offered else 'TAKE'
+        for c in q.conditions_list():
+            if c.get('cond') != 'after':
+                continue
+            line = f"AOQ {verb} {c.get('event', 'TAKE')} Q_{q.id}"
+            text = insert_aoq(text, c['quest'], line)
+            log.append(('aoq', c['quest'], line))
+    if '\r' in text:
+        raise model.ModelError('CR in qtx')
+    return text, log
+
+
+# -- lan ----------------------------------------------------------------------
+
+def quest_texts(quest):
+    """(tree, {key: text}) with title, journal, dialog and new NPC names."""
+    tree, texts = graph_to_tree(quest)
+    qid = quest.id
+    texts[f'translateQ_{qid}'] = quest.title
+    texts[f'translateQ_{qid}_QTD'] = quest.journal.get('take', '')
+    texts[f'translateQ_{qid}_QSD'] = quest.journal.get('solve', '')
+    texts[f'translateQ_{qid}_QCD'] = quest.journal.get('close', '')
+    for s in quest.speakers:
+        if s.get('new') and isinstance(s['id'], int):
+            texts[f"translateNPC_{s['id']}"] = s['name']
+    return tree, texts
+
+
+def build_lan(master, quests):
+    """(full master .lan bytes, overlay .lan bytes)."""
+    tr, aliases, rest = tw1_lan.read(master)
+    trees = tw1_lan.parse_trees(rest)
+    over_tr, over_trees = {}, []
+    for q in quests:
+        tree, texts = quest_texts(q)
+        prefix = f'translateDQ_{q.id}_'
+        for k in [k for k in tr if k.startswith(prefix) and k not in texts]:
+            del tr[k]
+        tr.update(texts)
+        over_tr.update(texts)
+        ids = [i for i, tt in enumerate(trees) if tt.id == tree.id]
+        if ids:
+            trees[ids[0]] = tree
+        else:
+            trees.append(tree)
+        over_trees.append(tree)
+    full = tw1_lan.build(tr, aliases, tw1_lan.build_trees(trees))
+    overlay = tw1_lan.build(over_tr, [], tw1_lan.build_trees(over_trees))
+    return full, overlay
+
+
+# -- environment ----------------------------------------------------------------
+
+def game_running():
+    try:
+        out = subprocess.run(['tasklist', '/FO', 'CSV', '/NH'],
+                             capture_output=True, text=True, timeout=10,
+                             creationflags=getattr(subprocess,
+                                                   'CREATE_NO_WINDOW', 0))
+    except (OSError, subprocess.SubprocessError):
+        return False
+    names = {ln.split(',')[0].strip('"').lower()
+             for ln in out.stdout.splitlines() if ln}
+    return any(n in names for n in GAME_EXES)
+
+
+def wd_paths(path):
+    """Inner paths of a .wd without decompressing the file data."""
+    import struct
+    import zlib
+    with open(path, 'rb') as f:
+        f.seek(-4, 2)
+        dir_off = struct.unpack('<I', f.read(4))[0]
+        f.seek(-dir_off, 2)
+        raw = f.read()
+    d = zlib.decompressobj()
+    table = d.decompress(raw) + d.flush()
+    off = 8
+    count = struct.unpack_from('<H', table, off)[0]
+    off += 2
+    out = []
+    for _ in range(count):
+        nlen = table[off]
+        off += 1
+        out.append(table[off:off + nlen].decode('latin-1'))
+        off += nlen
+        flags = table[off]
+        off += 13
+        if flags & 0x08:
+            off += 1 + table[off]
+        if flags & 0x10:
+            off += 4
+        if flags & 0x20:
+            off += 16
+    return out
+
+
+def registry_mods():
+    """{archive name: DWORD} from HKCU\\...\\Mods."""
+    try:
+        import winreg
+    except ImportError:
+        return {}
+    out = {}
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_MODS) as k:
+            i = 0
+            while True:
+                try:
+                    name, val, _ = winreg.EnumValue(k, i)
+                except OSError:
+                    break
+                out[name] = val
+                i += 1
+    except OSError:
+        pass
+    return out
+
+
+def enable_mod(name):
+    import winreg
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_MODS) as k:
+        try:
+            old = winreg.QueryValueEx(k, name)[0]
+        except OSError:
+            old = None
+        winreg.SetValueEx(k, name, 0, winreg.REG_DWORD, 1)
+    return old
+
+
+def conflicts(game_dir, archive):
+    """Other enabled Mods\\*.wd that also ship the full qtx or master lan
+    (README 3.1: the later one wins silently)."""
+    reg = registry_mods()
+    out = []
+    mods = os.path.join(game_dir, 'Mods')
+    names = sorted(os.listdir(mods)) if os.path.isdir(mods) else []
+    for name in names:
+        if not name.lower().endswith('.wd') or name.lower() == archive.lower():
+            continue
+        try:
+            paths = set(wd_paths(os.path.join(mods, name)))
+        except Exception:
+            continue
+        hit = [p for p in (INNER_QTX, INNER_LAN) if p in paths]
+        if hit and reg.get(name, 0):
+            out.append((name, hit))
+    return out
+
+
+# -- packing --------------------------------------------------------------------
+
+def _entries(path):
+    return {e.path: e for e in tw1_wd.read(path)}
+
+
+def pack_archive(archive, files, log=print):
+    """Merge ``files`` into ``archive`` (or create it) with buglord's wdio,
+    verify content byte for byte and the directory metadata of every
+    untouched entry, then replace the archive. A one-time backup
+    ``<archive>.qf2backup`` keeps the state before the first export."""
+    stage = tempfile.mkdtemp(prefix='qf2_')
+    new = archive + '.new'
+    try:
+        before = _entries(archive) if os.path.isfile(archive) else {}
+        if before:
+            log(('unpack', os.path.basename(archive), len(before)))
+            with contextlib.redirect_stdout(io.StringIO()):
+                wdio.unpack_single(archive, stage)
+        for inner, blob in files.items():
+            dest = os.path.join(stage, *inner.split('\\'))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, 'wb') as f:
+                f.write(blob)
+        log(('pack', os.path.basename(archive)))
+        if os.path.exists(new):
+            os.remove(new)
+        with contextlib.redirect_stdout(io.StringIO()):
+            wdio.pack_single(stage, new, 1, None)
+        after = _entries(new)
+        problems = []
+        for inner, blob in files.items():
+            if inner not in after or after[inner].data != blob:
+                problems.append(f'{inner}: content differs')
+        for inner, e in before.items():
+            if inner in files:
+                continue
+            a = after.get(inner)
+            if a is None:
+                problems.append(f'{inner}: missing')
+            elif (a.data != e.data or a.flags != e.flags
+                  or a.extra_str != e.extra_str
+                  or a.extra_int != e.extra_int
+                  or bool(a.guid) != bool(e.guid)):
+                problems.append(f'{inner}: data or metadata differs')
+        if problems:
+            raise model.ModelError('verification failed: '
+                                   + '; '.join(problems[:5]))
+        log(('verified', len(after)))
+        if before:
+            backup = archive + '.qf2backup'
+            if not os.path.exists(backup):
+                shutil.copy2(archive, backup)
+                log(('backup', os.path.basename(backup)))
+        os.replace(new, archive)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+        if os.path.exists(new):
+            try:
+                os.remove(new)
+            except OSError:
+                pass
+
+
+def build_files(project, base_qtx, master_lan, index=None, overlay_name=None):
+    """{inner path: bytes} for all quests of the project."""
+    quests = list(project.quests)
+    files = {}
+    if any(not q.retail for q in quests):
+        text, _ = patch_qtx(base_qtx.decode('latin-1'), quests, index)
+        files[INNER_QTX] = text.encode('latin-1')
+    full, overlay = build_lan(master_lan, quests)
+    files[INNER_LAN] = full
+    files[f'Language\\ZZ_{overlay_name or "QuestForge"}.lan'] = overlay
+    return files
+
+
+def overlay_stem(project):
+    """ZZ_ overlay name: QF_<project>, never the name of an archive's own
+    overlay."""
+    name = re.sub(r'[^A-Za-z0-9_-]+', '', project.display_name() or '')
+    return 'QF_' + (name or 'Quests')
+
+
+def archive_name(project):
+    name = (project.target_archive or '').strip()
+    if not name:
+        name = re.sub(r'[^A-Za-z0-9_-]+', '', project.display_name() or '') \
+            or 'QuestForgeMod'
+    if not name.lower().endswith('.wd'):
+        name += '.wd'
+    return name
+
+
+def export_mod(project, game_dir, base_dir, index=None, log=print,
+               files_only=None, register=True):
+    """Full export (plan 3.1 "Exportieren als Mod"). Returns a summary.
+    ``files_only``: write the files into that folder instead of packing."""
+    name = archive_name(project)
+    archive = os.path.join(game_dir, 'Mods', name)
+    base_qtx = master_lan = None
+    if os.path.isfile(archive):
+        ents = _entries(archive)
+        if INNER_QTX in ents:
+            base_qtx = ents[INNER_QTX].data
+            log(('base', 'qtx', name))
+        if INNER_LAN in ents:
+            master_lan = ents[INNER_LAN].data
+            log(('base', 'lan', name))
+        del ents
+    if base_qtx is None:
+        with open(os.path.join(base_dir, 'TwoWorldsQuests.qtx'), 'rb') as f:
+            base_qtx = f.read()
+        log(('base', 'qtx', 'Update16.wd'))
+    if master_lan is None:
+        with open(os.path.join(base_dir, 'TwoWorldsQuests.lan'), 'rb') as f:
+            master_lan = f.read()
+        log(('base', 'lan', 'Language.wd'))
+    files = build_files(project, base_qtx, master_lan, index,
+                        overlay_stem(project))
+    for inner, blob in files.items():
+        log(('file', inner, len(blob)))
+    if files_only:
+        for inner, blob in files.items():
+            dest = os.path.join(files_only, *inner.split('\\'))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, 'wb') as f:
+                f.write(blob)
+        return {'archive': None, 'files': list(files)}
+    os.makedirs(os.path.dirname(archive), exist_ok=True)
+    pack_archive(archive, files, log)
+    old = None
+    if register:
+        old = enable_mod(name)
+        log(('registry', name, old))
+    return {'archive': archive, 'files': list(files), 'registry_old': old}

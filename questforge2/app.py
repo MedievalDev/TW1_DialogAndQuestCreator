@@ -9,6 +9,7 @@ exist but are disabled so the final structure (plan section 3) is visible.
 import glob
 import json
 import os
+import queue
 import random
 import sys
 import threading
@@ -22,7 +23,7 @@ from .graph import GraphView
 from .i18n import t, set_lang, get_lang, detect_lang
 from .inspector import Inspector
 from .model import Project, Quest, ModelError, PROJECT_EXT
-from .palette import SpeakerBox
+from .palette import ActionBox, SpeakerBox
 
 GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
@@ -121,9 +122,13 @@ class App:
         m.add_separator()
         m.add_command(label=t('file.gamepath'), command=self.change_game_dir)
         m.add_separator()
+        can = self._state(bool(self.project and self.project.quests
+                               and self.cfg.get('game_dir')))
         m.add_command(label=t('file.export'), accelerator=self._acc('Ctrl+E'),
-                      state='disabled')
-        m.add_command(label=t('file.exportfiles'), state='disabled')
+                      command=self.export_ui, state=can)
+        m.add_command(label=t('file.exportfiles'),
+                      command=lambda: self.export_ui(files_only=True),
+                      state=can)
         m.add_separator()
         m.add_command(label=t('file.quit'), command=self.quit)
 
@@ -254,11 +259,13 @@ class App:
         self.graph.on_open_node = self._open_node
         self.graph.fill_add_menu = self._fill_add_menu
         self.graph.node_style = self.node_style
+        self.graph.docked_text = self.docked_text
+        self.graph.fill_docked_menu = self._fill_docked_menu
         self.graph.bind('<Configure>', self._draw_graph_placeholder, add='+')
 
         self.palette = ttk.PanedWindow(self.hpane, orient='vertical')
         self.speakers = SpeakerBox(self.palette, self)
-        self.actions = self._placeholder(self.palette, 'panel.actions', 5)
+        self.actions = ActionBox(self.palette, self)
         self.palette.add(self.speakers, weight=1)
         self.palette.add(self.actions, weight=1)
 
@@ -384,7 +391,9 @@ class App:
             self._build_tabs()
         self._mark_tab()
         self.graph.set_filter(state)
-        if state:
+        if state == 'solved':
+            self.graph.scroll_to_node(model.TASK_ID)
+        elif state:
             self.graph.scroll_to_node(model.entry_id(state))
         self._update_status()
 
@@ -415,6 +424,7 @@ class App:
             messagebox.showwarning(APP_NAME, t('quest.noid'), parent=self.root)
             return
         q = Quest(free[0])
+        model.add_default_conditions(q)
         self.project.quests.append(q)
         self.mark_dirty()
         self.open_quest(q)
@@ -502,6 +512,282 @@ class App:
         ttk.Button(win, text=t('close'), command=win.destroy
                    ).pack(anchor='e', padx=8, pady=(0, 8))
 
+    # -- task / actions / conditions ------------------------------------------
+
+    def npc_label(self, nid):
+        if nid in ('', None):
+            return ''
+        if self.quest:
+            spk = self.quest.speaker(nid)
+            if spk:
+                return f"{spk['name']}  (NPC_{nid})"
+        if self.index and self.index.npc(nid):
+            return self.index.npc_label(nid)
+        return f'NPC_{nid}'
+
+    def parse_npc(self, text):
+        import re
+        m = re.search(r'NPC_(\d+)', str(text)) or re.fullmatch(
+            r'\s*(\d+)\s*', str(text))
+        return int(m.group(1)) if m else str(text).strip()
+
+    def _value_text(self, kind, v):
+        if v in ('', None):
+            return '?'
+        idx = self.index
+        if kind == 'npc':
+            return self.npc_label(v).split('  (')[0]
+        if kind == 'object' and idx:
+            return idx.object_names.get(str(v)) or str(v)
+        if kind == 'location' and idx and str(v) in idx.locations:
+            return idx.locations[str(v)]['name']
+        if kind.startswith('marker:'):
+            return f'#{v}'
+        return str(v)
+
+    def _args_text(self, spec, values):
+        parts = []
+        for f in spec:
+            v = values.get(f[0])
+            if f[1] == 'tile' and not v:
+                continue
+            parts.append(self._value_text(f[1], v))
+        return ' '.join(parts)
+
+    def action_summary(self, a, when=None):
+        spec = model.ACTION_SPECS[(a['kind'], a['verb'])]
+        text = t(f"op.{a['kind']}.{a['verb']}") + ' ' + self._args_text(
+            spec, a['args'])
+        return text + (f'  [{when}]' if when else '')
+
+    def docked_text(self, node):
+        kind = node['type']
+        if kind == 'task':
+            fc = node.get('fc')
+            if not fc:
+                return t('node.task'), t('op.none'), True
+            try:
+                model.op_tokens(model.FC_SPECS[fc], node['args'])
+                bad = False
+            except model.ModelError:
+                bad = True
+            return t('node.task'), t('op.FC.' + fc) + ' ' + self._args_text(
+                model.FC_SPECS[fc], node['args']), bad
+        if kind == 'action':
+            when = model.action_when(self.quest.graph, node)
+            try:
+                model.op_tokens(model.ACTION_SPECS[(node['kind'],
+                                                    node['verb'])],
+                                node['args'])
+                bad = when is None
+            except model.ModelError:
+                bad = True
+            return t('node.action'), self.action_summary(node, when), bad
+        cond = node.get('cond')
+        if cond == 'after':
+            text = t('cond.after.sum', q=node.get('quest'),
+                     ev=t('ev.' + node.get('event', 'TAKE')))
+        elif cond == 'level':
+            text = t('cond.level.sum', n=node.get('level'))
+        else:
+            text = t('cond.guild.sum', g=node.get('guild'),
+                     r=node.get('min_rep'))
+        return t('node.condition'), text, False
+
+    def quest_choices(self):
+        out = []
+        if self.index:
+            for key, q in sorted(self.index.quests.items(),
+                                 key=lambda kv: int(kv[0])):
+                out.append((int(key), f"Q_{key}  {q['title']}"))
+        if self.project:
+            known = {q for q, _ in out}
+            for q in self.project.quests:
+                if q.id not in known and q is not self.quest:
+                    out.append((q.id, f'Q_{q.id}  {q.title}'))
+        return out
+
+    def select_task(self):
+        if not self.quest:
+            return
+        self.show_tab('solved')
+        self.graph.select([model.TASK_ID])
+
+    def selected_dialog_node(self):
+        if not self.quest:
+            return None
+        sel = [i for i in self.graph.selected
+               if self.quest.graph['nodes'].get(i, {}).get('type')
+               in ('npc', 'player')]
+        return sel[0] if len(sel) == 1 else None
+
+    def fill_action_menu(self, menu, parent):
+        for k, v in model.ACTION_MAIN:
+            menu.add_command(label=t(f'op.{k}.{v}'), command=lambda k=k, v=v:
+                             self.graph.add_docked(model.make_action(k, v,
+                                                                     parent)))
+        more = tk.Menu(menu, tearoff=0)
+        for k, v in model.ACTION_MORE:
+            more.add_command(label=t(f'op.{k}.{v}'), command=lambda k=k, v=v:
+                             self.graph.add_docked(model.make_action(k, v,
+                                                                     parent)))
+        menu.add_cascade(label=t('op.more'), menu=more)
+
+    def fill_condition_menu(self, menu):
+        for cond in ('after', 'level', 'guild'):
+            menu.add_command(label=t('cond.' + cond), command=lambda c=cond:
+                             self._add_condition(c))
+
+    def _add_condition(self, cond):
+        if not self.quest:
+            return
+        self.show_tab('first')
+        self.graph.add_docked(model.make_condition(cond))
+
+    def _fill_docked_menu(self, menu, kind, nid):
+        if kind in ('npc', 'player'):
+            sub = tk.Menu(menu, tearoff=0)
+            self.fill_action_menu(sub, nid)
+            menu.add_cascade(label=t('ctx.addaction'), menu=sub)
+        elif kind == 'entry':
+            sub = tk.Menu(menu, tearoff=0)
+            self.fill_condition_menu(sub)
+            menu.add_cascade(label=t('ctx.addcond'), menu=sub)
+        elif kind == 'task':
+            sub = tk.Menu(menu, tearoff=0)
+            for fc in model.FC_MAIN + model.FC_MORE:
+                sub.add_command(label=t('op.FC.' + fc),
+                                command=lambda fc=fc: self._set_task(fc))
+            menu.add_cascade(label=t('ctx.settask'), menu=sub)
+
+    def _set_task(self, fc):
+        self.push_undo('task')
+        model.set_task(self.quest.graph, fc)
+        self.graph.redraw_node(model.TASK_ID)
+        self.changed()
+
+    def add_enemy_for_cleararea(self):
+        """Plan 6.2: create the ENEMY_CREATE that CLEAR_AREA needs, docked
+        at the first offer line (TAKE), same marker, tile and party."""
+        q = self.quest
+        task = q.task()
+        first = model.edge_from(q.graph, model.entry_id('first'), 0)
+        a = model.make_action('ACTION', 'ENEMY_CREATE',
+                              first[2] if first else None)
+        for key in ('marker', 'tile', 'party'):
+            if task['args'].get(key) not in ('', None):
+                a['args'][key] = task['args'][key]
+        if first:
+            self.graph.add_docked(a)
+        else:
+            self.push_undo('qaction')
+            for k in ('attached_to', 'x', 'y', 'slot', 'type'):
+                a.pop(k, None)
+            a['when'] = 'TAKE'
+            q.actions.append(a)
+            self.changed()
+
+    # -- export ---------------------------------------------------------------
+
+    def export_ui(self, files_only=False):
+        p = self.project
+        game = self.cfg.get('game_dir')
+        if not p or not p.quests:
+            messagebox.showinfo(t('export.title'), t('export.nothing'),
+                                parent=self.root)
+            return
+        if not game:
+            messagebox.showerror(t('export.title'), t('export.nogame'),
+                                 parent=self.root)
+            return
+        name = export.archive_name(p)
+        errors, warnings = [], []
+        for q in p.quests:
+            E, W = export.validate_quest(q, self.index, p, name, t)
+            errors += [(q, m, nid) for m, nid in E]
+            warnings += [(q, m, nid) for m, nid in W]
+        if errors:
+            ProblemWindow(self, t('export.errors', n=len(errors)), errors)
+            return
+        target = None
+        if files_only:
+            target = filedialog.askdirectory(title=t('file.exportfiles'),
+                                             parent=self.root)
+            if not target:
+                return
+        else:
+            if export.game_running():
+                messagebox.showerror(t('export.title'), t('export.running'),
+                                     parent=self.root)
+                return
+            conf = export.conflicts(game, name)
+            if conf:
+                if not messagebox.askyesno(t('export.title'), t(
+                        'export.conflict', target=name,
+                        mods=', '.join(c[0] for c in conf)),
+                        icon='warning', parent=self.root):
+                    return
+            elif not messagebox.askyesno(t('export.title'),
+                                         t('export.target', name=name),
+                                         parent=self.root):
+                return
+        if warnings:
+            text = t('export.warnings', n=len(warnings)) + '\n\n' + '\n'.join(
+                f'Q_{q.id}: {m}' for q, m, _ in warnings[:12])
+            if not messagebox.askyesno(t('export.title'), text, icon='warning',
+                                       parent=self.root):
+                return
+        win = ExportWindow(self)
+        result = {}
+        logq = queue.Queue()
+
+        def work():
+            try:
+                result['res'] = export.export_mod(
+                    p, game, data.base_dir(), self.index, logq.put,
+                    files_only=target)
+            except Exception as e:          # shown in the log window
+                result['err'] = e
+
+        def poll():
+            while True:
+                try:
+                    win.log(logq.get_nowait())
+                except queue.Empty:
+                    break
+            if th.is_alive():
+                self.root.after(100, poll)
+                return
+            if 'err' in result:
+                win.finish(t('export.failed', err=result['err']), ok=False)
+            elif target:
+                win.finish(t('export.done.files', path=target))
+            else:
+                win.finish(t('export.done', path=result['res']['archive'])
+                           + '\n\n' + t('export.next'))
+
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+        poll()
+
+    def goto_problem(self, quest, nid):
+        if quest is not self.quest:
+            self.open_quest(quest)
+        if nid and nid in quest.graph['nodes']:
+            node = quest.graph['nodes'][nid]
+            st = node.get('state')
+            if node.get('type') == 'task':
+                st = 'solved'
+            elif node.get('type') in ('action', 'condition'):
+                st = quest.graph['nodes'].get(node.get('attached_to'), {}).get(
+                    'state', st)
+            self.show_tab(st if st in model.STATES and st != 'neutral'
+                          else None)
+            self.graph.scroll_to_node(nid, 120)
+            self.graph.select([nid])
+        else:
+            self.graph.select([])
+
     def node_style(self, node):
         """(title, header colour) for a dialog node."""
         if node.get('type') == 'player' or node.get('speaker') == model.PLAYER:
@@ -524,6 +810,9 @@ class App:
             return
         self.push_undo('speaker')
         self.quest.add_speaker(spk)
+        if self.quest.giver is None and isinstance(spk['id'], int) \
+                and not self.quest.retail:
+            self.quest.giver = spk['id']
         self.changed()
 
     def add_speaker_node(self, sid, wx, wy, connect_from=None):
@@ -765,6 +1054,7 @@ class App:
         r.bind('<Control-o>', lambda e: self.open_project())
         r.bind('<Control-s>', lambda e: self.save_project())
         r.bind('<Control-S>', lambda e: self.save_project_as())
+        r.bind('<Control-e>', lambda e: self.export_ui())
         g = self.graph
         for seq, fn in (('<Control-z>', self.do_undo),
                         ('<Control-y>', self.do_redo),
@@ -827,13 +1117,11 @@ class App:
             return
         win = _ProgressWindow(self.root)
         result = {}
+        q = queue.Queue()
 
         def progress(step, frac):
-            if isinstance(step, tuple):
-                text = t('index.step.' + step[0], name=step[1])
-            else:
-                text = t('index.step.' + step)
-            self.root.after(0, win.update, text, frac)
+            # worker thread: only hand the step to the main thread
+            q.put((step, frac))
 
         def work():
             try:
@@ -841,7 +1129,20 @@ class App:
             except Exception as e:      # shown to the user below
                 result['err'] = e
 
+        def drain():
+            while True:
+                try:
+                    step, frac = q.get_nowait()
+                except queue.Empty:
+                    break
+                if isinstance(step, tuple):
+                    text = t('index.step.' + step[0], name=step[1])
+                else:
+                    text = t('index.step.' + step)
+                win.update(text, frac)
+
         def poll():
+            drain()
             if th.is_alive():
                 self.root.after(100, poll)
                 return
@@ -1022,6 +1323,93 @@ class App:
 
     def run(self):
         self.root.mainloop()
+
+
+class ProblemWindow:
+    """List of validation problems; double click jumps to the node."""
+
+    def __init__(self, app, title, problems):
+        self.app = app
+        self.problems = problems
+        win = tk.Toplevel(app.root)
+        win.title(t('export.title'))
+        win.transient(app.root)
+        win.geometry('640x360')
+        theme.dark_titlebar(win)
+        f = ttk.Frame(win, padding=10)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=title, foreground=theme.ERR).pack(anchor='w')
+        ttk.Label(f, text=t('export.gotonode'), style='Muted.TLabel'
+                  ).pack(anchor='w', pady=(0, 6))
+        self.lst = tk.Listbox(f, font=theme.FONT, activestyle='none')
+        self.lst.pack(fill='both', expand=True)
+        for q, msg, nid in problems:
+            self.lst.insert('end', f'Q_{q.id}: {msg}')
+        self.lst.bind('<Double-Button-1>', self._go)
+        ttk.Button(f, text=t('close'), command=win.destroy
+                   ).pack(anchor='e', pady=(8, 0))
+        self.win = win
+
+    def _go(self, ev):
+        sel = self.lst.curselection()
+        if sel:
+            q, msg, nid = self.problems[sel[0]]
+            self.app.goto_problem(q, nid)
+
+
+class ExportWindow:
+    """Log of a running export (plan 2.2: build in a thread with log)."""
+
+    def __init__(self, app):
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('export.title'))
+        self.win.transient(app.root)
+        self.win.geometry('720x420')
+        theme.dark_titlebar(self.win)
+        f = ttk.Frame(self.win, padding=10)
+        f.pack(fill='both', expand=True)
+        self.txt = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=16)
+        self.txt.pack(fill='both', expand=True)
+        self.txt.tag_configure('ok', foreground=theme.OK)
+        self.txt.tag_configure('err', foreground=theme.ERR)
+        self.btn = ttk.Button(f, text=t('close'), command=self.win.destroy)
+        self.btn.pack(anchor='e', pady=(8, 0))
+        self.btn.state(['disabled'])
+
+    def _put(self, text, tag=None):
+        try:
+            self.txt.insert('end', text + '\n', tag)
+            self.txt.see('end')
+        except tk.TclError:
+            pass
+
+    def log(self, msg):
+        kind = msg[0]
+        if kind == 'base':
+            text = t('export.log.base', kind=msg[1], src=msg[2])
+        elif kind == 'file':
+            text = t('export.log.file', inner=msg[1], n=msg[2])
+        elif kind == 'unpack':
+            text = t('export.log.unpack', name=msg[1], n=msg[2])
+        elif kind == 'pack':
+            text = t('export.log.pack', name=msg[1])
+        elif kind == 'verified':
+            text = t('export.log.verified', n=msg[1])
+        elif kind == 'backup':
+            text = t('export.log.backup', name=msg[1])
+        elif kind == 'registry':
+            text = t('export.log.registry', name=msg[1], old=msg[2])
+        else:
+            text = ' '.join(str(x) for x in msg)
+        self._put(text)
+
+    def finish(self, text, ok=True):
+        self._put('')
+        self._put(text, 'ok' if ok else 'err')
+        try:
+            self.btn.state(['!disabled'])
+        except tk.TclError:
+            pass
 
 
 class RetailDialog:

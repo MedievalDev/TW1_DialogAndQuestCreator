@@ -50,8 +50,106 @@ LINE_H = 22
 NODE_PAD = 8
 ENTRY_W, ENTRY_H = 150, 34
 COMMENT_MIN_W, COMMENT_MIN_H = 80, 40
+ACTION_H = 24
+TASK_W, TASK_H = 230, 50
+TASK_ID = 'task'
 CAM_NPC = 2
 CAM_HERO = 7
+
+# ---------------------------------------------------------------------------
+# quest opcodes (column order from the SDK loader PQuestLoader.ech, arity
+# checked by tw1_qtx). Field spec: (key, kind[, default]).
+# kinds: npc, object, location, tile, int, amount, party, guild, enemy,
+#        text, marker:<editor marker kind>
+MARKER_KINDS = ('Q_Solve', 'Q_Action_Teleport', 'Q_Action_Walk',
+                'Q_Action_Create_Enemy', 'Q_Action_Create_Object',
+                'Q_Action_Clear_Area', 'Q_Action_Kill_Area', 'Gate')
+_GO = [('marker', 'marker:Q_Solve'), ('tile', 'tile'), ('range', 'int', 8)]
+FC_SPECS = {
+    'KILL': [('npc', 'npc')],
+    'TALK': [('npc', 'npc')],
+    'BRING_OBJECT': [('object', 'object'), ('count', 'int', 1)],
+    'BRING_GOLD': [('gold', 'int', 100)],
+    'GO': _GO,
+    'CLEAR_AREA': [('marker', 'marker:Q_Solve'), ('tile', 'tile'),
+                   ('range', 'int', 50), ('party', 'party', 20)],
+    'FIND_LOCATION': [('location', 'location')],
+    'FIND_OBJECT': [('object', 'object')],
+    'DELIVER_OBJECT': [('object', 'object'), ('count', 'int', 1),
+                       ('marker', 'marker:Q_Solve'), ('tile', 'tile'),
+                       ('range', 'int', 8)],
+    'FIND_KILL': [('npc', 'npc')],
+    'FIND_TALK': [('npc', 'npc')],
+    'GO_AWAY': _GO,
+    'FIND_PLACE': _GO,
+}
+FC_MAIN = ('KILL', 'TALK', 'BRING_OBJECT', 'BRING_GOLD', 'GO', 'CLEAR_AREA',
+           'FIND_LOCATION', 'FIND_OBJECT', 'DELIVER_OBJECT')
+FC_MORE = ('FIND_KILL', 'FIND_TALK', 'GO_AWAY', 'FIND_PLACE')
+_AREA = lambda kind: [('marker', 'marker:' + kind), ('tile', 'tile'),  # noqa
+                      ('range', 'int', 50), ('party', 'party', 20)]
+ACTION_SPECS = {
+    ('REWARD', 'GLD'): [('amount', 'amount', '500')],
+    ('REWARD', 'EXP'): [('amount', 'amount', '250')],
+    ('REWARD', 'ITM'): [('count', 'int', 1), ('object', 'object')],
+    ('REWARD', 'REP'): [('count', 'int', 1), ('guild', 'guild', '202')],
+    ('ACTION', 'NPC_CREATE'): [('npc', 'npc')],
+    ('ACTION', 'NPC_REMOVE'): [('npc', 'npc')],
+    ('ACTION', 'NPC_KILL'): [('npc', 'npc')],
+    ('ACTION', 'NPC_TELEPORT'): [('npc', 'npc'),
+                                 ('marker', 'marker:Q_Action_Teleport'),
+                                 ('tile', 'tile'), ('angle', 'int', 0)],
+    ('ACTION', 'NPC_GO'): [('npc', 'npc'), ('marker', 'marker:Q_Action_Walk')],
+    ('ACTION', 'HERO_TELEPORT_DELAYED'): [
+        ('delay', 'int', 1), ('marker', 'marker:Q_Action_Teleport'),
+        ('tile', 'tile'), ('angle', 'int', 0)],
+    ('ACTION', 'ENEMY_CREATE'): [
+        ('enemy', 'enemy', 'ENEMY_GOBLIN'), ('count', 'int', 3),
+        ('level', 'int', 1), ('marker', 'marker:Q_Action_Create_Enemy'),
+        ('tile', 'tile'), ('party', 'party', 20)],
+    ('ACTION', 'OBJECT_CREATE'): [('object', 'object'),
+                                  ('marker', 'marker:Q_Action_Create_Object'),
+                                  ('tile', 'tile')],
+    ('ACTION', 'OPEN'): [('marker', 'marker:Gate'), ('tile', 'tile')],
+    ('ACTION', 'CLOSE'): [('marker', 'marker:Gate'), ('tile', 'tile')],
+    ('ACTION', 'SHOW_LOCATION'): [('location', 'location')],
+    ('ACTION', 'CREATE_EFFECT'): [('effect', 'text', 'EFFECT_17'),
+                                  ('x', 'int', 0), ('y', 'int', 0),
+                                  ('tile', 'tile')],
+    ('REWARD', 'SKL'): [('count', 'int', 1)],
+    ('ACTION', 'NPC_CHANGE_PARTY'): [('npc', 'npc'), ('party', 'party', 20)],
+    ('ACTION', 'CLEAR_AREA'): _AREA('Q_Action_Clear_Area'),
+    ('ACTION', 'KILL_AREA'): _AREA('Q_Action_Kill_Area'),
+    ('ACTION', 'PLAY_CUTSCENE'): [('number', 'int', 1)],
+    ('ACTION', 'SET_WORLD_STATE'): [('number', 'int', 1)],
+}
+ACTION_MAIN = [('REWARD', 'GLD'), ('REWARD', 'EXP'), ('REWARD', 'ITM'),
+               ('REWARD', 'REP'), ('ACTION', 'NPC_CREATE'),
+               ('ACTION', 'NPC_REMOVE'), ('ACTION', 'NPC_KILL'),
+               ('ACTION', 'NPC_TELEPORT'), ('ACTION', 'NPC_GO'),
+               ('ACTION', 'HERO_TELEPORT_DELAYED'), ('ACTION', 'ENEMY_CREATE'),
+               ('ACTION', 'OBJECT_CREATE'), ('ACTION', 'OPEN'),
+               ('ACTION', 'CLOSE'), ('ACTION', 'SHOW_LOCATION'),
+               ('ACTION', 'CREATE_EFFECT')]
+ACTION_MORE = [k for k in ACTION_SPECS if k not in ACTION_MAIN]
+REWARD_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'HEAR')
+ACTION_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'ENABLE', 'HEAR', 'FAIL', 'FIGHT')
+AOQ_EVENTS = ('TAKE', 'SOLVE', 'CLOSE')
+# ParseEnemyType in PQuestLoader.ech (unknown names fall back to goblins)
+ENEMY_TYPES = (
+    'ENEMY_ANIMAL', 'ENEMY_BANDIT', 'ENEMY_DAEMON', 'ENEMY_GOBLIN',
+    'ENEMY_GOBLIN2', 'ENEMY_GOLEM_FLESH', 'ENEMY_GOLEM_WOOD',
+    'ENEMY_GOLEM_STEEL', 'ENEMY_GOLEM_STONE', 'ENEMY_INSECT',
+    'ENEMY_LIZARDMAN', 'ENEMY_MANTIS', 'ENEMY_ORC', 'ENEMY_ORC_2',
+    'ENEMY_REPTILE', 'ENEMY_YETI', 'ENEMY_SPIDER', 'ENEMY_UNDEAD',
+    'ENEMY_UNDEAD_ANIMAL', 'ENEMY_ZOMBIE', 'ENEMY_SKELETON', 'ENEMY_MINION',
+    'ENEMY_SEA_GUY', 'ENEMY_INSECT_GUY', 'ENEMY_SNOW_ORC', 'ENEMY_JACKAL',
+    'ENEMY_DRAGON', 'ENEMY_WHITE_DRAGON', 'ENEMY_STONE_DRAGON',
+    'ENEMY_LAVA_DRAGON', 'ENEMY_SNOW_ANIMAL', 'ENEMY_NECRO',
+    'ENEMY_HELLMASTER', 'ENEMY_DEAD_KNIGHT', 'ENEMY_DWARF',
+    'ENEMY_BRO_WARRIOR', 'ENEMY_SOLDIER_04', 'ENEMY_OGR', 'ENEMY_WOLF',
+    'GHOST_DWARF', 'ENEMY_KHAN', 'ENEMY_DRAGONFLY2', 'ENEMY_DEADMEAT',
+    'ENEMY_SKULL')
 
 
 class ModelError(Exception):
@@ -74,15 +172,14 @@ class Quest:
         self.enable_level = 1
         self.speakers = []               # [{'id','name','lector','tile','new'}]
         self.graph = new_graph()
-        self.task = None                 # FC block, dict or None
-        self.actions = []                # actions without dialog (6.2)
-        self.conditions = []             # entry conditions (6.3)
+        self.actions = []                # actions without dialog (6.2):
+        #   [{'kind','verb','args','when'}]; docked ones live in the graph
         self.retail = False              # True = edited retail quest
         self.extra = {}                  # unknown keys, preserved
 
     _FIELDS = ('title', 'group', 'journal', 'giver', 'giver_type',
                'map_sign', 'offered', 'enable_level', 'speakers', 'graph',
-               'task', 'actions', 'conditions', 'retail')
+               'actions', 'retail')
 
     def to_dict(self):
         d = {'id': self.id}
@@ -98,13 +195,15 @@ class Quest:
             if f in d:
                 setattr(q, f, d[f])
         q.extra = {k: v for k, v in d.items()
-                   if k != 'id' and k not in cls._FIELDS and k != 'tabs'}
+                   if k != 'id' and k not in cls._FIELDS
+                   and k not in ('tabs', 'task', 'conditions')}
         if 'tabs' in d and 'graph' not in d:
             q.graph = _graph_from_tabs(d['tabs'])
         q.graph.setdefault('nodes', {})
         q.graph.setdefault('edges', [])
         for st in DEFAULT_STATES:
             ensure_entry(q.graph, st)
+        ensure_task(q.graph)
         for n in q.graph['nodes'].values():
             if n.get('type') in ('npc', 'player'):
                 n.setdefault('lines', [new_line(n.get('state'))])
@@ -116,9 +215,21 @@ class Quest:
     # -- helpers ------------------------------------------------------------
 
     def node_count(self):
-        """Nodes placed by the user (entries do not count)."""
+        """Dialog and comment nodes placed by the user."""
         return sum(1 for n in self.graph['nodes'].values()
-                   if n.get('type') != 'entry')
+                   if n.get('type') in ('npc', 'player', 'comment'))
+
+    def task(self):
+        return ensure_task(self.graph)
+
+    def conditions_list(self):
+        return [n for n in self.graph['nodes'].values()
+                if n.get('type') == 'condition']
+
+    def graph_actions(self):
+        """[(node id, action node)] of actions docked to dialog nodes."""
+        return [(nid, n) for nid, n in self.graph['nodes'].items()
+                if n.get('type') == 'action']
 
     def states_present(self):
         """Default levels first, then extra levels that have nodes."""
@@ -308,7 +419,150 @@ def new_graph(states=DEFAULT_STATES):
     g = {'nodes': {}, 'edges': []}
     for st in states:
         ensure_entry(g, st)
+    ensure_task(g)
     return g
+
+
+def ensure_task(graph):
+    """The quest's single task block (FC), left of the 'solved' entry."""
+    if TASK_ID not in graph['nodes']:
+        graph['nodes'][TASK_ID] = {'type': 'task', 'fc': None, 'args': {},
+                                   'x': 0, 'y': 0}
+    restack(graph)
+    return graph['nodes'][TASK_ID]
+
+
+def restack(graph, parent=None):
+    """Place docked nodes relative to their parent: actions stacked above a
+    dialog node, conditions below the offer entry, the task block left of
+    the 'solved' entry."""
+    nodes = graph['nodes']
+    groups = {}
+    for nid, n in nodes.items():
+        if n.get('type') in ('action', 'condition') and n.get('attached_to'):
+            if parent is None or n['attached_to'] == parent:
+                groups.setdefault(n['attached_to'], []).append(nid)
+    for pid, ids in groups.items():
+        p = nodes.get(pid)
+        if not p:
+            continue
+        ids.sort(key=lambda i: nodes[i].get('slot', 0))
+        pw, ph = node_size(p)
+        for k, nid in enumerate(ids):
+            n = nodes[nid]
+            n['slot'] = k
+            if n['type'] == 'action':
+                n['x'] = p['x']
+                n['y'] = p['y'] - (k + 1) * (ACTION_H + 4) - 4
+            else:
+                n['x'] = p['x']
+                n['y'] = p['y'] + ph + 10 + k * (ACTION_H + 4)
+    task = nodes.get(TASK_ID)
+    ent = nodes.get(entry_id('solved'))
+    if task and ent and parent in (None, entry_id('solved')):
+        task['x'] = ent['x'] - TASK_W - 40
+        task['y'] = ent['y'] - (TASK_H - ENTRY_H) / 2
+
+
+def is_docked(node):
+    return node.get('type') in ('action', 'condition', 'task')
+
+
+def make_action(kind, verb, attached_to=None):
+    spec = ACTION_SPECS[(kind, verb)]
+    return {'type': 'action', 'kind': kind, 'verb': verb,
+            'args': {f[0]: (f[2] if len(f) > 2 else '') for f in spec},
+            'when': None, 'attached_to': attached_to, 'x': 0, 'y': 0,
+            'slot': 999}
+
+
+def make_condition(cond='after', **values):
+    n = {'type': 'condition', 'cond': cond,
+         'attached_to': entry_id('first'), 'x': 0, 'y': 0, 'slot': 999,
+         'quest': 4, 'event': 'TAKE', 'level': 1, 'guild': '(null)',
+         'min_rep': 0}
+    n.update(values)
+    return n
+
+
+def add_default_conditions(quest):
+    """New quests: offered after taking Q_4, level 1 (plan 6.3)."""
+    g = quest.graph
+    add_node(g, make_condition('after', quest=4, event='TAKE'))
+    add_node(g, make_condition('level', level=1))
+    restack(g)
+
+
+def set_task(graph, fc):
+    task = ensure_task(graph)
+    if task.get('fc') == fc:
+        return task
+    old = task.get('args') or {}
+    task['fc'] = fc
+    task['args'] = {}
+    if fc:
+        for f in FC_SPECS[fc]:
+            task['args'][f[0]] = old.get(f[0], f[2] if len(f) > 2 else '')
+    return task
+
+
+def set_action_verb(node, kind, verb):
+    old = node.get('args') or {}
+    node['kind'], node['verb'] = kind, verb
+    node['args'] = {f[0]: old.get(f[0], f[2] if len(f) > 2 else '')
+                    for f in ACTION_SPECS[(kind, verb)]}
+
+
+def action_when(graph, node):
+    """Event of an action: docked ones derive it from the parent's level
+    (plan 6.2 table), free ones carry it. None = not allowed there."""
+    pid = node.get('attached_to')
+    if not pid:
+        return node.get('when')
+    parent = graph['nodes'].get(pid)
+    if not parent:
+        return None
+    st = parent.get('state')
+    if st == 'first':
+        return 'TAKE'
+    if st == 'solved':
+        return 'SOLVE' if node.get('when') == 'SOLVE' else 'CLOSE'
+    return None
+
+
+def op_tokens(spec, values):
+    """qtx argument tokens for a field spec; raises ModelError on empties."""
+    out = []
+    for f in spec:
+        key, kind = f[0], f[1]
+        v = values.get(key, '')
+        v = '' if v is None else str(v).strip()
+        if kind == 'tile':
+            out.append(v.upper() if v else '(null)')
+            continue
+        if v == '':
+            raise ModelError(f'field {key} is empty')
+        if kind == 'npc':
+            out.append(v if v.startswith('NPC_') else f'NPC_{v}')
+        elif kind in ('int', 'party') or kind.startswith('marker:'):
+            try:
+                out.append(str(int(v)))
+            except ValueError:
+                raise ModelError(f'field {key} must be a number: {v!r}')
+        elif kind == 'amount':
+            if v.upper() in ('SMALL', 'MEDIUM', 'HIGH'):
+                out.append(v.upper())
+            else:
+                try:
+                    out.append(str(int(v)))
+                except ValueError:
+                    raise ModelError(f'field {key}: number or SMALL/MEDIUM/'
+                                     f'HIGH, not {v!r}')
+        else:
+            if ' ' in v:
+                raise ModelError(f'field {key} must not contain spaces')
+            out.append(v)
+    return out
 
 
 def ensure_entry(graph, state):
@@ -348,6 +602,10 @@ def node_size(node):
     t = node.get('type')
     if t == 'entry':
         return ENTRY_W, ENTRY_H
+    if t in ('action', 'condition'):
+        return NODE_W, ACTION_H
+    if t == 'task':
+        return TASK_W, TASK_H
     if t == 'comment':
         return (max(COMMENT_MIN_W, node.get('w', 200)),
                 max(COMMENT_MIN_H, node.get('h', 80)))
@@ -360,7 +618,7 @@ def out_port_count(node):
     t = node.get('type')
     if t == 'entry':
         return 1
-    if t == 'comment':
+    if t in ('comment', 'action', 'condition', 'task'):
         return 0
     return max(1, len(node.get('lines') or []))
 
@@ -372,9 +630,18 @@ def add_node(graph, node, nid=None):
 
 
 def remove_nodes(graph, ids):
-    ids = {i for i in ids if not is_entry(i)}
+    ids = {i for i in ids if not is_entry(i) and i != TASK_ID}
+    # docked actions/conditions go with their parent
+    ids |= {nid for nid, n in graph['nodes'].items()
+            if n.get('type') in ('action', 'condition')
+            and n.get('attached_to') in ids}
+    parents = {graph['nodes'][i].get('attached_to') for i in ids
+               if i in graph['nodes']}
     for i in ids:
         graph['nodes'].pop(i, None)
+    for p in parents:
+        if p in graph['nodes']:
+            restack(graph, p)
     graph['edges'] = [e for e in graph['edges']
                       if e[0] not in ids and e[2] not in ids]
     for n in graph['nodes'].values():
@@ -387,7 +654,9 @@ def can_connect(graph, frm, port, to):
     a, b = graph['nodes'].get(frm), graph['nodes'].get(to)
     if not a or not b or frm == to:
         return False
-    if a['type'] == 'comment' or b['type'] in ('comment', 'entry'):
+    if b['type'] not in ('npc', 'player') or a['type'] not in ('npc',
+                                                              'player',
+                                                              'entry'):
         return False
     return 0 <= port < out_port_count(a)
 
@@ -449,7 +718,16 @@ def remove_line(graph, nid, index):
 
 def copy_nodes(graph, ids):
     """Clipboard payload: the nodes (deep copy) and the edges between them."""
-    ids = {i for i in ids if not is_entry(i) and i in graph['nodes']}
+    ids = {i for i in ids if not is_entry(i) and i != TASK_ID
+           and i in graph['nodes']}
+    # copying a dialog node takes its actions along; a lone action or
+    # condition cannot live without its parent and is skipped
+    ids |= {nid for nid, n in graph['nodes'].items()
+            if n.get('type') == 'action' and n.get('attached_to') in ids}
+    ids = {i for i in ids if not (graph['nodes'][i].get('type') in
+                                  ('action', 'condition')
+                                  and graph['nodes'][i].get('attached_to')
+                                  not in ids)}
     nodes = {i: copy.deepcopy(graph['nodes'][i]) for i in ids}
     for n in nodes.values():
         if n.get('attached_to') not in ids:
@@ -472,6 +750,7 @@ def paste_nodes(graph, clip, dx=30, dy=30):
             n['attached_to'] = mapping[n['attached_to']]
     for frm, port, to in clip['edges']:
         connect(graph, mapping[frm], port, mapping[to])
+    restack(graph)
     return list(mapping.values())
 
 
@@ -525,6 +804,14 @@ def auto_layout(graph, gap_x=80, gap_y=30, x0=40, y0=40):
     for lv in sorted(widths):
         col_x[lv] = x
         x += widths[lv] + gap_x
+    # docked nodes need room: actions stack above, conditions below
+    above, below = {}, {}
+    for n in nodes.values():
+        pid = n.get('attached_to')
+        if n.get('type') == 'action' and pid:
+            above[pid] = above.get(pid, 0) + ACTION_H + 4
+        elif n.get('type') == 'condition' and pid:
+            below[pid] = below.get(pid, 10) + ACTION_H + 4
     col_next_y, parent_y, band_y = {}, {}, y0
     for nid in order:
         if is_entry(nid):
@@ -534,18 +821,20 @@ def auto_layout(graph, gap_x=80, gap_y=30, x0=40, y0=40):
         lv = level[nid]
         w, h = node_size(nodes[nid])
         y = max(col_next_y.get(lv, band_y), parent_y.get(nid, band_y))
+        y += above.get(nid, 0)
         nodes[nid]['x'] = col_x[lv]
         nodes[nid]['y'] = y
-        col_next_y[lv] = y + h + gap_y
+        col_next_y[lv] = y + h + below.get(nid, 0) + gap_y
         for s in successors(graph, nid):
             parent_y.setdefault(s, y)
     max_y = max([band_y] + list(col_next_y.values()))
     x = x0
     for nid, n in nodes.items():
-        if nid in seen or n.get('type') == 'comment':
+        if nid in seen or n.get('type') == 'comment' or is_docked(n):
             continue
         n['x'], n['y'] = x, max_y + gap_y
         x += node_size(n)[0] + gap_x
+    restack(graph)
     return order
 
 

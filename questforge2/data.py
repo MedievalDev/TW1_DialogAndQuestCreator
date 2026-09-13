@@ -23,7 +23,7 @@ import tw1_lan
 import tw1_qtx  # noqa: F401  (index_ids used by later milestones)
 import tw1_wd
 
-INDEX_FORMAT = 2      # bump whenever the index content changes
+INDEX_FORMAT = 3      # bump whenever the index content changes
 MIN_QUEST_ID = 381
 MAX_QUEST_ID = 399          # hard engine cap in single-player, see SKILL.md
 REG_GAME = r'SOFTWARE\Reality Pump\TwoWorlds'
@@ -33,8 +33,8 @@ INNER_LAN = 'Language\\TwoWorldsQuests.lan'
 STEAM_SUBDIR = r'steamapps\common\Two Worlds - Epic Edition'
 
 # Which marker kind each opcode reads and where marker/tile sit in its
-# argument list (SKILL.md, "Editor markers"). ENEMY_CREATE column order is
-# UNVERIFIED (same note as in tw1_qtx._ACTION).
+# argument list, verified against the SDK loader (PQuestLoader.ech). For FC
+# the index counts after the subtype, for ACTION after subtype and time.
 #   kind, marker arg index, tile arg index (None = no tile in the line)
 _FC_MARKERS = {
     'GO': ('Q_Solve', 0, 1), 'GO_AWAY': ('Q_Solve', 0, 1),
@@ -45,9 +45,11 @@ _ACTION_MARKERS = {
     'NPC_TELEPORT': ('Q_Action_Teleport', 1, 2),
     'HERO_TELEPORT_DELAYED': ('Q_Action_Teleport', 1, 2),
     'NPC_GO': ('Q_Action_Walk', 1, None),
-    'ENEMY_CREATE': ('Q_Action_Create_Enemy', 1, 4),
-    'OBJECT_CREATE': ('Q_Action_Create_Object', 2, None),
-    'CLEAR_AREA': ('Area', 0, 1), 'KILL_AREA': ('Area', 0, 1),
+    'ENEMY_CREATE': ('Q_Action_Create_Enemy', 3, 4),
+    'OBJECT_CREATE': ('Q_Action_Create_Object', 1, 2),
+    'CLEAR_AREA': ('Q_Action_Clear_Area', 0, 1),
+    'KILL_AREA': ('Q_Action_Kill_Area', 0, 1),
+    'OPEN': ('Gate', 0, 1), 'CLOSE': ('Gate', 0, 1),
 }
 
 
@@ -312,7 +314,9 @@ def _index_qtx(qtx_text, tr, idx, source, retail_blocks):
             lector = _int(p[6], None)
             idx['npcs'][key] = {
                 'name': tr.get(f'translateNPC_{nid}', f'NPC_{nid}'),
-                'tile': p[4], 'lector': lector, 'source': source}
+                'tile': p[4], 'lector': lector, 'source': source,
+                'marker': _int(p[3], None), 'angle': _int(p[5], 0),
+                'record': ln}
             idx['tiles'].add(p[4])
             if lector is not None:
                 idx['lectors'].setdefault(str(lector), []).append(nid)
@@ -432,6 +436,8 @@ def index_from_parts(qtx_text, lan_bytes, extra_lans=(), mods=(),
             _index_qtx(mqtx, {**tr, **mtr}, idx, name, retail_blocks)
         for tr2, rest2 in parsed:
             _index_lan({**tr, **tr2}, rest2, idx, name)
+    idx['object_names'] = {o: tr.get('translate' + o, '')
+                           for o in idx['objects']}
     idx['objects'] = sorted(idx['objects'])
     idx['tiles'] = sorted(idx['tiles'], key=_tile_key)
     for lst in idx['markers'].values():
@@ -578,6 +584,7 @@ class Index:
         self.groups = d['groups']
         self.locations = d['locations']
         self.objects = d['objects']
+        self.object_names = d.get('object_names', {})
         self.tiles = d['tiles']
         self.markers = d['markers']
         self.cues = d['cues']

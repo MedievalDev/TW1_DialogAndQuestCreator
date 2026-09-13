@@ -2,7 +2,8 @@
 
 Stand: 2026-09-13, **Plan freigegeben (Marco)**. Umsetzung laeuft auf Branch
 `questforge2` im Clone `C:\Users\marco\Desktop\TW1QuestCreator`.
-**M1 bis M4 fertig** (2026-09-13, siehe Abschnitt 11 und 12).
+**M1 bis M4 fertig, M5 Code fertig, Spieltest offen** (2026-09-13, siehe
+Abschnitt 11 und 12).
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -712,7 +713,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 | M2 | Canvas-Editor: Nodes, Ports, Kanten, Drag, Auswahl, Pan/Zoom, Undo, Kommentar-Node | 300 Nodes fluessig ziehbar; Entscheidung Tkinter vs Qt wird hier final. **Fertig 2026-09-13:** `graph.py`; bei 300 Nodes (4449 Canvas-Items) ein Node ziehen 1,7 ms/Frame, alle 300 zusammen 13 ms/Frame, Zoomstufe wechseln 92 ms, Undo 107 ms. **Tkinter bleibt (final).** 21 Tests gruen |
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen. **Fertig 2026-09-13:** Pruefung in 6.3 eingetragen; `palette.py` (Sprecher-Box mit Dialog Vorhandener/Neuer NPC, Ziehen und Doppelklick), `inspector.py` (Formulare je Node-Typ, Quest-Panel, Cue-Suche), Modell auf einen Graphen pro Quest umgestellt; Beispiel-Dialog mit Angebot/Frage/Annahme, Laeuft, Erfuellt gebaut, gespeichert, wieder geoeffnet, byte-gleich; 27 Tests gruen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich. **Fertig 2026-09-13:** `export.py` (`tree_to_graph`, `graph_to_tree`, `preview_text`), "Quest > Dialog aus dem Spiel laden", "Vorschau als Text", "Quest wechseln". Round-Trip byte-gleich fuer **alle 378 Retail-Quest-Baeume** der Basis-`.lan` sowie alle 457 Baeume aus Yamalin.wd und Content02_Lan.wd, auch nach Speichern und Laden des Projekts; Import des groessten Baums (DQ_359, 74 Zeilen) 1 ms. 31 Tests gruen |
-| M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet) |
+| M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet). **Code fertig 2026-09-13, Spieltest steht aus:** Aufgabe-Node, angedockte Aktionen und Bedingungen, Aktionen ohne Dialog, `mappicker.py`, `.qtx`-Block und AOQ-Einfuegen, volle `.lan` plus `ZZ_`-Overlay, Packen mit Verifikation, Registry. Einmischen in eine Kopie von Yamalin.wd: 2,9 s, alle 47 unberuehrten Eintraege samt `.lnd`/`.par`-Metadaten identisch. Testprojekte fuer 6.3 Schritt 4a/4b in `testprojekte/`. 38 Tests gruen |
 | M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen |
 | M7 | Validierung komplett | Alle Regeln aus Abschnitt 8 mit Sprung zum Node |
 | M8 | Rundgang und Tutorial | Tutorial fuehrt ohne Vorwissen zur laufenden Test-Quest |
@@ -874,6 +875,69 @@ Entschieden am 2026-09-13 (Umsetzung M4):
     `0.QS.AE`, `0.QC`, `0.QF`, `0.LR`, `0.X` (neutral). Nur Namenskonvention,
     das Spiel liest die Schluessel nicht aus.
 
+Entschieden am 2026-09-13 (Umsetzung M5):
+
+31. Spalten jedes Opcodes stammen aus dem SDK-Loader
+    (`PQuestLoader.ech`, `ParseFC`, `ParseACT`, `ParseRWD`). Dabei
+    korrigiert: ENEMY_CREATE hat die Marker-Nummer in Spalte 4
+    (`<typ> <anzahl> <level> <marker> <kachel> <partei>`), OBJECT_CREATE in
+    Spalte 2 (`<objekt> <marker> <kachel>`); `INDEX_FORMAT` 3. Angeboten
+    werden nur Opcodes, die `tw1_qtx` validiert. Der Loader kennt zusaetzlich
+    `NPC_DIALOG`, `OBJECT_ADD`, `OBJECT_REMOVE`, `CHANGE_RELATIONS`,
+    `ACTIVATE_LEVEL`, `KILL_AREA_DELAYED`, `FC OPEN` und `REWARD RND`; sie
+    fehlen in `tw1_qtx` und bleiben draussen, bis besprochen ist, ob
+    `tw1_qtx` erweitert werden darf **[PRUEFEN]**.
+32. Aufgabe = fester Node `task` links neben dem Einstieg Erfuellt (nicht
+    loeschbar, nicht verschiebbar). Aktionen = Nodes, die an einen
+    Dialog-Node andocken und darueber gestapelt werden (bewegen sich mit,
+    werden mit geloescht und kopiert). Bedingungen = Nodes unter dem
+    Einstieg Angebot (`after`, `level`, `guild`); Kopfzeile `enableLevel`,
+    `guild`, `minRep` kommen aus ihnen. Aktionen ohne Dialog stehen in
+    `quest.actions` mit eigenem Zeitpunkt (Quest-Panel). Neue Quests
+    bekommen "nach Q_4 angenommen" und "ab Level 1"; der erste NPC-Sprecher
+    wird Questgeber.
+33. AOQ-Export: vor dem Einfuegen werden alle
+    `AOQ PROMOTE|TAKE <ereignis> Q_<id>`-Zeilen im ganzen `.qtx` entfernt,
+    dann je Bedingung "Nach Quest" eine Zeile in den Block der
+    Vorgaengerquest gesetzt (hinter die letzte AOQ, sonst hinter FC oder
+    GIVER). PROMOTE bei "wird angeboten", TAKE bei "startet automatisch".
+    Wiederholter Export erzeugt keine Duplikate.
+34. Neue NPCs (`new=True`): der Export setzt einen NPC-Block
+    (`NPC ...`, `OBJECTS True`, `END`) vor den Questblock. Grundlage ist
+    der Record einer Vorlage (Feld "Aussehen wie NPC", sonst der NPC der
+    gewaehlten Stimme, sonst Tago); ersetzt werden ID, Q_Giver-Marker
+    (Spalte 3, Yamalin nutzt dort abweichende Nummern wie `NPC_500 500 10`),
+    Kachel, Blickrichtung und Lector. Der Anzeigename geht nach
+    `translateNPC_<id>`. **[PRUEFEN]** Partei, Gilde, `SMALL`, `True/False`,
+    Aussehen-String und letzte Zahl werden unveraendert von der Vorlage
+    uebernommen.
+35. Export-Ablauf: Basis sind `.qtx` und `.lan` aus dem Zielarchiv, sonst
+    Update16 und Language.wd. Drei Dateien: volle `.qtx`, volle Master-`.lan`,
+    `Language\ZZ_QF_<Projekt>.lan`. Packen mit wdio (entpacken ohne
+    GUID-Datei, wie das alte Tool), danach Vergleich aller Dateien byte-genau
+    und aller unberuehrten Eintraege inklusive Flags, Name, Klassen-ID und
+    GUID-Vorhandensein; erst dann ersetzt `.new` das Archiv. Einmalige
+    Sicherung `<Archiv>.qf2backup` vor dem ersten Export. Registry-DWORD = 1.
+    `wd_metadaten.py` wird nicht gebraucht: `.qtx` und `.lan` tragen keine
+    Verzeichnis-Metadaten, und unberuehrte Eintraege behalten ihren
+    Kopfsatz-Strom.
+36. Vor dem Export: Pflichtfehler blockieren (Liste mit Sprung zum Node),
+    Warnungen fragen nach; laufendes Spiel (`TwoWorlds.exe`,
+    `TwoWorlds_RADEON.exe`) blockiert; andere aktive Mods, die ebenfalls die
+    volle `.qtx` oder Master-`.lan` liefern, werden mit Empfehlung gemeldet
+    (README 3.1). Bei Marco liefert Yamalin.wd beides, deshalb ist fuer
+    Tests Yamalin.wd das richtige Ziel.
+37. Hintergrund-Threads (Index-Aufbau, Export) melden ueber `queue.Queue`,
+    der Hauptthread holt ab. `root.after` aus einem Nebenthread ist nicht
+    threadsicher und scheiterte ohne laufende Hauptschleife.
+38. Spieltest-Paket (6.3 Schritt 4a/4b): `testprojekte/Test_4a_Ablehnen` und
+    `Test_4b_TakeLetzteZeile`, beide Q_386 (in Marcos Yamalin die einzige
+    freie ID), Questgeber Tago, Bedingung "nach Q_385 abgeschlossen" (daran
+    haengt in Yamalin nichts; "nach Q_4 angenommen" wuerde gleichzeitig mit
+    Q_385 freigeschaltet), Aufgabe 10 Gold bringen, Belohnung 1234 Gold als
+    sichtbarer Beweis, Zielarchiv Yamalin.wd. Alle Dialogzeilen tragen
+    `[TEST 4a]`/`[TEST 4b]` als Ladungsmarker.
+
 Offen:
 
 - Ob `quest_creator_gui.py` nach dem ersten erfolgreichen Spieltest aus
@@ -883,7 +947,9 @@ Offen:
   Annahme/Ablehnen (5.2) **geklaert, Hypothese A**, Spieltest als
   Bestaetigung. Kanten ueber Tab-Grenzen (5.1) **geklaert, erlaubt**.
   Offen: `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4), Startzeilen-Regel der
-  Engine (6.3), `ACTION NPC_DIALOG` (6.3).
+  Engine (6.3), `ACTION NPC_DIALOG` (6.3), NPC-Record-Spalten neuer NPCs
+  (12.34), Loader-Opcodes ausserhalb `tw1_qtx` (12.31).
+- Spieltest nach M5 (Marco): Testprojekte 4a und 4b (12.38).
 
 ---
 

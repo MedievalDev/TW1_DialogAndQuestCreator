@@ -23,7 +23,8 @@ END
 QUEST Q_385 1 105 (null) 0 True
   GIVER ACTIVE NPC_3 BACK_TO_GIVER_MAP_SIGN NONE
   FC CLEAR_AREA 385 E1 50 20
-  ACTION ENEMY_CREATE ENABLE ENEMY_GOBLIN2 385 1 1 E1 20
+  ACTION ENEMY_CREATE ENABLE ENEMY_GOBLIN2 3 1 385 E1 20
+  ACTION OBJECT_CREATE ENABLE QITEM_040 7 F2
   ACTION NPC_TELEPORT SOLVE NPC_5 7 F2 192
   REWARD GLD CLOSE 500
   REWARD ITM CLOSE 1 QITEM_040
@@ -78,6 +79,9 @@ class IndexBuild(unittest.TestCase):
         self.assertEqual(self.idx.markers['Q_Solve|E1'], [385])
         self.assertEqual(self.idx.markers['Q_Action_Teleport|F2'], [7])
         self.assertEqual(self.idx.markers['Q_Action_Create_Enemy|E1'], [385])
+        self.assertEqual(self.idx.markers['Q_Action_Create_Object|F2'], [7])
+        self.assertEqual(self.idx.npc(3)['marker'], 3)
+        self.assertTrue(self.idx.npc(3)['record'].startswith('NPC NPC_3 3 3 F5'))
 
     def test_cues(self):
         self.assertEqual(self.idx.cues['CUE_0004_0001'],

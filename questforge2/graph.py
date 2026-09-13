@@ -48,6 +48,9 @@ class GraphView(tk.Canvas):
         self.on_open_node = lambda nid: None
         self.fill_add_menu = None          # (menu, wx, wy) -> None
         self.node_style = lambda node: ('', theme.SPEAKER_COLORS[0])
+        # (title, summary, problem) of an action / condition / task node
+        self.docked_text = lambda node: ('', '', False)
+        self.fill_docked_menu = None       # (menu, kind, nid) -> None
         self.last_frame_ms = 0.0
         self._drag = None
         self._space = False
@@ -224,7 +227,8 @@ class GraphView(tk.Canvas):
     def select_all(self):
         if self.graph:
             self.select([i for i, n in self.graph['nodes'].items()
-                         if not model.is_entry(i) and not self._dimmed(n)])
+                         if not model.is_entry(i) and not model.is_docked(n)
+                         and not self._dimmed(n)])
 
     def delete_selection(self):
         if not self.graph:
@@ -238,10 +242,20 @@ class GraphView(tk.Canvas):
             self.selected_edge = None
             self.after_change()
             return
-        ids = {i for i in self.selected if not model.is_entry(i)}
+        ids = {i for i in self.selected if not model.is_entry(i)
+               and i != model.TASK_ID}
         if not ids:
             return
         self.before_change('delete')
+        if any(model.is_docked(self.graph['nodes'][i]) for i in ids) or any(
+                n.get('attached_to') in ids and model.is_docked(n)
+                for n in self.graph['nodes'].values()):
+            model.remove_nodes(self.graph, ids)
+            self.selected = set()
+            self.redraw()
+            self.after_change()
+            self.on_select()
+            return
         touched = {e[0] for e in self.graph['edges'] if e[2] in ids}
         gone = [e for e in self.graph['edges'] if e[0] in ids or e[2] in ids]
         model.remove_nodes(self.graph, ids)
@@ -272,6 +286,35 @@ class GraphView(tk.Canvas):
         self.select([nid])
         return nid
 
+    def add_docked(self, node, select=True):
+        """Add an action or condition node and restack its group."""
+        self.before_change('add')
+        nid = model.add_node(self.graph, node)
+        model.restack(self.graph, node.get('attached_to'))
+        self.redraw_group(node.get('attached_to'))
+        self.after_change()
+        if select:
+            self.select([nid])
+        return nid
+
+    def redraw_group(self, parent):
+        """Redraw a parent and everything docked to it."""
+        if not self.graph:
+            return
+        for nid, n in self.graph['nodes'].items():
+            if nid == parent or n.get('attached_to') == parent:
+                self.draw_node(nid)
+        self._apply_selection()
+
+    def node_at(self, x_root, y_root):
+        """Node id under a screen position (for drops from the palette)."""
+        x, y = x_root - self.winfo_rootx(), y_root - self.winfo_rooty()
+        if not (0 <= x < self.winfo_width() and 0 <= y < self.winfo_height()):
+            return None, None
+        ev = type('E', (), {'x': x, 'y': y})()
+        return self._hit(ev)['nid'], self.c2w(self.canvasx(x),
+                                               self.canvasy(y))
+
     def redraw_node(self, nid):
         """Public: node data changed (text, colour, size, lines)."""
         if not self.graph or nid not in self.graph['nodes']:
@@ -287,6 +330,11 @@ class GraphView(tk.Canvas):
     def _dimmed(self, node):
         if not self.filter_state or node.get('type') == 'comment':
             return False
+        if node.get('type') == 'task':
+            return self.filter_state != 'solved'
+        if node.get('type') in ('action', 'condition'):
+            parent = self.graph['nodes'].get(node.get('attached_to'))
+            return self._dimmed(parent) if parent else False
         return node.get('state') not in (self.filter_state, 'neutral')
 
     def _draw_grid(self):
@@ -352,6 +400,8 @@ class GraphView(tk.Canvas):
             self.create_polygon(x2, y2 - g, x2, y2, x2 - g, y2,
                                 fill=theme.MUT, outline='',
                                 tags=tags + ('grip',))
+        elif kind in ('action', 'condition', 'task'):
+            body = self._draw_docked(nid, node, x1, y1, x2, y2, tags, dim)
         elif kind == 'entry':
             col = theme.STATE_COLORS.get(node.get('state'), theme.ENTRY_COLOR)
             body = self.create_polygon(
@@ -447,6 +497,38 @@ class GraphView(tk.Canvas):
         self._body[nid] = body
         if nid in self.selected:
             self._outline(nid, True)
+
+    def _draw_docked(self, nid, node, x1, y1, x2, y2, tags, dim):
+        z = self.zoom
+        kind = node['type']
+        title, summary, problem = self.docked_text(node)
+        col = {'action': theme.GOLD, 'condition': '#9a8fe0',
+               'task': theme.STATE_COLORS['solved']}[kind]
+        glyph = {'action': '\u26a1', 'condition': '\u25c9',
+                 'task': '\u25ce'}[kind]
+        outline = theme.ERR if problem else col
+        if dim:
+            col = outline = theme.DIM
+        body = self.create_polygon(
+            self._rr(x1, y1, x2, y2, min(10 * z, (y2 - y1) / 2)),
+            smooth=True, fill=theme.PANEL, outline=outline,
+            width=1.5 if kind != 'task' else 2, tags=tags + ('body',))
+        font = self._font('small' if kind != 'task' else 'line')
+        w = (x2 - x1) - 26 * z
+        if kind == 'task':
+            self.create_text(x1 + 10 * z, y1 + 13 * z, anchor='w',
+                             text=glyph + ' ' + title, fill=col,
+                             font=self._font('title'), tags=tags + ('body',))
+            self.create_text(x1 + 10 * z, y1 + 34 * z, anchor='w',
+                             text=self._fit_text(summary, font, w + 10 * z),
+                             fill=theme.DIM if dim else theme.INK, font=font,
+                             tags=tags + ('body',))
+        else:
+            text = self._fit_text(glyph + ' ' + summary, font, w)
+            self.create_text(x1 + 8 * z, (y1 + y2) / 2, anchor='w', text=text,
+                             fill=theme.DIM if dim else theme.INK, font=font,
+                             tags=tags + ('body',))
+        return body
 
     def _draw_port(self, cx, cy, role, nid, tags):
         r = PORT_R * self.zoom
@@ -661,9 +743,12 @@ class GraphView(tk.Canvas):
                       'y': self.canvasy(ev.y), 'rect': None, 'add': ctrl}
 
     def _movable(self, ids):
-        """Selected nodes plus comments attached to them, minus entries."""
-        out = {i for i in ids if not model.is_entry(i)}
-        for nid, n in self.graph['nodes'].items():
+        """Selected nodes plus whatever is attached to them (comments,
+        actions), minus entries and docked nodes selected on their own."""
+        nodes = self.graph['nodes']
+        out = {i for i in ids if not model.is_entry(i)
+               and not model.is_docked(nodes[i])}
+        for nid, n in nodes.items():
             if n.get('attached_to') in out:
                 out.add(nid)
         return out
@@ -874,11 +959,26 @@ class GraphView(tk.Canvas):
             if nid not in self.selected:
                 self.select([nid])
             node = self.graph['nodes'][nid]
+            if model.is_docked(node):
+                if self.fill_docked_menu:
+                    self.fill_docked_menu(menu, node['type'], nid)
+                if node['type'] != 'task':
+                    menu.add_command(label=t('edit.delete'),
+                                     command=self.delete_selection)
+                try:
+                    menu.tk_popup(ev.x_root, ev.y_root)
+                finally:
+                    menu.grab_release()
+                return
             if node['type'] != 'entry':
                 menu.add_command(label=t('edit.duplicate'),
                                  command=self.duplicate_selection)
                 menu.add_command(label=t('edit.delete'),
                                  command=self.delete_selection)
+            if self.fill_docked_menu and (
+                    node['type'] in ('npc', 'player')
+                    or nid == model.entry_id('first')):
+                self.fill_docked_menu(menu, node['type'], nid)
             if node['type'] == 'comment':
                 if node.get('attached_to'):
                     menu.add_command(label=t('ctx.detach'),

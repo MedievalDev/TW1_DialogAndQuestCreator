@@ -134,6 +134,91 @@ class SpeakerBox(ttk.Frame):
         self.app.changed()
 
 
+class ActionBox(ttk.Frame):
+    """Lower part of the left box (plan 6.2): the task block, new actions
+    (drag onto a dialog node or double click for the selected node) and
+    new conditions (always docked at the offer entry)."""
+
+    def __init__(self, parent, app):
+        super().__init__(parent, style='Panel.TFrame')
+        self.app = app
+        self._drag = None
+        ttk.Label(self, text=t('panel.actions'), style='PanelTitle.TLabel'
+                  ).pack(anchor='w', fill='x')
+        self.rows = ttk.Frame(self, style='Panel.TFrame')
+        self.rows.pack(fill='both', expand=True, padx=8)
+        self.task = self._row(t('palette.task'), theme.STATE_COLORS['solved'],
+                              '\u25ce')
+        self.task.bind('<Button-1>', lambda e: self.app.select_task())
+        for w in self.task.winfo_children():
+            w.bind('<Button-1>', lambda e: self.app.select_task())
+        self.action = self._row(t('palette.action'), theme.GOLD, '\u26a1')
+        for w in [self.action] + list(self.action.winfo_children()):
+            w.bind('<ButtonPress-1>', self._press)
+            w.bind('<B1-Motion>', self._motion)
+            w.bind('<ButtonRelease-1>', self._release)
+            w.bind('<Double-Button-1>', lambda e: self._verb_menu(
+                e.x_root, e.y_root, self.app.selected_dialog_node()))
+        self.cond = self._row(t('palette.condition'), '#9a8fe0', '\u25c9')
+        for w in [self.cond] + list(self.cond.winfo_children()):
+            w.bind('<Button-1>', lambda e: self._cond_menu(e.x_root, e.y_root))
+        ttk.Label(self.rows, text=t('palette.hint'), style='PanelMuted.TLabel',
+                  wraplength=210).pack(anchor='w', pady=(8, 0))
+
+    def _row(self, text, color, glyph):
+        f = ttk.Frame(self.rows, style='Panel.TFrame', cursor='hand2')
+        f.pack(fill='x', pady=2)
+        tk.Label(f, text=glyph, fg=color, bg=theme.PANEL,
+                 font=theme.FONT_BOLD).pack(side='left', padx=(0, 6))
+        ttk.Label(f, text=text, style='Panel.TLabel').pack(side='left')
+        return f
+
+    def _press(self, ev):
+        self._drag = {'x': ev.x_root, 'y': ev.y_root, 'active': False}
+
+    def _motion(self, ev):
+        d = self._drag
+        if d and not d['active'] and (abs(ev.x_root - d['x']) > 4
+                                      or abs(ev.y_root - d['y']) > 4):
+            d['active'] = True
+            self.app.root.configure(cursor='hand2')
+
+    def _release(self, ev):
+        d = self._drag
+        self._drag = None
+        if not d or not d['active']:
+            return
+        self.app.root.configure(cursor='')
+        nid, _ = self.app.graph.node_at(ev.x_root, ev.y_root)
+        node = self.app.quest.graph['nodes'].get(nid) if (
+            self.app.quest and nid) else None
+        if node and node.get('type') == 'action':
+            nid = node.get('attached_to')
+            node = self.app.quest.graph['nodes'].get(nid)
+        if node and node.get('type') in ('npc', 'player'):
+            self._verb_menu(ev.x_root, ev.y_root, nid)
+
+    def _verb_menu(self, x, y, parent):
+        if not self.app.quest or not parent:
+            return
+        menu = tk.Menu(self, tearoff=0)
+        self.app.fill_action_menu(menu, parent)
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def _cond_menu(self, x, y):
+        if not self.app.quest:
+            return
+        menu = tk.Menu(self, tearoff=0)
+        self.app.fill_condition_menu(menu)
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+
 class _AskString:
     def __init__(self, parent, title, initial=''):
         self.result = None
@@ -229,9 +314,15 @@ class SpeakerDialog:
         self.v_name = tk.StringVar()
         self.v_tile = tk.StringVar()
         self.v_lector = tk.StringVar(value=t('speaker.lector.none'))
+        self.v_marker = tk.StringVar()
+        self.v_template = tk.StringVar()
         rows = ((t('speaker.id'), ttk.Entry(nw, textvariable=self.v_id)),
                 (t('speaker.name'), ttk.Entry(nw, textvariable=self.v_name)),
-                (t('speaker.tile'), ttk.Entry(nw, textvariable=self.v_tile)))
+                (t('speaker.tile'), ttk.Entry(nw, textvariable=self.v_tile)),
+                (t('insp.speaker.marker'),
+                 ttk.Entry(nw, textvariable=self.v_marker)),
+                (t('insp.speaker.template'),
+                 ttk.Entry(nw, textvariable=self.v_template)))
         for r, (label, w) in enumerate(rows):
             ttk.Label(nw, text=label).grid(row=r, column=0, sticky='w',
                                            pady=3, padx=(0, 8))
@@ -243,16 +334,16 @@ class SpeakerDialog:
                                   if str(i) in idx.npcs)
                 self.lectors.append((t('speaker.lector.of', names=names,
                                        n=lec), int(lec)))
-        ttk.Label(nw, text=t('speaker.lector')).grid(row=3, column=0,
+        ttk.Label(nw, text=t('speaker.lector')).grid(row=5, column=0,
                                                      sticky='w', pady=3)
         cb = ttk.Combobox(nw, textvariable=self.v_lector, state='readonly',
                           values=[l for l, _ in self.lectors])
-        cb.grid(row=3, column=1, sticky='ew', pady=3)
+        cb.grid(row=5, column=1, sticky='ew', pady=3)
         ttk.Label(nw, text=t('speaker.hint'), wraplength=480,
-                  style='Muted.TLabel').grid(row=4, column=0, columnspan=2,
+                  style='Muted.TLabel').grid(row=6, column=0, columnspan=2,
                                              sticky='w', pady=(12, 0))
         self.err = ttk.Label(nw, text='', foreground=theme.ERR, wraplength=480)
-        self.err.grid(row=5, column=0, columnspan=2, sticky='w', pady=(8, 0))
+        self.err.grid(row=7, column=0, columnspan=2, sticky='w', pady=(8, 0))
 
         b = ttk.Frame(self.win)
         b.pack(anchor='e', padx=10, pady=(0, 10))
@@ -297,4 +388,10 @@ class SpeakerDialog:
         lector = dict(self.lectors).get(self.v_lector.get())
         self.result = {'id': nid, 'name': name, 'lector': lector,
                        'tile': self.v_tile.get().strip().upper(), 'new': True}
+        mk = re.fullmatch(r'\d+', self.v_marker.get().strip())
+        if mk:
+            self.result['marker'] = int(mk.group(0))
+        tp = re.fullmatch(r'(?:NPC_)?(\d+)', self.v_template.get().strip())
+        if tp:
+            self.result['template'] = int(tp.group(1))
         self.win.destroy()

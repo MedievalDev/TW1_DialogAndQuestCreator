@@ -9,6 +9,7 @@ from tkinter import ttk
 
 from . import data, model, theme
 from .i18n import t
+from .mappicker import MapPicker
 
 CAMS = ((None, 'cam.default'), (2, 'cam.npc'), (1, 'cam.npc2'),
         (7, 'cam.hero'), (6, 'cam.hero2'))
@@ -50,6 +51,10 @@ class Inspector(ttk.Frame):
 
     # -- dispatch -----------------------------------------------------------
 
+    def show_qaction(self, i):
+        self.current = ('qaction', i)
+        self.refresh()
+
     def show(self, selected):
         q = self.app.quest
         if not q:
@@ -76,6 +81,13 @@ class Inspector(ttk.Frame):
             return
         if cur[0] == 'quest':
             self._quest_form()
+        elif cur[0] == 'qaction':
+            acts = self.app.quest.actions
+            if 0 <= cur[1] < len(acts):
+                self._action_form(None, acts[cur[1]])
+            else:
+                self.current = ('quest',)
+                self._quest_form()
         elif cur[0] == 'multi':
             ttk.Label(self.body, text=t('insp.multi', n=cur[1]),
                       style='PanelMuted.TLabel').pack(anchor='w')
@@ -88,6 +100,12 @@ class Inspector(ttk.Frame):
                 self._entry_form(cur[1], node)
             elif node['type'] == 'comment':
                 self._comment_form(cur[1], node)
+            elif node['type'] == 'task':
+                self._task_form(cur[1], node)
+            elif node['type'] == 'action':
+                self._action_form(cur[1], node)
+            elif node['type'] == 'condition':
+                self._condition_form(cur[1], node)
             else:
                 self._dialog_form(cur[1], node)
         self.canvas.yview_moveto(0)
@@ -220,6 +238,26 @@ class Inspector(ttk.Frame):
             cb, lambda: setattr(self.app.project, 'target_archive', var.get())))
         cb.bind('<KeyRelease>', lambda ev: self._edit(
             cb, lambda: setattr(self.app.project, 'target_archive', var.get())))
+        if not self.app.project.target_archive:
+            from .export import archive_name
+            var.set('')
+            ttk.Label(self.body, text='-> ' + archive_name(self.app.project),
+                      style='PanelMuted.TLabel').pack(anchor='w')
+        self._label(t('insp.qactions'))
+        for i, a in enumerate(q.actions):
+            row = ttk.Frame(self.body, style='Panel.TFrame')
+            row.pack(fill='x', pady=1)
+            ttk.Label(row, text=self.app.action_summary(a, a.get('when')),
+                      style='Panel.TLabel', wraplength=190
+                      ).pack(side='left', fill='x', expand=True)
+            ttk.Button(row, text='\u00d7', width=2,
+                       command=lambda i=i: self._remove_qaction(i)
+                       ).pack(side='right')
+            ttk.Button(row, text=t('insp.edit'), width=9,
+                       command=lambda i=i: self.show_qaction(i)
+                       ).pack(side='right', padx=2)
+        ttk.Button(self.body, text=t('insp.qaction.add'),
+                   command=self._add_qaction_menu).pack(anchor='w', pady=(4, 0))
 
     def _entry_form(self, nid, node):
         self.title.configure(text=t('node.entry') + ' ' + t('state.' + node['state']))
@@ -227,6 +265,216 @@ class Inspector(ttk.Frame):
                   style='Panel.TLabel', wraplength=260).pack(anchor='w', pady=4)
         ttk.Label(self.body, text=t('insp.entry.cond'),
                   style='PanelMuted.TLabel', wraplength=260).pack(anchor='w', pady=4)
+
+    # -- task / actions / conditions ------------------------------------------
+
+    def _hint(self, key, error=False, **fmt):
+        ttk.Label(self.body, text=t(key, **fmt), wraplength=260,
+                  foreground=theme.ERR if error else theme.MUT,
+                  background=theme.PANEL).pack(anchor='w', pady=(2, 0))
+
+    def _fields(self, spec, values, nid, on_change=None):
+        """One widget per field of an opcode spec."""
+        widgets = {}
+        for f in spec:
+            key, kind = f[0], f[1]
+            self._label(t('field.' + key))
+            cur = values.get(key, '')
+            cur = '' if cur is None else cur
+            var = tk.StringVar(value=str(cur))
+            row = ttk.Frame(self.body, style='Panel.TFrame')
+            row.pack(fill='x')
+
+            def setter(v, key=key, kind=kind):
+                if kind in ('int', 'party') or kind.startswith('marker:'):
+                    try:
+                        v = int(v)
+                    except (TypeError, ValueError):
+                        pass
+                elif kind == 'npc':
+                    v = self.app.parse_npc(v)
+                elif kind == 'tile':
+                    v = (v or '').strip().upper()
+                values[key] = v
+                if on_change:
+                    on_change()
+
+            if kind == 'enemy':
+                w = ttk.Combobox(row, textvariable=var, state='readonly',
+                                 values=list(model.ENEMY_TYPES))
+            elif kind == 'amount':
+                w = ttk.Combobox(row, textvariable=var,
+                                 values=['SMALL', 'MEDIUM', 'HIGH'])
+            elif kind == 'npc':
+                labels = [self.app.speaker_style(s['id'])[0] + f"  (NPC_{s['id']})"
+                          for s in self.app.quest.speakers
+                          if isinstance(s['id'], int)]
+                w = ttk.Combobox(row, textvariable=var, values=labels)
+                if cur not in ('', None):
+                    var.set(self.app.npc_label(cur))
+            else:
+                w = ttk.Entry(row, textvariable=var)
+            w.pack(side='left', fill='x', expand=True)
+            w.bind('<FocusIn>', lambda ev, w=w: self._reset_undo(w))
+            w.bind('<KeyRelease>', lambda ev, w=w, var=var, st=setter:
+                   self._edit(w, lambda: st(var.get()), nid))
+            if isinstance(w, ttk.Combobox):
+                w.bind('<<ComboboxSelected>>', lambda ev, w=w, var=var,
+                       st=setter: self._edit(w, lambda: st(var.get()), nid))
+            mode = {'npc': 'npc', 'object': 'object', 'location': 'location',
+                    'tile': 'tile'}.get(kind)
+            mkind = kind.split(':', 1)[1] if kind.startswith('marker:') else None
+            if mode or mkind:
+                ttk.Button(row, text='...', width=3,
+                           command=lambda key=key, mode=mode or 'marker',
+                           mkind=mkind, var=var, w=w, st=setter:
+                           self._pick(values, key, mode, mkind, var, w, st,
+                                      nid)).pack(side='left', padx=(4, 0))
+            if kind in ('object', 'location') and cur and self.app.index:
+                idx = self.app.index
+                name = (idx.object_names.get(str(cur)) if kind == 'object'
+                        else (idx.locations.get(str(cur)) or {}).get('name'))
+                if name:
+                    ttk.Label(self.body, text=name, style='PanelMuted.TLabel'
+                              ).pack(anchor='w')
+            if mkind:
+                self._hint('field.reads', kind=mkind)
+            widgets[key] = (w, var)
+        return widgets
+
+    def _pick(self, values, key, mode, mkind, var, widget, setter, nid):
+        if not self.app.index:
+            return
+        dlg = MapPicker(self.app, mode, mkind, values.get('tile') or '')
+        self.app.root.wait_window(dlg.win)
+        if not dlg.result:
+            return
+        res = dlg.result
+
+        def apply():
+            setter(res['value'])
+            if mode == 'marker' and res.get('tile') and 'tile' in values:
+                values['tile'] = res['tile'].upper()
+        self._edit(widget, apply, nid)
+        self.refresh()
+
+    def _task_form(self, nid, node):
+        self.title.configure(text=t('node.task'))
+        self._label(t('node.task'))
+        fcs = [None] + list(model.FC_MAIN) + list(model.FC_MORE)
+        labels = [t('op.none')] + [t('op.FC.' + f) for f in model.FC_MAIN] + \
+            [t('op.more') + ': ' + t('op.FC.' + f) for f in model.FC_MORE]
+
+        def set_fc(v):
+            model.set_task(self.app.quest.graph, v)
+        cb = self._combo(fcs, node.get('fc'), set_fc, nid, labels=labels)
+        cb.bind('<<ComboboxSelected>>', lambda ev: self.after_idle_refresh(),
+                add='+')
+        fc = node.get('fc')
+        if not fc:
+            return
+        self._fields(model.FC_SPECS[fc], node['args'], nid)
+        if fc in ('KILL', 'FIND_KILL'):
+            self._hint('hint.kill')
+        if fc in ('TALK', 'FIND_TALK'):
+            self._hint('hint.talk')
+        if fc == 'CLEAR_AREA':
+            self._hint('hint.cleararea')
+            ttk.Button(self.body, text=t('hint.cleararea.add'),
+                       command=self.app.add_enemy_for_cleararea
+                       ).pack(anchor='w', pady=(4, 0))
+
+    def _action_form(self, nid, node):
+        free = nid is None
+        g = self.app.quest.graph
+        self.title.configure(text=t('node.action'))
+        self._label(t('node.action'))
+        keys = list(model.ACTION_MAIN) + list(model.ACTION_MORE)
+        labels = [t(f'op.{k}.{v}') for k, v in model.ACTION_MAIN] + \
+            [t('op.more') + ': ' + t(f'op.{k}.{v}') for k, v in model.ACTION_MORE]
+        cur = (node['kind'], node['verb'])
+
+        def set_verb(v):
+            model.set_action_verb(node, *v)
+        cb = self._combo(keys, cur, set_verb, nid, labels=labels)
+        cb.bind('<<ComboboxSelected>>', lambda ev: self.after_idle_refresh(),
+                add='+')
+        # time
+        if free:
+            allowed = (model.REWARD_WHEN if node['kind'] == 'REWARD'
+                       else model.ACTION_WHEN)
+            self._label(t('insp.when'))
+            self._combo(list(allowed), node.get('when'),
+                        lambda v: node.__setitem__('when', v), None,
+                        labels=[t('when.' + w) for w in allowed])
+        else:
+            when = model.action_when(g, node)
+            parent = g['nodes'].get(node.get('attached_to'), {})
+            if when is None:
+                self._hint('when.notallowed', error=True,
+                           state=t('state.' + parent.get('state', 'neutral')))
+            else:
+                self._hint('when.derived', when=t('when.' + when))
+            if parent.get('state') == 'solved':
+                self._check(t('when.solve.check'), node.get('when') == 'SOLVE',
+                            lambda v: node.__setitem__('when',
+                                                       'SOLVE' if v else None),
+                            nid)
+        self._fields(model.ACTION_SPECS[cur], node['args'], nid)
+        hints = {'SHOW_LOCATION': 'hint.showloc', 'NPC_TELEPORT': 'hint.teleport',
+                 'NPC_GO': 'hint.npcgo', 'PLAY_CUTSCENE': 'hint.cutscene'}
+        if node['verb'] in hints:
+            self._hint(hints[node['verb']])
+
+    def _condition_form(self, nid, node):
+        self.title.configure(text=t('node.condition'))
+        cond = node.get('cond', 'after')
+        self._label(t('cond.' + cond))
+        if cond == 'after':
+            opts = self.app.quest_choices()
+            vals = [q for q, _ in opts]
+            self._combo(vals, node.get('quest'),
+                        lambda v: node.__setitem__('quest', v), nid,
+                        labels=[lab for _, lab in opts])
+            self._label(t('insp.when'))
+            self._combo(list(model.AOQ_EVENTS), node.get('event', 'TAKE'),
+                        lambda v: node.__setitem__('event', v), nid,
+                        labels=[t('ev.' + e) for e in model.AOQ_EVENTS])
+        elif cond == 'level':
+            self._fields([('level', 'int', 1)], node, nid)
+        else:
+            self._fields([('guild', 'guild'), ('count', 'int', 0)],
+                         _Alias(node, {'count': 'min_rep'}), nid)
+        self._hint('insp.conditions.hint')
+
+    def after_idle_refresh(self):
+        self.after_idle(self.refresh)
+
+    def _add_qaction_menu(self):
+        menu = tk.Menu(self, tearoff=0)
+        for k, v in model.ACTION_MAIN + model.ACTION_MORE:
+            menu.add_command(label=t(f'op.{k}.{v}'),
+                             command=lambda k=k, v=v: self._add_qaction(k, v))
+        try:
+            menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
+        finally:
+            menu.grab_release()
+
+    def _add_qaction(self, kind, verb):
+        a = model.make_action(kind, verb)
+        for k in ('attached_to', 'x', 'y', 'slot', 'type'):
+            a.pop(k, None)
+        a['when'] = 'ENABLE' if kind == 'ACTION' else 'TAKE'
+        self.app.push_undo('qaction')
+        self.app.quest.actions.append(a)
+        self.app.changed(from_inspector=True)
+        self.show_qaction(len(self.app.quest.actions) - 1)
+
+    def _remove_qaction(self, i):
+        self.app.push_undo('qaction')
+        del self.app.quest.actions[i]
+        self.app.changed(from_inspector=True)
+        self.refresh()
 
     def _comment_form(self, nid, node):
         self.title.configure(text=t('node.comment'))
@@ -350,6 +598,26 @@ class Inspector(ttk.Frame):
         if dlg.result is not None:
             self._edit(dlg, lambda: line.__setitem__('cue', dlg.result), nid)
             self.refresh()
+
+
+class _Alias(dict):
+    """Dict view that maps some field keys to other keys of a node."""
+
+    def __init__(self, node, alias):
+        super().__init__()
+        self.node, self.alias = node, alias
+
+    def get(self, key, default=None):
+        return self.node.get(self.alias.get(key, key), default)
+
+    def __getitem__(self, key):
+        return self.node[self.alias.get(key, key)]
+
+    def __setitem__(self, key, value):
+        self.node[self.alias.get(key, key)] = value
+
+    def __contains__(self, key):
+        return self.alias.get(key, key) in self.node
 
 
 def _int(s):
