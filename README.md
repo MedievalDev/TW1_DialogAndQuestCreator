@@ -449,7 +449,9 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   und NPC-Nodes, verbunden von Ausgang zu Eingang. Die Reiter Angebot,
   Läuft, Erfüllt, Abgeschlossen (plus Bekannt, Fehlgeschlagen, Ruf, Immer)
   sind die Zustandsebenen aus 6.1. Pro Zeile die Haken "Nimmt die Quest an",
-  "Schließt die Quest ab", "Kampf beginnt".
+  "Schließt die Quest ab", "Kampf beginnt". Nodes zeigen den ganzen Text
+  und wachsen nach unten mit. Mausrad zoomt, Strg+Rad scrollt senkrecht,
+  Umschalt+Rad waagerecht, mittlere Maustaste verschiebt.
 - **Aufgabe, Aktionen, Bedingungen** (links unten): die Aufgabe (`FC`) steht
   links neben dem Einstieg Erfüllt, Aktionen docken oben an Dialogzeilen (der
   Zeitpunkt folgt aus der Ebene), Bedingungen hängen unter dem Einstieg
@@ -463,6 +465,8 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
 - **Exportieren** (Strg+E): siehe 13.3. "Nur Dateien exportieren" schreibt
   die drei Dateien in einen Ordner.
 - **Hilfe:** Rundgang, Tutorial, diese Dokumentation, klickbare Links (GitHub-Repo, Alchemy Fox, Guide-Seite, Community), Über.
+- **Sprache:** `DE · EN` oben rechts in der Menüleiste schaltet sofort um.
+  Projekt und Ansicht bleiben erhalten.
 
 ### 13.3 Was der Export macht
 

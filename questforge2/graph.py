@@ -3,7 +3,8 @@
 Tag based drawing: every node is a group of items tagged ``n:<id>``, every
 edge is one line tagged ``e:<from>:<port>``. Dragging moves one 'sel' tag
 per frame; edges are updated through an item table. Zoom is in fixed steps
-with fonts precomputed per step. World coordinates (the model) map to
+(mouse wheel) with fonts precomputed per step. Dialog lines wrap; a node
+grows downwards with its text. The scroll region always covers every node. World coordinates (the model) map to
 canvas coordinates by multiplying with the zoom factor; panning is the
 canvas' own scan/scroll.
 
@@ -18,10 +19,11 @@ import tkinter.font as tkfont
 from . import model, theme
 from .i18n import t
 
-ZOOM_STEPS = (0.5, 0.75, 1.0, 1.25, 1.5)
-DEFAULT_ZOOM = 2
+ZOOM_STEPS = (0.3, 0.4, 0.5, 0.6, 0.75, 0.9, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0)
+DEFAULT_ZOOM = ZOOM_STEPS.index(1.0)
 GRID = 40
 WORLD = (-1000, -1000, 6000, 4000)
+REGION_MARGIN = 800            # free space around the outermost nodes
 PORT_R = 5
 CORNER = 18
 END_CAP_W = 30
@@ -58,6 +60,10 @@ class GraphView(tk.Canvas):
         self._fonts = {}
         self._body = {}
         self._edge_items = {}          # (from, port) -> canvas item
+        self._wheel_acc = 0
+        # wrapping is measured with the line font at 100 % zoom
+        self._font100 = tkfont.Font(family=theme.FONT[0], size=theme.FONT[1])
+        model.set_text_measure(self._font100.measure)
         self.configure(scrollregion=self._scrollregion())
         self.bind('<ButtonPress-1>', self._press)
         self.bind('<B1-Motion>', self._motion)
@@ -66,9 +72,9 @@ class GraphView(tk.Canvas):
         self.bind('<ButtonPress-2>', self._pan_start)
         self.bind('<B2-Motion>', self._pan_move)
         self.bind('<ButtonPress-3>', self._context)
-        self.bind('<MouseWheel>', self._wheel)
+        self.bind('<MouseWheel>', self._wheel_zoom)
         self.bind('<Shift-MouseWheel>', self._wheel_h)
-        self.bind('<Control-MouseWheel>', self._wheel_zoom)
+        self.bind('<Control-MouseWheel>', self._wheel)
         self.bind('<KeyPress-space>', lambda e: self._set_space(True))
         self.bind('<KeyRelease-space>', lambda e: self._set_space(False))
         self.bind('<Delete>', lambda e: self.delete_selection())
@@ -94,8 +100,26 @@ class GraphView(tk.Canvas):
         return self.c2w(self.canvasx(ev.x), self.canvasy(ev.y))
 
     def _scrollregion(self):
+        """The world area plus every node with a margin, so no dialog can
+        lie outside the scrollable area."""
+        x0, y0, x1, y1 = WORLD
+        if self.graph:
+            m = REGION_MARGIN
+            for n in self.graph['nodes'].values():
+                w, h = model.node_size(n)
+                x0 = min(x0, n['x'] - m)
+                y0 = min(y0, n['y'] - m)
+                x1 = max(x1, n['x'] + w + m)
+                y1 = max(y1, n['y'] + h + m)
         z = self.zoom
-        return tuple(v * z for v in WORLD)
+        return (x0 * z, y0 * z, x1 * z, y1 * z)
+
+    def _update_region(self):
+        region = self._scrollregion()
+        current = tuple(float(v) for v in self.cget('scrollregion').split())
+        if current != tuple(float(v) for v in region):
+            self.configure(scrollregion=region)
+            self._draw_grid()
 
     def _font(self, kind):
         key = (kind, self.zoom_i)
@@ -320,11 +344,16 @@ class GraphView(tk.Canvas):
         """Public: node data changed (text, colour, size, lines)."""
         if not self.graph or nid not in self.graph['nodes']:
             return
-        self.draw_node(nid)
+        # the node may have grown: docked conditions below it move along
+        model.restack(self.graph, nid)
+        for other, n in self.graph['nodes'].items():
+            if other == nid or n.get('attached_to') == nid:
+                self.draw_node(other)
         for e in self.graph['edges']:
             if e[0] == nid or e[2] == nid:
                 self.draw_edge(*e)
         self._apply_selection()
+        self._update_region()
 
     # -- drawing ------------------------------------------------------------
 
@@ -465,17 +494,21 @@ class GraphView(tk.Canvas):
             lines = node.get('lines') or [model.new_line()]
             font = self._font('line')
             many = kind == 'player' and node.get('kind') == 'question'
+            tops, total = model.line_tops(node)
             for i, line in enumerate(lines):
-                ly = hy + (model.NODE_PAD / 2 + i * model.LINE_H
+                ly = hy + (model.NODE_PAD / 2 + tops[i]
                            + model.LINE_H / 2) * z
-                glyphs = ''.join(g for k, g, c in EVENT_GLYPHS if line.get(k))
-                gw = font.measure(glyphs) + 6 * z if glyphs else 0
                 dw = 22 * z if many and len(lines) > 1 else 0
-                text = self._fit_text(line.get('text') or '…', font,
-                                      (w - 30) * z - gw - dw)
-                self.create_text(x1 + 12 * z, ly, text=text, anchor='w',
-                                 fill=ink if line.get('text') else theme.DIM,
-                                 font=font, tags=tags + ('body',))
+                avail = model.line_text_width(node, line) * z
+                # full text, wrapped; rows are re-fitted only where the
+                # zoomed font is wider than the scaled row (small zoom)
+                for r, row in enumerate(model.line_rows(node, line)):
+                    self.create_text(
+                        x1 + 12 * z, ly + r * model.ROW_H * z,
+                        text=self._fit_text(row, font, avail + 2 * z),
+                        anchor='w',
+                        fill=ink if line.get('text') else theme.DIM,
+                        font=font, tags=tags + ('body',))
                 gx = x2 - 12 * z - dw
                 for k, g, c in reversed(EVENT_GLYPHS):
                     if line.get(k):
@@ -489,7 +522,7 @@ class GraphView(tk.Canvas):
                                      tags=tags + (f'delline:{i}',))
                 self._draw_out_port(nid, i, tags, dim)
             if many:
-                ly = hy + (model.NODE_PAD / 2 + len(lines) * model.LINE_H
+                ly = hy + (model.NODE_PAD / 2 + total
                            + model.LINE_H / 2) * z
                 self.create_text(x1 + 12 * z, ly, text='+ ' + t('insp.addline'),
                                  anchor='w', fill=theme.GOLD if not dim
@@ -567,8 +600,10 @@ class GraphView(tk.Canvas):
         w, h = model.node_size(node)
         if node['type'] == 'entry':
             return node['x'] + w, node['y'] + h / 2
+        tops, total = model.line_tops(node)
+        top = tops[port] if port < len(tops) else total
         return (node['x'] + w, node['y'] + model.HEADER_H + model.NODE_PAD / 2
-                + port * model.LINE_H + model.LINE_H / 2)
+                + top + model.LINE_H / 2)
 
     def in_pos(self, nid):
         node = self.graph['nodes'][nid]
@@ -867,6 +902,7 @@ class GraphView(tk.Canvas):
             self.dtag('all', 'sel')
             self.dtag('all', 'seledge')
             if d['moved']:
+                self._update_region()
                 self.after_change()
         elif d['kind'] == 'edge':
             self.delete('temp')
@@ -923,7 +959,14 @@ class GraphView(tk.Canvas):
         self.xview_scroll(-1 if ev.delta > 0 else 1, 'units')
 
     def _wheel_zoom(self, ev):
-        self.set_zoom(self.zoom_i + (1 if ev.delta > 0 else -1), (ev.x, ev.y))
+        """Mouse wheel zooms around the cursor; fine touchpad deltas are
+        collected until they make one notch."""
+        self._wheel_acc += ev.delta
+        steps = int(self._wheel_acc / 120)
+        if not steps:
+            return
+        self._wheel_acc -= steps * 120
+        self.set_zoom(self.zoom_i + steps, (ev.x, ev.y))
 
     # -- node buttons -------------------------------------------------------
 

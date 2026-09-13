@@ -41,7 +41,7 @@ Multiplayer-Questsystem.
 | Sprache | Python 3.12, nur Standard-Library + bestehende Module | Bestehende Pipeline (`tw1_qtx`, `tw1_lan`, `wdio`, `questforge`, `DataHub`-Logik aus `quest_creator_gui.py`) wird 1:1 wiederverwendet |
 | GUI | **Tkinter, Node-Graph als eigener `Canvas`** (entschieden 2026-09-13) | Keine Abhaengigkeit, eine einzige exe von ca. 12 MB, Start unter 1 s, das Dark-Theme aus `quest_creator_gui.py` existiert schon. Alternative PySide6 (QGraphicsView) waere fuer den Graphen komfortabler, kostet aber 50 bis 100 MB exe und 2 bis 4 s Start. Umstieg auf Qt nur, wenn der Canvas in Meilenstein 2 nachweislich zu langsam ist |
 | Exe | **`TW1QuestCreator.exe`**, PyInstaller `--onefile --noconsole --icon`, Build-Spec im Repo (`build_exe.spec`), Build-Skript `build_exe.bat` | Nutzer brauchen kein Python. Eine Datei, wie gewuenscht. Hinweis: onefile entpackt beim Start nach `%TEMP%`, bei Tkinter etwa 0,5 s, akzeptabel |
-| UI-Sprache | **Umschaltbar Deutsch / Englisch** (entschieden 2026-09-13) | Alle sichtbaren Texte laufen ueber `i18n.t('key')`, zwei Woerterbuecher in `questforge2/i18n.py`. Standard nach Windows-Sprache (`locale.getlocale`), Umschalten im Menue Ansicht, wirkt nach Neustart (Widgets werden nicht live umbeschriftet, das haelt den Code einfach). Guides und Validierungstexte sind ebenfalls zweisprachig |
+| UI-Sprache | **Umschaltbar Deutsch / Englisch** (entschieden 2026-09-13) | Alle sichtbaren Texte laufen ueber `i18n.t('key')`, zwei Woerterbuecher in `questforge2/i18n.py`. Standard nach Windows-Sprache (`locale.getlocale`), Umschalten ueber `DE · EN` oben rechts in der Menueleiste oder im Menue Ansicht; wirkt sofort, das Hauptfenster wird neu aufgebaut und uebernimmt Projekt und Ansicht (12.52). Guides und Validierungstexte sind ebenfalls zweisprachig |
 | Projektdatei | `*.tw1proj` (JSON, lesbar, Git-freundlich) | Ein Projekt = eine Mod (`.wd`) mit beliebig vielen Quests |
 | Konfig | `questforge_config.json` wie bisher (Spielpfad, zuletzt geoeffnete Projekte, Guide-schon-gesehen) | Bleibt kompatibel zum bestehenden Tool |
 
@@ -160,7 +160,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.0.0; wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.1.0 (2.0.0 bis M10, 2.1.0 mit 12.52); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -311,7 +311,8 @@ Ablehnen: siehe Annahme und Ablehnen oben.
 - Textbearbeitung: Doppelklick auf den Node oeffnet den Text im
   Eigenschaften-Panel mit Fokus. Kein Inline-Editing im Canvas (Tkinter kann
   das nicht sauber, und das Panel ist eh da).
-- Pan: mittlere Maustaste oder Leertaste+Ziehen. Zoom: Strg+Rad. Mehrfachauswahl:
+- Pan: mittlere Maustaste oder Leertaste+Ziehen. Zoom: Mausrad (12.52),
+  Strg+Rad scrollt senkrecht, Umschalt+Rad waagerecht. Mehrfachauswahl:
   Rahmen ziehen oder Strg+Klick.
 - Auto-Layout: links nach rechts nach Gespraechsfluss (Breitensuche vom
   Einstieg), Zeilen einer Frage faechern nach unten auf.
@@ -1023,6 +1024,21 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
 51. `tw1_qtx` bleibt unveraendert (Marco 2026-09-13). Die Loader-Opcodes
     ausserhalb von `tw1_qtx` (12.31) bietet das Tool nicht an. Commit von
     M6 bis M10 auf `questforge2` freigegeben.
+52. Bedienung nach erstem Ausprobieren (Marco 2026-09-13):
+    - Sprachumschalter `DE · EN` oben rechts in der Menueleiste, links vom
+      Programmnamen, aktive Sprache gold (Design-Vorlage 5.3). Ein Klick
+      baut das Hauptfenster sofort neu auf; Projekt, offene Quest, Undo,
+      Index, Zoom, Scrollposition und Panelgroessen gehen mit, kein Dialog.
+    - Mausrad zoomt um den Mauszeiger, Strg+Rad scrollt senkrecht,
+      Umschalt+Rad waagerecht. Zoomstufen 30 bis 200 % in 12 Stufen.
+    - Dialog-Nodes zeigen den vollen Text: jede Zeile bricht um, der Node
+      waechst nach unten (`model.line_tops`, Umbruch mit der Zeilenschrift
+      bei 100 %). Ports sitzen auf der ersten Textzeile ihrer Zeile.
+    - Der Scrollbereich des Graphen umfasst immer alle Nodes plus Rand;
+      vorher lagen Nodes ausserhalb des festen Bereichs und waren
+      abgeschnitten.
+    - Scrollbalken-Schieber hellgrau (`SCROLL_THUMB` #7a7061), gold bei
+      Hover und Ziehen; vorher PANEL auf BG, kaum sichtbar.
 
 Offen:
 

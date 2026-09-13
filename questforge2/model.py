@@ -46,8 +46,12 @@ LEGACY_TABS = {'0.FT.AS': 'first', '0.FT': 'first', '0.QNT': 'known',
 # Edges: [from_id, out_port, to_id]; one edge per out port, any number in.
 NODE_W = 200
 HEADER_H = 26
-LINE_H = 22
+LINE_H = 22          # height of a dialog line with one row of text
+ROW_H = 15           # every further wrapped row of the same line
 NODE_PAD = 8
+TEXT_INSET = 30      # text starts 12 in, 18 kept free for the out port
+GLYPH_W = 14         # event glyph (take/close/fight) at the right
+DEL_W = 22           # delete cross of question lines
 ENTRY_W, ENTRY_H = 150, 34
 COMMENT_MIN_W, COMMENT_MIN_H = 80, 40
 ACTION_H = 24
@@ -614,6 +618,91 @@ def make_node(ntype, x, y, state='first', speaker=None):
             'speaker': speaker, 'lines': [new_line(state)]}
 
 
+# -- wrapped dialog lines: a node grows downwards with its text ----------
+# The graph view installs the real font measure (font at 100 % zoom); the
+# fallback keeps the model usable without Tk (tests, export).
+
+_measure = None
+_wrap_cache = {}
+
+
+def set_text_measure(fn):
+    global _measure
+    _measure = fn
+    _wrap_cache.clear()
+
+
+def _text_w(text):
+    return _measure(text) if _measure else len(text) * 6.5
+
+
+def _break_word(word, width):
+    """Split a word that is wider than a row into row-sized pieces."""
+    parts = []
+    while len(word) > 1 and _text_w(word) > width:
+        lo, hi = 1, len(word) - 1
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if _text_w(word[:mid]) <= width:
+                lo = mid
+            else:
+                hi = mid - 1
+        parts.append(word[:lo])
+        word = word[lo:]
+    return parts, word
+
+
+def wrap_text(text, width):
+    """Rows of ``text`` that fit ``width`` world units."""
+    key = (text, width)
+    rows = _wrap_cache.get(key)
+    if rows is not None:
+        return rows
+    rows = []
+    for para in (text or '').splitlines() or ['']:
+        if _text_w(para) <= width:
+            rows.append(para)
+            continue
+        cur = ''
+        for word in para.split(' '):
+            cand = word if not cur else cur + ' ' + word
+            if _text_w(cand) <= width:
+                cur = cand
+                continue
+            if cur:
+                rows.append(cur)
+            parts, cur = _break_word(word, width)
+            rows.extend(parts)
+        rows.append(cur)
+    if len(_wrap_cache) > 20000:
+        _wrap_cache.clear()
+    _wrap_cache[key] = rows
+    return rows
+
+
+def line_text_width(node, line):
+    """Width available for the text of one dialog line."""
+    glyphs = sum(1 for k in ('take', 'close', 'fight') if line.get(k))
+    many = (node.get('type') == 'player' and node.get('kind') == 'question'
+            and len(node.get('lines') or []) > 1)
+    return (NODE_W - TEXT_INSET - (glyphs * GLYPH_W + 6 if glyphs else 0)
+            - (DEL_W if many else 0) - 4)
+
+
+def line_rows(node, line):
+    return wrap_text(line.get('text') or '…', line_text_width(node, line))
+
+
+def line_tops(node):
+    """(tops, total): offset of every line below the header padding and
+    the height of all lines together."""
+    tops, y = [], 0
+    for line in (node.get('lines') or [new_line()]):
+        tops.append(y)
+        y += LINE_H + (len(line_rows(node, line)) - 1) * ROW_H
+    return tops, y
+
+
 def node_size(node):
     """(w, h) in world units."""
     t = node.get('type')
@@ -626,9 +715,8 @@ def node_size(node):
     if t == 'comment':
         return (max(COMMENT_MIN_W, node.get('w', 200)),
                 max(COMMENT_MIN_H, node.get('h', 80)))
-    n = max(1, len(node.get('lines') or []))
     extra = LINE_H if (t == 'player' and node.get('kind') == 'question') else 0
-    return NODE_W, HEADER_H + n * LINE_H + NODE_PAD + extra
+    return NODE_W, HEADER_H + line_tops(node)[1] + NODE_PAD + extra
 
 
 def out_port_count(node):

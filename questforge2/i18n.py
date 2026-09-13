@@ -1,8 +1,8 @@
 """UI language: ``t(key)`` with German and English dictionaries.
 
-The language is picked once at start-up (config, else Windows locale) and
-does not change live; switching in the View menu takes effect after a
-restart (plan section 2.1). Unknown keys return the key itself so a missing
+The language is picked at start-up (config, else Windows locale). The
+DE · EN switch in the menu bar rebuilds the main window at once and hands
+project and view over (plan 12.52). Unknown keys return the key itself so a missing
 translation is visible instead of crashing.
 """
 
@@ -40,8 +40,6 @@ _DE = {
     'view.edges.curve': 'Kurve', 'view.edges.line': 'Gerade',
     'view.lang': 'Sprache', 'view.lang.de': 'Deutsch',
     'view.lang.en': 'English',
-    'view.lang.restart': 'Die Sprache wird nach dem naechsten Start '
-                         'verwendet.',
     'quest.new': 'Neue Quest', 'quest.duplicate': 'Quest duplizieren',
     'quest.delete': 'Quest loeschen', 'quest.validate': 'Validieren',
     'quest.preview': 'Vorschau als Text', 'quest.template':
@@ -519,7 +517,6 @@ _EN = {
     'view.edges.curve': 'Curve', 'view.edges.line': 'Straight',
     'view.lang': 'Language', 'view.lang.de': 'Deutsch',
     'view.lang.en': 'English',
-    'view.lang.restart': 'The language is used after the next start.',
     'quest.new': 'New quest', 'quest.duplicate': 'Duplicate quest',
     'quest.delete': 'Delete quest', 'quest.validate': 'Validate',
     'quest.preview': 'Preview as text', 'quest.template':

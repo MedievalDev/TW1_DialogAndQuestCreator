@@ -29,6 +29,7 @@ PLAYER_COLOR = '#6ca0e0'
 ENTRY_COLOR = '#43b563'
 COMMENT_COLOR = '#4a453d'
 DIM = '#5c564c'
+SCROLL_THUMB = '#7a7061'     # scrollbar thumb, readable on BG
 # One colour per conversation level (state band on the node header).
 STATE_COLORS = {'first': '#d2a044', 'known': '#b08850', 'running': '#6ca0e0',
                 'taken': '#5a88c0', 'solved': '#43b563', 'closed': '#9a938a',
@@ -134,12 +135,14 @@ def apply_dark_theme(root):
               selectbackground=[('readonly', FIELD)],
               selectforeground=[('readonly', INK)],
               arrowcolor=[('active', GOLD)])
+    # thumb in a light warm grey on the dark trough, gold while hovered or
+    # dragged (a PANEL thumb on BG was almost invisible)
     for cls in ('Vertical.TScrollbar', 'Horizontal.TScrollbar'):
-        style.configure(cls, background=PANEL, troughcolor=BG,
-                        bordercolor=BG, arrowcolor=MUT,
-                        darkcolor=PANEL, lightcolor=PANEL,
+        style.configure(cls, background=SCROLL_THUMB, troughcolor=BG,
+                        bordercolor=LINE, arrowcolor=MUT,
+                        darkcolor=SCROLL_THUMB, lightcolor=SCROLL_THUMB,
                         gripcount=0, relief='flat', arrowsize=13)
-        style.map(cls, background=[('active', '#3a3226')],
+        style.map(cls, background=[('pressed', GOLD), ('active', GOLD_HI)],
                   arrowcolor=[('active', GOLD)])
     style.configure('TPanedwindow', background=LINE)
     style.configure('Sash', sashthickness=5, gripcount=0)

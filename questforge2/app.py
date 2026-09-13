@@ -33,8 +33,10 @@ DEBUG = not getattr(sys, 'frozen', False)
 
 
 class App:
-    def __init__(self, start_time=None):
+    def __init__(self, start_time=None, carry=None):
         self.t_start = start_time or time.perf_counter()
+        self.restart = None            # state handed to the next window
+        self._carry = carry
         self.cfg = data.Config()
         set_lang(self.cfg.get('lang') or detect_lang())
         self.index = None
@@ -72,7 +74,10 @@ class App:
         self._build_body()
         self._build_statusbar()
         self._bind_keys()
-        self.new_project(ask=False)
+        if carry:
+            self._restore_carry(carry)
+        else:
+            self.new_project(ask=False)
         if not self.selftest:
             self.root.deiconify()
         self.root.after(50, self._startup)
@@ -97,6 +102,29 @@ class App:
         self.lbl_brand = ttk.Label(bar, text='QUEST CREATOR',
                                    style='Menubar.TLabel')
         self.lbl_brand.pack(side='right', padx=(0, 6))
+        self._build_lang_toggle(bar).pack(side='right', padx=(0, 10))
+
+    def _build_lang_toggle(self, bar):
+        """DE · EN at the right of the menu bar: active language in gold,
+        a click switches at once (design template 5.3)."""
+        box = ttk.Frame(bar, style='Menubar.TFrame')
+        self.lang_labels = {}
+        for i, code in enumerate(('de', 'en')):
+            if i:
+                ttk.Label(box, text='·', style='Menubar.TLabel',
+                          padding=(2, 5), foreground=theme.MUT
+                          ).pack(side='left')
+            lbl = ttk.Label(box, text=code.upper(), style='Menubar.TLabel',
+                            padding=(4, 5), cursor='hand2')
+            lbl.pack(side='left')
+            lbl.bind('<Button-1>', lambda ev, c=code: self.switch_lang(c))
+            lbl.bind('<Enter>', lambda ev, w=lbl: w.state(['active']))
+            lbl.bind('<Leave>', lambda ev, w=lbl: w.state(['!active']))
+            self.lang_labels[code] = lbl
+        for code, lbl in self.lang_labels.items():
+            lbl.configure(foreground=theme.GOLD if code == get_lang()
+                          else theme.MUT)
+        return box
 
     def _popup(self, filler, widget):
         menu = theme.Menu(self.root, tearoff=0)
@@ -211,7 +239,7 @@ class App:
         for code in ('de', 'en'):
             lang.add_radiobutton(label=t(f'view.lang.{code}'), value=code,
                                  variable=self.lang_var,
-                                 command=self._change_lang)
+                                 command=lambda c=code: self.switch_lang(c))
         m.add_cascade(label=t('view.lang'), menu=lang)
 
     def _fill_quest(self, m):
@@ -1304,6 +1332,10 @@ class App:
     # -- start-up -----------------------------------------------------------
 
     def _startup(self):
+        if self._carry and self.index is not None:
+            self._update_status()
+            self._index_ready(self.index, True, 0.0)
+            return
         game = data.find_game_dir(self.cfg)
         if not game and self.selftest:
             with open(self.selftest, 'w', encoding='utf-8') as f:
@@ -1556,11 +1588,77 @@ class App:
 
     # -- misc ---------------------------------------------------------------
 
-    def _change_lang(self):
-        self.cfg.set('lang', self.lang_var.get())
+    def switch_lang(self, code):
+        """Rebuild the window in the other language right away. Project,
+        open quest, undo history, index and view go to the new window, so
+        nothing is lost and nothing is read again (design template 5.3)."""
+        if code == get_lang():
+            self.lang_var.set(code)
+            return
+        self.cfg.set('lang', code)
+        self.cfg.set('window', self.root.geometry())
         self.cfg.save()
-        messagebox.showinfo(t('view.lang'), t('view.lang.restart'),
-                            parent=self.root)
+        g = self.graph
+        self.restart = {
+            'index': self.index, 'project': self.project,
+            'quest': self.quest, 'undo': self.undo,
+            'preview': self.preview, 'preview_snap': self._preview_snap,
+            'clipboard': self.clipboard, 'tab': self.tab_state,
+            'zoom': g.zoom_i, 'view': (g.xview()[0], g.yview()[0]),
+            'grid': self.grid_var.get(), 'edges': self.edge_var.get(),
+            'sash': self._sash_positions(),
+        }
+        # timers of this window must not fire into the next one
+        # (plain Tcl cancel: after_cancel would delete the Python callback
+        # commands that destroy() deletes again)
+        for job in self.root.tk.splitlist(self.root.tk.call('after', 'info')):
+            try:
+                self.root.tk.call('after', 'cancel', job)
+            except tk.TclError:
+                pass
+        self.root.destroy()
+
+    def _sash_positions(self):
+        out = {}
+        for name in ('vpane', 'hpane', 'side'):
+            pane = getattr(self, name)
+            try:
+                out[name] = [pane.sashpos(i)
+                             for i in range(len(pane.panes()) - 1)]
+            except tk.TclError:
+                out[name] = []
+        return out
+
+    def _restore_carry(self, c):
+        """Counterpart of switch_lang in the new window."""
+        self.index = c['index']
+        self.project = c['project']
+        self.clipboard = c['clipboard']
+        self.preview = c['preview']
+        self._preview_snap = c['preview_snap']
+        self._tour_done = True
+        self.grid_var.set(c['grid'])
+        self.graph.set_grid(c['grid'])
+        self.edge_var.set(c['edges'])
+        self.graph.set_edge_style(c['edges'])
+        self.open_quest(c['quest'])
+        self.undo = c['undo']
+        if c['quest'] is not None and c['tab'] != self.tab_state:
+            self.show_tab(c['tab'])
+
+        def later():
+            for name, positions in c['sash'].items():
+                pane = getattr(self, name)
+                for i, pos in enumerate(positions):
+                    try:
+                        pane.sashpos(i, pos)
+                    except tk.TclError:
+                        pass
+            if c['quest'] is not None:
+                self.graph.set_zoom(c['zoom'])
+                self.graph.xview_moveto(c['view'][0])
+                self.graph.yview_moveto(c['view'][1])
+        self.root.after(80, later)
 
     def show_about(self):
         win = tk.Toplevel(self.root)
@@ -1833,4 +1931,10 @@ class _ProgressWindow:
 
 
 def main(start_time=None):
-    App(start_time).run()
+    carry = None
+    while True:
+        app = App(start_time, carry)
+        app.run()
+        if not app.restart:
+            break
+        carry, start_time = app.restart, None
