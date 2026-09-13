@@ -25,7 +25,8 @@ Theorie — jede einzelne hat beim Bau der ersten Quest Stunden gekostet.
 10. [Troubleshooting: Symptom → Ursache](#10-troubleshooting-symptom--ursache)
 11. [Fallstudie: der Weg zur ersten Quest](#11-fallstudie-der-weg-zur-ersten-quest)
 12. [Modul-Referenz](#12-modul-referenz)
-13. [Credits und Lizenz](#13-credits-und-lizenz)
+13. [QuestForge 2: der Quest-Editor](#13-questforge-2-der-quest-editor)
+14. [Credits und Lizenz](#14-credits-und-lizenz)
 
 ---
 
@@ -228,6 +229,51 @@ Aufbau des bewährten Angebots: abwechselnd NPC/Held als `0.FT.AS`-Kette
 Zeile `0.QNS.AE` (noch nicht erledigt), `0.QS.AE` (Belohnung) und `0.QC`
 (danach). Komplett in `build_quest_tago.py` zu sehen.
 
+### 6.1 Was die Flags laut SDK bedeuten
+
+Quelle: Kampagnen-Skript des Two Worlds SDK
+(`Scripts\Campaigns\Missions\PInc\PQuestsCommon.ech`, `GetDialogInputFlags`,
+`UpdateQuestStateAfterDialog`). Das ist Code-Lesart, kein Spieltest; die
+Ergebnisse passen aber zu allen bisherigen Spielbefunden.
+
+Die Flags sind **kein Aufzählungswert**, sondern zwei Gruppen von Bits.
+Beim Ansprechen baut der Skript eine Maske aus acht **Zustandsbits** und
+zieht die Bits des aktuellen Questzustands ab. Eine Zeile ist spielbar, wenn
+alle ihre Zustandsbits zum Zustand passen; `0x0` ist immer spielbar. Drei
+hohe Bits sind **Ereignisse**: Lief das Gespräch über eine Zeile mit so einem
+Bit, meldet das Spiel es am Gesprächsende an den Skript.
+
+| Bit | SDK-Name | Bedeutung |
+|---|---|---|
+| `0x1` | `eFirstTime` | erstes Ansprechen, Quest freigeschaltet und noch nie angeboten |
+| `0x2` | `eQuestNotTaken` | Angebot gehört, nicht angenommen |
+| `0x4` | `eQuestTaken` | angenommen |
+| `0x8` | `eQuestClosed` | abgeschlossen |
+| `0x10` | `eQuestFailed` | fehlgeschlagen |
+| `0x20` | `eQuestLowReputation` | Ruf unter dem Mindestruf der Kopfzeile |
+| `0x100` | `eQuestNotSolved` | Aufgabe nicht erledigt (freigeschaltet **oder** angenommen) |
+| `0x200` | `eQuestSolved` | Aufgabe erledigt (beim Gesprächsstart geprüft: Gegenstand/Gold dabei, Ort gefunden) |
+| `0x10000` | `eQuestFightNow` | Ereignis: Questgeber wird feindlich, `FIGHT`-Aktionen |
+| `0x20000` | `eQuestTakeNow` | Ereignis: Quest wird angenommen, `TAKE`-Aktionen und -Belohnungen |
+| `0x40000` | `eQuestCloseNow` | Ereignis: Quest wird abgeschlossen, Gegenstände/Gold werden abgenommen, `CLOSE`-Belohnungen |
+
+Damit lösen sich die Namen der Tabelle oben auf: `0.FT.AS` = FirstTime +
+TakeNow, `1.TAKE` = NotSolved + TakeNow, `0.QS.AE` = Solved + CloseNow.
+Folgerungen:
+
+- Es gibt **keine** freien Bedingungen oder Aktionen pro Dialogzeile.
+  Aktionen hängen an Quest-Ereignissen (`TAKE`, `SOLVE`, `CLOSE`, `ENABLE`,
+  `HEAR`, `FAIL`, `FIGHT`).
+- Ablehnen ist möglich: Endet das Angebot auf einem Pfad ohne TakeNow, bleibt
+  die Quest freigeschaltet, beim nächsten Gespräch spielen `0x2`-Zeilen.
+  (Spieltest steht aus, siehe `NODE_EDITOR_PLAN.md` 6.3.)
+- Antwortmenüs zeigen nur auf Held-Zeilen; Verzweigungen nach Zustand laufen
+  über Held-Zeilen mit verschiedenen Zustandsbits. Nachfolger über
+  Zustandsgrenzen hinweg sind normal.
+- Alle 6942 Zeilen der 378 Retail-Questbäume bestehen nur aus diesen elf
+  Bits. Andere Bits kommen nur in den Gruß-Bäumen der Bürger und Wachen vor
+  (dort ist jedes Bit ein Gruß-Slot).
+
 ## 7. Quest-Design: was funktioniert und was nicht
 
 **Das bewährte Muster** (Retail macht es genauso, 103-mal):
@@ -358,8 +404,113 @@ Endzustand: Quest komplett spielbar, Referenz in `build_quest_tago.py`.
 | `extract_base.py` | zieht die Basisdateien aus der eigenen Installation |
 | `tw1-quest-modding/SKILL.md` | Kurzfassung dieser Doku als Claude-Skill |
 | `QuestForge_Guide.html` | illustrierte Einführung |
+| `questforge2/` | **QuestForge 2**, der Node-Editor (Abschnitt 13). Importiert nur `tw1_qtx`, `tw1_lan`, `tw1_wd`, `wdio` |
+| `TW1QuestCreator.pyw` | Starter ohne Konsole, zugleich Einstieg des Exe-Builds |
+| `build_exe.spec`, `build_exe.bat` | Exe-Build mit PyInstaller → `dist\TW1QuestCreator.exe` |
+| `tools/make_icon.py` | zeichnet das Programm-Icon (Pillow, nur für den Build nötig) |
+| `NODE_EDITOR_PLAN.md` | Plan, Entscheidungen und Prüfergebnisse von QuestForge 2 |
+| `testprojekte/` | Projekte für die offenen Spieltests (Ablehnen, Annahme auf der letzten Zeile) |
 
-## 13. Credits und Lizenz
+## 13. QuestForge 2: der Quest-Editor
+
+Ein grafisches Werkzeug, das von "Neue Quest" bis zur gepackten, im Spiel
+aktivierten Mod führt. Dialoge werden als Node-Graph gezeichnet, alle Quests
+des Spiels liegen in einer Zeitleiste, ein Coach erklärt das Tool und baut auf
+Wunsch mit einem Tutorial eine Test-Quest.
+
+### 13.1 Starten
+
+```
+TW1QuestCreator.exe                 fertige Exe, kein Python nötig
+py -3.12 -m questforge2             aus dem Quelltext (Repo-Ordner)
+TW1QuestCreator.pyw                 Doppelklick, ohne Konsole
+```
+
+Beim ersten Start sucht das Tool den Spielordner (Konfig, Registry,
+Steam-Bibliotheken), zieht die Basisdateien aus `Update16.wd` und
+`Language.wd` und baut einen Index aller Quests, NPCs, Orte, Marker und
+Voice-Cues (etwa 1,5 s). Danach startet es aus dem Cache (Exe unter 2 s).
+Daten liegen neben dem Quelltext bzw. bei der Exe in
+`%LOCALAPPDATA%\TW1QuestCreator` (`questforge_config.json`, `base\`,
+`cache\index.json`, `templates\`).
+
+### 13.2 Bedienung in Kürze
+
+- **Zeitleiste** (oben): alle Quests als Karten in Kettenreihenfolge, nach
+  Tagebuchgruppen getrennt. Klick öffnet eine Quest. Spielquests sind erst
+  eine Ansicht und werden bei der ersten Änderung nach Rückfrage Teil des
+  Projekts. Rechtsklick: duplizieren als eigene Quest, nur diese Quest
+  exportieren, als Text anzeigen.
+- **Sprecher** (links oben): "+ Neuer Sprecher" wählt einen NPC des Spiels
+  oder legt einen neuen an (ID aus dem Two Worlds Editor, Stimme, Kachel,
+  Q_Giver-Marker, Vorlage für das Aussehen). Sprecher in den Graph ziehen oder
+  doppelklicken.
+- **Graph** (Mitte): Spieler-Nodes (Antwort oder Frage mit mehreren Zeilen)
+  und NPC-Nodes, verbunden von Ausgang zu Eingang. Die Reiter Angebot,
+  Läuft, Erfüllt, Abgeschlossen (plus Bekannt, Fehlgeschlagen, Ruf, Immer)
+  sind die Zustandsebenen aus 6.1. Pro Zeile die Haken "Nimmt die Quest an",
+  "Schließt die Quest ab", "Kampf beginnt".
+- **Aufgabe, Aktionen, Bedingungen** (links unten): die Aufgabe (`FC`) steht
+  links neben dem Einstieg Erfüllt, Aktionen docken oben an Dialogzeilen (der
+  Zeitpunkt folgt aus der Ebene), Bedingungen hängen unter dem Einstieg
+  Angebot (Vorgängerquest, Level, Gilde). Aktionen ohne Dialog stehen im
+  Quest-Panel.
+- **Eigenschaften** (rechts): Formular des gewählten Elements, ohne Auswahl
+  die Quest selbst. ID-Felder haben einen Kachel-Picker, Dialogzeilen eine
+  Cue-Suche.
+- **Validieren** (F7, Statusleiste): Fehler blockieren den Export, Warnungen
+  nicht; Doppelklick springt zur Stelle.
+- **Exportieren** (Strg+E): siehe 13.3. "Nur Dateien exportieren" schreibt
+  die drei Dateien in einen Ordner.
+- **Hilfe:** Rundgang, Tutorial, diese Dokumentation, klickbare Links (GitHub-Repo, Alchemy Fox, Guide-Seite, Community), Über.
+
+### 13.3 Was der Export macht
+
+1. Prüft alle Quests des Projekts, bricht bei Fehlern ab.
+2. Bricht ab, wenn ein Two-Worlds-Prozess läuft (`TwoWorlds*.exe`).
+3. Warnt, wenn eine andere aktive Mod ebenfalls die komplette `.qtx` oder
+   Master-`.lan` liefert (3.1). In dem Fall am besten in dieses Archiv
+   exportieren (Quest-Panel, Zielarchiv).
+4. Nimmt `.qtx` und `.lan` aus dem Zielarchiv, sonst aus der Basis. Setzt den
+   Questblock ein bzw. ersetzt ihn, trägt die `AOQ PROMOTE`- (oder `TAKE`-)
+   Zeilen in die Vorgängerquests ein, legt NPC-Blöcke für neue NPCs an und
+   schreibt Titel, Tagebuch, Dialogbaum und NPC-Namen in die Master-`.lan`
+   und in `Language\ZZ_QF_<Projekt>.lan`.
+5. Packt mit `wdio.py`, liest das Archiv wieder ein und vergleicht alle
+   Dateien byte-genau sowie Flags, Namen, Klassen-IDs und GUIDs aller
+   unberührten Einträge. Erst dann wird das Archiv ersetzt. Vor dem ersten
+   Export entsteht einmalig `<Archiv>.qf2backup`.
+6. Setzt `HKCU\SOFTWARE\Reality Pump\TwoWorlds\Mods\<Archiv> = 1`.
+
+Unveränderte Spielquests kommen byte-gleich wieder heraus (getestet für alle
+500 Questblöcke und alle 378 Questbäume der Basisdateien).
+
+### 13.4 Projektdatei
+
+`*.tw1proj` ist JSON (UTF-8, LF): Projektname, Zielarchiv und die Quests mit
+Graph, Sprechern, Tagebuch und Aktionen. Unbekannte Felder bleiben beim
+Speichern erhalten. Quest-Vorlagen (`*.tw1quest`) liegen im Ordner
+`templates`.
+
+### 13.5 Exe bauen
+
+```
+build_exe.bat
+```
+
+Braucht Python mit PyInstaller (auf Marcos Rechner Python 3.13). Ergebnis:
+`dist\TW1QuestCreator.exe`, eine Datei, rund 11,5 MB, ohne Spieldaten.
+Selbsttest ohne Fenster: Umgebungsvariable `QF2_SELFTEST=<Datei>` schreibt
+Version und Startzeit in die Datei und beendet das Programm.
+
+### 13.6 Offene Punkte
+
+Was nur am Spiel geklärt werden kann, steht mit **[PRUEFEN]** in
+`NODE_EDITOR_PLAN.md` (Ablehnen und Annahme, Startzeilen-Regel,
+`AOQ TAKE TAKE` gegen `PROMOTE TAKE`, NPC-Blöcke neuer NPCs,
+`ACTION NPC_DIALOG`). Die Testprojekte dafür liegen in `testprojekte\`.
+
+## 14. Credits und Lizenz
 
 - `wdio.py`: **buglord** — CC0, aus dessen Misc-Projects übernommen. Ohne
   diesen Packer wäre das Projekt an Phantom-Fehlern gescheitert.
@@ -368,4 +519,5 @@ Endzustand: Quest komplett spielbar, Referenz in `build_quest_tago.py`.
   Reality Pump / TopWare Interactive; für den Bau eigener Mods braucht jeder
   eine eigene Spielkopie.
 
+Alchemy Fox: <https://alchemy-fox.de/>  
 Community: <https://twmp.alchemy-fox.de/>

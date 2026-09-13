@@ -22,6 +22,10 @@ mod `.wd`. Prefer it over editing files by hand.
 - Full write-up: `QuestForge_Guide.html` in that folder
 - Python: `C:/Users/marco/AppData/Local/Programs/Python/Python313/python.exe`
   (the bare `python` alias does NOT work on this machine)
+- **QuestForge 2** (graphical node editor, `TW1QuestCreator.exe`): clone
+  `C:\Users\marco\Desktop\TW1QuestCreator`, branch `questforge2`. Start with
+  `py -3.12 -m questforge2`, build the exe with `build_exe.bat` (PyInstaller
+  under Python 3.13). See README section 13 and `NODE_EDITOR_PLAN.md`.
 
 ## The pipeline (minimal path — no editor, no WhizzEdit)
 
@@ -350,3 +354,42 @@ Schutzgelderpresser", chained from `Q_4`, deployed inside `Yamalin.wd`):
 
 Never invent opcodes: if a verb/enum isn't in `tw1_qtx.py`'s tables, confirm it
 against a real quest in `base\TwoWorldsQuests.qtx` first.
+
+## Dialog flags — what the SDK script does with them
+
+Source: `D:\Games\TwoWorldsSDK\Scripts\Campaigns\Missions\PInc\PQuestsCommon.ech`
+(`GetDialogInputFlags`, `UpdateQuestStateAfterDialog`). Code reading, no game
+test yet, consistent with all game findings so far.
+
+The flag word is two bit groups, not an enum. **State bits** decide whether a
+line may play: the script starts from all eight and removes the bits of the
+current quest state; a line plays when all its state bits are in the current
+state, `0x0` always plays. **Event bits** are reported when the conversation
+ends after passing such a line.
+
+| Bit | SDK name | meaning |
+|---|---|---|
+| `0x1` | eFirstTime | first talk, quest enabled and never offered |
+| `0x2` | eQuestNotTaken | offer heard, not taken |
+| `0x4` | eQuestTaken | taken |
+| `0x8` | eQuestClosed | closed |
+| `0x10` | eQuestFailed | failed |
+| `0x20` | eQuestLowReputation | reputation below the header's minimum |
+| `0x100` | eQuestNotSolved | task not done (enabled or taken) |
+| `0x200` | eQuestSolved | task done (item/gold/location checked at talk start) |
+| `0x10000` | eQuestFightNow | event: giver turns hostile, FIGHT actions |
+| `0x20000` | eQuestTakeNow | event: TakeQuest, TAKE actions/rewards |
+| `0x40000` | eQuestCloseNow | event: CloseQuest, items/gold removed, CLOSE rewards |
+
+So `0.FT.AS` = FirstTime+TakeNow, `1.TAKE` = NotSolved+TakeNow, `0.QS.AE` =
+Solved+CloseNow. There are **no per-line conditions or actions** beyond these
+bits; actions hang on quest events. Reply menus (several `next`) only point at
+hero lines; state branching goes through hero lines with different state bits,
+and `next` across state boundaries is normal retail practice. `HEAR` fires at
+the start of the very first talk. The loader also knows `ACTION NPC_DIALOG
+<time> NPC_<n> <tree>` (unused in retail, not in `tw1_qtx`, untested).
+
+Columns verified against the loader (`PQuestLoader.ech`):
+`ACTION ENEMY_CREATE <time> <type> <count> <level> <marker> <tile> <party>`,
+`ACTION OBJECT_CREATE <time> <object> <marker> <tile>`,
+`ACTION HERO_TELEPORT_DELAYED <time> <delay> <marker> <tile> <angle>`.

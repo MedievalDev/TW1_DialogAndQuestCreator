@@ -2,8 +2,9 @@
 
 Stand: 2026-09-13, **Plan freigegeben (Marco)**. Umsetzung laeuft auf Branch
 `questforge2` im Clone `C:\Users\marco\Desktop\TW1QuestCreator`.
-**M1 bis M4 fertig, M5 Code fertig, Spieltest offen** (2026-09-13, siehe
-Abschnitt 11 und 12).
+**Alle Meilensteine M1 bis M10 umgesetzt** (2026-09-13). Offen sind nur
+die Spieltests und die [PRUEFEN]-Punkte, die sie klaeren (Abschnitt 11 und
+12, "Offen").
 
 Dieses Dokument ist die Arbeitsanweisung fuer die Umsetzung. Es beschreibt
 **wie das Tool bedient wird** und **wie die Node-Konzepte auf das echte
@@ -94,9 +95,13 @@ neue Tool nicht mit den Root-Skripten vermischt wird.
 | `questforge2/data.py` | Spielpfad-Suche, Basisdaten extrahieren, Index-Cache, NPC/Quest/Location/Marker/Cue-Indizes |
 | `questforge2/export.py` | Graph zu `.qtx`-Block und `.lan`-Baum; Packen; Registry. Nutzt `tw1_qtx`, `tw1_lan`, `wdio` |
 | `questforge2/validate.py` | Regelpruefung vor dem Export (Abschnitt 8) |
-| `questforge2/guide.py` | Rundgang-Guide und Tutorial-Quest |
-| `questforge2/tests/` | Round-Trip-Tests (M4), Modell-Tests, Validierungs-Tests; laufen ohne Spieldaten mit kleinen Fixtures |
+| `questforge2/guide.py` | Rundgang-Guide und Tutorial-Quest, Doku-Fenster |
+| `questforge2/retail.py` | (ergaenzt in M6) Spielquest-Bloecke ins Modell und byte-gleich zurueck |
+| `questforge2/assets/` | (ergaenzt in M9) Programm-Icon |
+| `questforge2/tests/` | Round-Trip-Tests (M4), Modell-Tests, Validierungs-Tests; laufen ohne Spieldaten mit kleinen Fixtures, Retail-Tests zusaetzlich mit `base/` |
 | `build_exe.spec`, `build_exe.bat` | Exe-Build (Repo-Root) |
+| `TW1QuestCreator.pyw` | (ergaenzt in M9) Starter ohne Konsole, Einstieg der Exe |
+| `tools/make_icon.py` | (ergaenzt in M9) zeichnet das Icon, braucht Pillow |
 
 ---
 
@@ -151,13 +156,16 @@ Lesetext, damit man sieht, was rauskommt), Als Vorlage speichern.
 
 **Hilfe:** Rundgang starten, Tutorial: Test-Quest anlegen, Dokumentation
 (oeffnet `README.md`-Inhalt im Fenster wie bisher `show_docs`), Trennlinie,
-Ueber.
+klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
+Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`qf2_app.py`, wird auch in Exe-Name und Projektdatei geschrieben), Links:
+`questforge2/__init__.py`, Stand 2.0.0; wird im Ueber-Dialog und in der
+Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
-Community (`https://twmp.alchemy-fox.de/`), Credits (buglord fuer `wdio.py`,
+Community (`https://twmp.alchemy-fox.de/`), Alchemy Fox
+(`https://alchemy-fox.de/`), Credits (buglord fuer `wdio.py`,
 CC0), Hinweis "keine Spieldaten enthalten".
 
 ### 3.2 Kontextmenues (Rechtsklick)
@@ -714,11 +722,11 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen. **Fertig 2026-09-13:** Pruefung in 6.3 eingetragen; `palette.py` (Sprecher-Box mit Dialog Vorhandener/Neuer NPC, Ziehen und Doppelklick), `inspector.py` (Formulare je Node-Typ, Quest-Panel, Cue-Suche), Modell auf einen Graphen pro Quest umgestellt; Beispiel-Dialog mit Angebot/Frage/Annahme, Laeuft, Erfuellt gebaut, gespeichert, wieder geoeffnet, byte-gleich; 27 Tests gruen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich. **Fertig 2026-09-13:** `export.py` (`tree_to_graph`, `graph_to_tree`, `preview_text`), "Quest > Dialog aus dem Spiel laden", "Vorschau als Text", "Quest wechseln". Round-Trip byte-gleich fuer **alle 378 Retail-Quest-Baeume** der Basis-`.lan` sowie alle 457 Baeume aus Yamalin.wd und Content02_Lan.wd, auch nach Speichern und Laden des Projekts; Import des groessten Baums (DQ_359, 74 Zeilen) 1 ms. 31 Tests gruen |
 | M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet). **Code fertig 2026-09-13, Spieltest steht aus:** Aufgabe-Node, angedockte Aktionen und Bedingungen, Aktionen ohne Dialog, `mappicker.py`, `.qtx`-Block und AOQ-Einfuegen, volle `.lan` plus `ZZ_`-Overlay, Packen mit Verifikation, Registry. Einmischen in eine Kopie von Yamalin.wd: 2,9 s, alle 47 unberuehrten Eintraege samt `.lnd`/`.par`-Metadaten identisch. Testprojekte fuer 6.3 Schritt 4a/4b in `testprojekte/`. 38 Tests gruen |
-| M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen |
-| M7 | Validierung komplett | Alle Regeln aus Abschnitt 8 mit Sprung zum Node |
-| M8 | Rundgang und Tutorial | Tutorial fuehrt ohne Vorwissen zur laufenden Test-Quest |
-| M9 | Exe-Build, Performance-Pass, Ueber-Dialog, Icons | Eine `.exe`, Start unter 2 s auf einem normalen PC |
-| M10 | Doku: README-Abschnitt, Guide-HTML aktualisieren, `[PRUEFEN]`-Punkte mit Ergebnis eintragen | Alle [PRUEFEN] aufgeloest |
+| M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen. **Code fertig 2026-09-13, Spieltest steht aus:** `timeline.py`, `retail.py`; Ansicht mit Rueckfrage bei der ersten Aenderung, Duplizieren, Loeschen, Einzelexport, Vorlagen; alle 500 Bloecke und 378 Baeume unveraendert byte-gleich; Aenderung an Q_4 in eine Yamalin-Kopie exportiert, restliche `.qtx` identisch (12.40 bis 12.43) |
+| M7 | Validierung komplett | Alle Regeln aus Abschnitt 8 mit Sprung zum Node. **Fertig 2026-09-13:** `validate.py`, F7-Fenster, Statusleiste, Sprung zu Node, Aktion ohne Dialog oder Quest-Panel (12.44) |
+| M8 | Rundgang und Tutorial | Tutorial fuehrt ohne Vorwissen zur laufenden Test-Quest. **Code fertig 2026-09-13:** `guide.py`; Tutorial ohne Fenster komplett durchgespielt bis zum Export; ob die Test-Quest im Spiel laeuft, klaert Marcos Spieltest (12.45) |
+| M9 | Exe-Build, Performance-Pass, Ueber-Dialog, Icons | Eine `.exe`, Start unter 2 s auf einem normalen PC. **Fertig 2026-09-13:** `dist\TW1QuestCreator.exe` 11,5 MB, zweiter Start 0,38 s bis bereit, 1,86 s gesamt; Ueber-Dialog mit Icon und Version 2.0.0 (12.48) |
+| M10 | Doku: README-Abschnitt, Guide-HTML aktualisieren, `[PRUEFEN]`-Punkte mit Ergebnis eintragen | Alle [PRUEFEN] aufgeloest. **Doku fertig 2026-09-13** (12.49). Nicht erreicht: die [PRUEFEN]-Punkte, die nur ein Spieltest klaeren kann, sind offen und in Abschnitt 12 "Offen" gesammelt |
 
 Reihenfolge der Tests im Spiel: nach M4 die beiden `[PRUEFEN]` zu `1.TAKE`
 und Ablehnen; nach M5 die erste Tool-Quest; nach M6 eine Retail-Aenderung.
@@ -885,8 +893,8 @@ Entschieden am 2026-09-13 (Umsetzung M5):
     werden nur Opcodes, die `tw1_qtx` validiert. Der Loader kennt zusaetzlich
     `NPC_DIALOG`, `OBJECT_ADD`, `OBJECT_REMOVE`, `CHANGE_RELATIONS`,
     `ACTIVATE_LEVEL`, `KILL_AREA_DELAYED`, `FC OPEN` und `REWARD RND`; sie
-    fehlen in `tw1_qtx` und bleiben draussen, bis besprochen ist, ob
-    `tw1_qtx` erweitert werden darf **[PRUEFEN]**.
+    fehlen in `tw1_qtx` und bleiben draussen. Entschieden (Marco
+    2026-09-13, 12.51): `tw1_qtx` wird nicht erweitert.
 32. Aufgabe = fester Node `task` links neben dem Einstieg Erfuellt (nicht
     loeschbar, nicht verschiebbar). Aktionen = Nodes, die an einen
     Dialog-Node andocken und darueber gestapelt werden (bewegen sich mit,
@@ -938,18 +946,103 @@ Entschieden am 2026-09-13 (Umsetzung M5):
     sichtbarer Beweis, Zielarchiv Yamalin.wd. Alle Dialogzeilen tragen
     `[TEST 4a]`/`[TEST 4b]` als Ladungsmarker.
 
+Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
+
+39. Arbeitsweise: Marco hat nach M5 angewiesen, das Tool ohne Halt vor jedem
+    Meilenstein fertigzustellen ("mach das tool jetzt fertig komplett"). M6
+    bis M10 wurden deshalb ohne Einzelbesprechung umgesetzt; Commits bleiben
+    auf Anweisung.
+40. Spielquests im Projekt (`retail.py`): Der `QUEST`-Block wird ins Modell
+    importiert (Kopfzeile als Bedingungen, GIVER, Aufgabe, Aktionen und
+    Belohnungen als Aktionen ohne Dialog). Was nicht exakt abbildbar ist
+    (AOQ-Zeilen, `CHANGE_RELATIONS`, `DISABLE_TOWN`, `ENABLE` usw.), bleibt
+    roh. Der Originalblock und eine Signatur der importierten Felder stehen in
+    `quest.extra['qtx']`; solange die Signatur gleich ist, wird der
+    Originalblock exportiert. Ergebnis: alle 500 Retail-Bloecke und alle 522
+    Bloecke der Installation mit Yamalin byte-gleich, 829 rohe Zeilen.
+    Geaenderte Bloecke werden neu gebaut (Kopf, GIVER, FC, AOQ, ACTION,
+    REWARD, rohe Zeilen) und behalten alle Zeilen. Die Gruppe `(null)` (Q_700)
+    bleibt als Token erhalten.
+41. Zeitleiste (`timeline.py`): Karten aus Index und Projekt, Reihenfolge per
+    Kahn-Algorithmus ueber `AOQ PROMOTE/TAKE` (kleinste ID zuerst, Zyklen nach
+    ID aufgebrochen, Quests ohne Kette dahinter), Gruppen als Abschnitte in
+    der Reihenfolge ihrer ersten Quest. Zoom als Schalter "grosse Karten"
+    statt Regler. Neuzeichnen 30 ms bei 522 Karten.
+42. Spielquest oeffnen = Ansicht (`App.preview`), nicht im Projekt. Die
+    erste Aenderung fragt (Plan 10); Nein setzt auf den Stand beim Oeffnen
+    zurueck, Ja nimmt die Quest ins Projekt (`retail=True`). Texte eines
+    Retail-Baums ohne eigenen Schluessel (`notext`) werden nur geschrieben,
+    wenn Text eingetragen wird; Tagebuchschluessel, die eine Spielquest nie
+    hatte, werden nicht angelegt. Alle 378 Retail-Baeume zusammen ergeben die
+    Master-`.lan` byte-gleich.
+43. Quest-Menue: Duplizieren (eigene Quest mit freier ID, Textschluessel
+    neu), Loeschen (aus dem Projekt), Als Vorlage speichern /
+    Neue Quest aus Vorlage (`templates/*.tw1quest`), Validieren F7, Vorschau
+    mit `.qtx`-Block. Neue Quests uebernehmen die Tagebuchgruppe von Q_4.
+44. Validierung (`validate.py`) nach Abschnitt 8 mit Sprungziel (Node-ID,
+    `qaction:<i>` oder Quest-Feld). Regel "Kante ueber Tab-Grenzen" entfaellt
+    (12.18). Zusaetzlich zu Abschnitt 8: Vorgaengerquest aus einer anderen Mod
+    als dem Zielarchiv ist ein Fehler (dort fehlt der Block fuer die
+    AOQ-Zeile), Tagebuchgruppe ohne Namen ist eine Warnung. Feldfehler
+    kommen als `model.FieldError` mit Feldname. Statusleiste validiert
+    600 ms nach jeder Aenderung.
+45. Coach (`guide.py`): Rundgang mit 15 Schritten, Tutorial mit 11
+    Schritten und Zustandspruefung (Weiter gesperrt bis erledigt, automatisch
+    weiter nach 0,9 s), jeder Tutorial-Schritt mit "Fuer mich erledigen".
+    Goldrahmen = vier `place`-Frames auf dem Root. Rundgang startet beim
+    ersten Start nach dem Index, Haken "Beim Start nicht mehr zeigen" ist
+    vorbelegt. Hilfe > Dokumentation rendert `README.md` (Ueberschriften,
+    Listen, Code, Tabellen monospace).
+46. Menues: eigene Klasse `theme.Menu` (Segoe UI 10). Windows zeichnet
+    deaktivierte `tk.Menu`-Eintraege eingepraegt und schwer lesbar (Marcos
+    Rueckmeldung); deaktivierte Eintraege sind daher technisch aktiv, in
+    `DIM`, ohne Hover und ohne Befehl. Menueleiste in `INK` statt `MUT`.
+    Design aller Tools festgehalten in `Desktop\PY_TOOL_DESIGN.md`.
+47. Spielerkennung vor dem Export: jeder Prozess `TwoWorlds*.exe` (bei Marco
+    laeuft `TwoWorldsExtended.exe`, das die alte Liste nicht kannte).
+48. Exe (M9): `TW1QuestCreator.pyw` als Einstieg, `build_exe.spec` (onefile,
+    ohne Konsole, Icon, README und Icons als Daten, Tests und Altwerkzeuge
+    ausgeschlossen), `build_exe.bat` mit PyInstaller 6.18 unter Python 3.13
+    (unter 3.12 ist PyInstaller nicht installiert). Groesse 11,5 MB. Icon
+    eigene Grafik aus `tools/make_icon.py`. Selbsttest ohne Fenster:
+    `QF2_SELFTEST=<datei>` (Startzeit), zusaetzlich
+    `QF2_SELFTEST_EXPORT=<projekt>|<spielordner>` (Export ohne Registry).
+    Gemessen: erster Start der Exe mit Index-Aufbau 1,84 s, zweiter Start
+    0,38 s bis bereit (1,86 s inklusive Entpacken und Beenden), Export mit
+    Pruefung in der Exe erfolgreich.
+49. Doku (M10): README Abschnitt 6.1 (Flags laut SDK) und 13 (QuestForge 2),
+    Modul-Referenz, Guide-HTML Abschnitt 12 mit Fensterskizze, Skill-Datei
+    mit Flag-Tabelle und Loader-Spalten.
+50. Hilfe-Menue (Marco 2026-09-13): die vier Links (GitHub-Repo,
+    `https://alchemy-fox.de/`, Guide-Seite, `https://twmp.alchemy-fox.de/`)
+    stehen klickbar direkt im Hilfe-Menue und im Ueber-Dialog. Sichtpruefung
+    der Menues nach 12.46 per Screenshot erledigt: Segoe UI 10 normal,
+    deaktivierte Eintraege flach grau ohne Schatten. Die Design-Vorlage fuer
+    weitere Tools liegt ausserhalb des Repos (`Desktop\PY_TOOL_DESIGN.md`)
+    und gibt nur Farben, Menueleiste, Guide beim Start und Hilfe-Links vor.
+51. `tw1_qtx` bleibt unveraendert (Marco 2026-09-13). Die Loader-Opcodes
+    ausserhalb von `tw1_qtx` (12.31) bietet das Tool nicht an. Commit von
+    M6 bis M10 auf `questforge2` freigegeben.
+
 Offen:
 
 - Ob `quest_creator_gui.py` nach dem ersten erfolgreichen Spieltest aus
-  `main` entfernt wird.
-- `[PRUEFEN]`-Punkte, Stand 2026-09-13: Bedingungen/Aktionen pro Zeile
-  (6.3) **per SDK geklaert**, nur der Spieltest 4a/4b/4c steht aus.
-  Annahme/Ablehnen (5.2) **geklaert, Hypothese A**, Spieltest als
-  Bestaetigung. Kanten ueber Tab-Grenzen (5.1) **geklaert, erlaubt**.
-  Offen: `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4), Startzeilen-Regel der
-  Engine (6.3), `ACTION NPC_DIALOG` (6.3), NPC-Record-Spalten neuer NPCs
-  (12.34), Loader-Opcodes ausserhalb `tw1_qtx` (12.31).
-- Spieltest nach M5 (Marco): Testprojekte 4a und 4b (12.38).
+  `main` entfernt wird (Marco 2026-09-13: wird nach dem Spieltest
+  entschieden).
+- `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,
+  sonst geklaert):
+  - Bedingungen/Aktionen pro Zeile (6.3): **per SDK geklaert**, Spieltest
+    4a/4b/4c als Bestaetigung.
+  - Annahme/Ablehnen (5.2): **Hypothese A per SDK**, Spieltest 4a.
+  - Kanten ueber Ebenen (5.1): **geklaert, erlaubt**.
+  - `AOQ TAKE TAKE` gegen `PROMOTE TAKE` (6.4): offen, beide Wege sind im
+    Tool waehlbar (Quest-Panel "Start").
+  - Startzeilen-Regel der Engine (6.3): offen; der Export haelt die
+    getestete Reihenfolge ein.
+  - `ACTION NPC_DIALOG` (6.3): offen, im Tool nicht angeboten.
+  - NPC-Block neuer NPCs (12.34): offen, Spalten 7 bis 12 von der Vorlage.
+- Spieltests (Marco): Testprojekte 4a und 4b (12.38), danach die erste
+  Tool-Quest (M5) und eine geaenderte Retail-Quest (M6).
 
 ---
 

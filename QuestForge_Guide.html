@@ -110,8 +110,17 @@
     <li><a href="#alte-tools">Die alten Werkzeuge</a></li>
     <li><a href="#voice">Vertonung</a></li>
     <li><a href="#dateien">Dateien im QuestForge-Ordner</a></li>
+    <li><a href="#qf2">QuestForge 2: der Quest-Editor</a></li>
   </ol>
 </nav>
+
+<div class="callout info">
+  <div class="ic">i</div>
+  <div><b>Neu: QuestForge 2 (TW1QuestCreator.exe).</b> Quests und Dialoge werden jetzt
+  als Node-Graph gebaut, mit Zeitleiste aller Quests, Validierung, Export in ein
+  Mod-Archiv und einem Coach mit Rundgang und Tutorial. Siehe
+  <a href="#qf2">Abschnitt 12</a>.</div>
+</div>
 
 <!-- 1 -->
 <h2 id="verdikt"><span class="num">1</span>Verdikt: geht das?</h2>
@@ -441,7 +450,115 @@ kein Abo.</p>
   <tr><td class="mono">base\TwoWorldsQuests.qtx</td><td>Basis aus Update16 (Quest-Definitionen)</td></tr>
   <tr><td class="mono">base\TwoWorldsQuests.lan</td><td>Master-Texte (zum Nachschlagen)</td></tr>
   <tr><td class="mono">out\*.wd</td><td>Erzeugte Mod-Archive</td></tr>
+  <tr><td class="mono">questforge2\</td><td>QuestForge 2, der Node-Editor (Abschnitt 12)</td></tr>
+  <tr><td class="mono">TW1QuestCreator.pyw</td><td>Starter ohne Konsole</td></tr>
+  <tr><td class="mono">build_exe.bat</td><td>baut <code>dist\TW1QuestCreator.exe</code></td></tr>
+  <tr><td class="mono">testprojekte\</td><td>Projekte für die offenen Spieltests</td></tr>
 </table>
+
+<!-- 12 -->
+<h2 id="qf2"><span class="num">12</span>QuestForge 2: der Quest-Editor</h2>
+<p class="lead">Von "Neue Quest" bis zur aktivierten Mod, ohne eine Datei von Hand anzufassen.</p>
+
+<figure>
+<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+  <rect x="0" y="0" width="880" height="330" fill="#14110e"/>
+  <rect x="0" y="0" width="880" height="26" fill="#1c1813"/>
+  <text x="14" y="18" fill="#ece7db" font-size="12">Datei   Bearbeiten   Ansicht   Quest   Hilfe</text>
+  <rect x="0" y="28" width="880" height="56" fill="#1c1813"/>
+  <text x="12" y="44" fill="#d2a044" font-size="11" font-weight="bold">ZEITLEISTE</text>
+  <g font-size="10">
+    <rect x="12" y="52" width="110" height="26" fill="#231e17" stroke="#352f26"/><text x="18" y="69" fill="#9a938a">Q_4 Lichtstreif</text>
+    <rect x="128" y="52" width="110" height="26" fill="#231e17" stroke="#352f26"/><text x="134" y="69" fill="#9a938a">Q_385 Erpresser</text>
+    <rect x="244" y="52" width="110" height="26" fill="#231e17" stroke="#d2a044" stroke-width="2"/><text x="250" y="69" fill="#d2a044">Q_386 eigene</text>
+    <rect x="360" y="52" width="110" height="26" fill="none" stroke="#d2a044" stroke-dasharray="4 3"/><text x="378" y="69" fill="#d2a044">+ Neue Quest</text>
+  </g>
+  <rect x="0" y="86" width="170" height="222" fill="#1c1813"/>
+  <text x="12" y="104" fill="#d2a044" font-size="11" font-weight="bold">SPRECHER</text>
+  <g font-size="11" fill="#ece7db">
+    <rect x="12" y="116" width="10" height="10" fill="#6ca0e0"/><text x="28" y="125">Spieler</text>
+    <rect x="12" y="134" width="10" height="10" fill="#e06c60"/><text x="28" y="143">Tago</text>
+  </g>
+  <text x="12" y="176" fill="#d2a044" font-size="11" font-weight="bold">AUFGABE / AKTIONEN</text>
+  <text x="12" y="196" fill="#43b563" font-size="11">&#9678; Aufgabe</text>
+  <text x="12" y="214" fill="#d2a044" font-size="11">&#9889; + Neue Aktion</text>
+  <text x="12" y="232" fill="#9a8fe0" font-size="11">&#9673; + Neue Bedingung</text>
+  <rect x="172" y="86" width="500" height="222" fill="#0f0d0a"/>
+  <text x="182" y="102" fill="#d2a044" font-size="11" font-weight="bold">Angebot</text>
+  <text x="240" y="102" fill="#9a938a" font-size="11">Laeuft   Erfuellt   Abgeschlossen</text>
+  <rect x="186" y="150" width="96" height="26" rx="13" fill="#1d3a26" stroke="#d2a044"/>
+  <text x="202" y="167" fill="#d2a044" font-size="10" font-weight="bold">Einstieg</text>
+  <rect x="186" y="182" width="120" height="18" rx="6" fill="#1c1813" stroke="#9a8fe0"/>
+  <text x="192" y="195" fill="#ece7db" font-size="9">&#9673; nach Q_4 (angenommen)</text>
+  <path d="M282 163 C320 163 300 140 340 140" stroke="#9a938a" stroke-width="1.5" fill="none"/>
+  <rect x="340" y="126" width="130" height="50" rx="10" fill="#231e17" stroke="#352f26"/>
+  <rect x="340" y="126" width="130" height="18" rx="9" fill="#e06c60"/>
+  <text x="348" y="139" fill="#17130b" font-size="10" font-weight="bold">Tago</text>
+  <text x="348" y="162" fill="#ece7db" font-size="9">Kannst du mir helfen?</text>
+  <path d="M470 160 C505 160 490 140 520 140" stroke="#9a938a" stroke-width="1.5" fill="none"/>
+  <rect x="520" y="126" width="140" height="66" rx="10" fill="#231e17" stroke="#d2a044" stroke-width="2"/>
+  <rect x="520" y="126" width="140" height="18" rx="9" fill="#6ca0e0"/>
+  <text x="528" y="139" fill="#17130b" font-size="10" font-weight="bold">Spieler  Frage</text>
+  <text x="528" y="160" fill="#ece7db" font-size="9">Ich helfe.  &#10004;</text>
+  <text x="528" y="176" fill="#ece7db" font-size="9">Nicht jetzt.</text>
+  <rect x="674" y="86" width="206" height="222" fill="#1c1813"/>
+  <text x="686" y="104" fill="#d2a044" font-size="11" font-weight="bold">EIGENSCHAFTEN</text>
+  <text x="686" y="124" fill="#ece7db" font-size="10">Ebene: Angebot</text>
+  <text x="686" y="142" fill="#ece7db" font-size="10">[x] Nimmt die Quest an</text>
+  <text x="686" y="160" fill="#ece7db" font-size="10">Voice-Cue: Suchen...</text>
+  <text x="686" y="228" fill="#d2a044" font-size="11" font-weight="bold">COACH</text>
+  <text x="686" y="246" fill="#ece7db" font-size="10">Schritt 6 von 11</text>
+  <rect x="0" y="310" width="880" height="20" fill="#1c1813"/>
+  <text x="10" y="324" fill="#9a938a" font-size="10">Projekt | Spielpfad | Q_386 | 5 Nodes |</text>
+  <text x="270" y="324" fill="#43b563" font-size="10">Validierung: ok</text>
+</svg>
+<figcaption>Aufbau des Fensters: Zeitleiste, Sprecher und Aktionen, Graph mit Ebenen-Reitern, Eigenschaften und Coach.</figcaption>
+</figure>
+
+<h3>So entsteht eine Quest</h3>
+<ol>
+  <li><b>Neue Quest</b> in der Zeitleiste. Das Tool wählt eine freie ID (381 bis 399) und hängt die Quest an Tagos erste Quest.</li>
+  <li><b>Titel und Tagebuch</b> im Eigenschaften-Panel eintragen (Annahme, Erfüllt, Abgeschlossen).</li>
+  <li><b>Sprecher</b> hinzufügen: vorhandener NPC oder neuer NPC mit der ID aus dem Two Worlds Editor.</li>
+  <li><b>Dialog zeichnen</b>: Sprecher in den Graph ziehen, von Ausgang zu Eingang verbinden. Jede Ebene (Angebot, Läuft, Erfüllt, Abgeschlossen) hat einen eigenen Einstieg. Bei der Annahme-Zeile den Haken "Nimmt die Quest an" setzen.</li>
+  <li><b>Aufgabe</b> links neben dem Einstieg Erfüllt festlegen, <b>Belohnungen</b> als Aktion oben an die Dankeszeile hängen.</li>
+  <li><b>Validieren</b> (F7) und <b>exportieren</b> (Strg+E). Das Spiel muss dafür geschlossen sein.</li>
+  <li><b>Neues Spiel</b> starten, Tagos erste Quest annehmen, ihn erneut ansprechen.</li>
+</ol>
+
+<div class="callout info">
+  <div class="ic">i</div>
+  <div><b>Was das Tool automatisch einhält:</b> Quest-IDs nur 381 bis 399, alle drei
+  Tagebuchtexte, <code>AOQ PROMOTE</code>-Verkettung ohne Duplikate, LF-Zeilenenden,
+  Packen nur mit <code>wdio.py</code>, Vergleich des gepackten Archivs vor dem Ersetzen,
+  Sicherung vor dem ersten Export, Registry-Schalter. Warnungen gibt es für die
+  bekannten Engine-Fallen (Teleport in Innenräume, Gebiet säubern ohne erzeugte Gegner,
+  Ort zeigen nicht bei Annahme, Sprechen mit dem eigenen Questgeber).</div>
+</div>
+
+<h3>Spielquests ändern</h3>
+<p>Ein Klick auf eine graue Karte öffnet eine Quest des Spiels oder einer Mod als Ansicht.
+Bei der ersten Änderung fragt das Tool nach und nimmt die Quest ins Projekt. Der Export
+ersetzt dann nur diesen Questblock und diesen Dialogbaum; alles andere bleibt
+byte-gleich. Getestet für alle 500 Questblöcke und alle 378 Questbäume.</p>
+
+<h3>Starten</h3>
+<pre><code><span class="tok-c"># fertige Exe, kein Python nötig</span>
+TW1QuestCreator.exe
+
+<span class="tok-c"># aus dem Quelltext</span>
+py -3.12 -m questforge2
+
+<span class="tok-c"># Exe selbst bauen (PyInstaller)</span>
+build_exe.bat</code></pre>
+
+<div class="callout warn">
+  <div class="ic">!</div>
+  <div><b>Noch am Spiel zu prüfen:</b> ob Ablehnen im Angebot wie im SDK-Code
+  funktioniert, ob die Annahme auch greift, wenn nur die letzte Zeile markiert ist, und
+  wie neue NPCs im Spiel erscheinen. Die Testprojekte liegen in
+  <code>testprojekte\</code>; Einzelheiten in <code>NODE_EDITOR_PLAN.md</code>.</div>
+</div>
 
 <div class="foot">
   QuestForge · erstellt für Marco · alle Formatangaben aus den Originaldateien und dem
