@@ -210,11 +210,15 @@ Erweitert (ausgeklappt, standardmaessig zu): Zusaetzliche Ebenen `0.FT`
 bearbeitet, die sie benutzen. Beim Laden eines Retail-Baums werden alle
 vorkommenden Flags automatisch als Tabs angelegt.
 
-**[PRUEFEN] Ebenen-Wechsel innerhalb eines Baums:** `next`-Indizes zeigen
-in denselben Baum, unabhaengig vom Flag. Ob eine Kante von einer
-`0.FT.AS`-Zeile auf eine `0.QNS.AE`-Zeile im Spiel etwas Sinnvolles tut, ist
-nicht dokumentiert. Bis das getestet ist: **Kanten nur innerhalb eines Tabs**
-erlauben, Validierung meldet Ebenen-uebergreifende Kanten als Fehler.
+**Ebenen-Wechsel innerhalb eines Baums (entschieden 2026-09-13, SDK):**
+`next`-Indizes zeigen in denselben Baum, das Spiel filtert die Nachfolger
+nach dem Zustand (Abschnitt 6.3, Ergebnis). Retail verzweigt so staendig:
+eine Taken-Zeile hat als Nachfolger eine Solved- und eine NotSolved-Zeile,
+neutrale `0x0`-Fragemenues haengen an Zeilen jeder Ebene. Kanten ueber
+Ebenen-Grenzen sind deshalb **erlaubt**. Entscheidung (Marco, 2026-09-13):
+**ein Graph pro Quest**, jeder Node traegt seine Ebene (Zustandsbits) als
+farbiges Band, die Tabs sind Filter, die zum Einstieg der Ebene springen
+und fremde Nodes abblenden (Abschnitt 12, Punkt 18).
 
 ### 5.2 Node-Typen im Dialog-Graph
 
@@ -260,11 +264,17 @@ naechsten Gespraech wieder anbieten. Offen ist nur der Mechanismus:
 | A: `1.TAKE` markiert die Annahme-Zeile, jede andere Endzeile im Angebot lehnt ab | Im Tab Angebot bekommt jede Zeile einer Spieler-Frage einen Haken **"Nimmt die Quest an"** (gold markiert). Zeilen ohne Haken, deren Zweig endet, sind Ablehnungen. Ein fuenfter Tab **"Bekannt"** (`0.QNT`) spielt nach einer Ablehnung; dort kann man erneut anbieten (wieder mit Annahme-Haken) |
 | B: Das Ende jeder `0.FT.AS`-Kette nimmt an, egal welche Zeile | Ablehnen ist im Angebot nicht moeglich. Der Haken entfaellt, der Coach sagt das klar ("Sobald das Angebotsgespraech endet, ist die Quest angenommen"). Der Tab "Bekannt" bleibt fuer Retail-Dialoge, die `0.QNT` nutzen |
 
-**[PRUEFEN] vor Meilenstein 4, am Spiel:** Angebot mit zwei Spieler-Zeilen
-bauen, eine mit `1.TAKE`, eine ohne, beide Zweige enden. Ablehnen waehlen,
-Tagebuch pruefen, NPC erneut ansprechen. Ergebnis entscheidet zwischen A und
-B; die Palette wird danach festgelegt. Bis dahin implementiert M3 den Haken
-(Hypothese A), weil er bei B einfach entfernt werden kann.
+**Ergebnis aus dem SDK (2026-09-13): Hypothese A trifft zu.** Das Bit
+`0x20000` (`eQuestTakeNow`) ist ein Ereignis, das nur feuert, wenn das
+Gespraech ueber eine Zeile mit diesem Bit lief; `0.FT.AS` ist FirstTime +
+TakeNow, `1.TAKE` ist NotSolved + TakeNow. Endet das Angebot auf einem Pfad
+ohne TakeNow, bleibt die Quest freigeschaltet, der Dialogzustand steht auf
+NotTaken, und beim naechsten Gespraech spielen die `0x2`-Zeilen (Ebene
+"Bekannt"). Gibt es dort keine, spielen die NotSolved-Zeilen der Ebene
+"Laeuft" (die sind im freigeschalteten Zustand ebenfalls spielbar).
+Der Haken "Nimmt die Quest an" bleibt; das Tool setzt das Bit auf den
+ganzen Pfad ab der angehakten Zeile. **[PRUEFEN] Spieltest** bleibt als
+Bestaetigung (6.3, Schritt 4a).
 
 **Kommentar-Node** (scharfe Ecken, grau, halbtransparent, groessenverstellbar,
 Farbe waehlbar): kein Port, keine Wirkung im Export. Kann per "Kommentar
@@ -361,12 +371,12 @@ Jede Maske zeigt in einer Zeile, **welche Marker-Art** die Aktion liest
 (z. B. "liest Marker: Q_Action_Teleport"), weil das die haeufigste Fehlerquelle
 ist.
 
-**Zeitpunkt der Aktion wird nicht abgefragt, sondern abgeleitet (vorlaeufig,
-siehe Pruefung in 6.3):** Nach heutigem Wissen haengt das Spiel Aktionen an
-Quest-Ereignisse (`TAKE, SOLVE, CLOSE, ENABLE, HEAR, FAIL, FIGHT`), nicht an
-Dialogzeilen. Falls die Pruefung einen Zeilen-Hook findet, entfaellt die
-Ableitung und die Aktion haengt echt an der Zeile. Bis dahin: Ableitung aus
-dem Tab, in dem der Node haengt:
+**Zeitpunkt der Aktion wird nicht abgefragt, sondern abgeleitet (bestaetigt
+durch die Pruefung in 6.3):** Das Spiel haengt Aktionen an Quest-Ereignisse
+(`TAKE, SOLVE, CLOSE, ENABLE, HEAR, FAIL, FIGHT`), nicht an Dialogzeilen.
+Einen Zeilen-Hook gibt es nicht; die Zeilen loesen ueber ihre Ereignisbits
+(TakeNow, CloseNow, FightNow) genau diese Ereignisse aus. Ableitung aus der
+Ebene, in der der Node haengt:
 
 | Node haengt im Tab | Zeitpunkt |
 |---|---|
@@ -418,6 +428,110 @@ Implementierer prueft das in dieser Reihenfolge, bevor er Ports zeichnet:
    im SDK gefundenen Hook in eine Testquest legen und im Spiel ansehen.
 
 Ergebnis in dieses Dokument eintragen. Danach gilt eine von zwei Bauweisen:
+
+**Ergebnis der Pruefung (2026-09-13, Schritte 1 bis 3 erledigt, Schritt 4
+offen):**
+
+*Schritt 1, Flag-Bits.* Alle 6942 Zeilen der 378 Quest-Baeume
+(`translateDQ_*`) zerfallen restlos in elf Bits, kein unbekanntes Bit. Die
+Bits mit anderen Werten (0x10, 0x40, 0x400 ... 0x80000000) kommen nur in den
+Gruss-Baeumen `translateCitizen_*`, `translateGuard_*`, `translateBandit_*`
+vor; dort ist jedes Bit ein Gruss-Slot (`PGreetings.ech`,
+`eGreetingsFriendly0..7`, `Unfriendly`, `Help`, `Work`), das hat mit Quests
+nichts zu tun.
+
+*Schritt 2, SDK-Quellen* (`Scripts\Campaigns\Missions\PInc\PQuestsCommon.ech`,
+`PDialogUnits.ec`, `PQuestActions.ech`, `PQuestLoader.ech`). Der Skript ruft
+`PlayDialog(..., nDialogFlags, nDisabledEventsMask, "translateDQ_<n>", ...)`.
+Die Maske entsteht in `GetDialogInputFlags`: Start mit allen acht
+Zustandsbits, dann werden die Bits des aktuellen Zustands **abgezogen**.
+Eine Zeile ist also spielbar, wenn alle ihre Zustandsbits im aktuellen
+Zustand gesetzt sind (`flags & maske == 0`); eine Zeile mit `0x0` ist immer
+spielbar. Die drei hohen Bits stehen nie in der Maske, sie sind
+**Ereignisse**, die das Spiel am Gespraechsende in `EndTalkDialog` an den
+Skript meldet (`UpdateQuestStateAfterDialog`):
+
+| Bit | SDK-Name | Bedeutung | Retail-Zeilen in DQ-Baeumen |
+|---|---|---|---|
+| `0x1` | `eFirstTime` | erstes Ansprechen (Quest freigeschaltet, noch nie angeboten) | 1012 pur, 1610 mit TakeNow |
+| `0x2` | `eQuestNotTaken` | Angebot gehoert, nicht angenommen | 105 |
+| `0x4` | `eQuestTaken` | angenommen (unabhaengig von erfuellt) | 137 |
+| `0x8` | `eQuestClosed` | abgeschlossen | 370 |
+| `0x10` | `eQuestFailed` | fehlgeschlagen | 18 |
+| `0x20` | `eQuestLowReputation` | Ruf unter `minRep` der Kopfzeile (dann feuert kein HEAR) | 105 |
+| `0x100` | `eQuestNotSolved` | Aufgabe noch nicht erledigt (in Zustand freigeschaltet **oder** angenommen) | 531 pur, 355 mit TakeNow, 10 mit FightNow |
+| `0x200` | `eQuestSolved` | Aufgabe erledigt (wird beim Gespraechsstart geprueft: Gegenstand/Gold im Inventar, Ort gefunden) | 90 pur, 1054 mit CloseNow |
+| `0x10000` | `eQuestFightNow` | Ereignis: Questgeber wird feindlich, Held zieht die Waffe, `FIGHT`-Aktionen | 59 pur |
+| `0x20000` | `eQuestTakeNow` | Ereignis: `TakeQuest` (Quest angenommen, `TAKE`-Aktionen und -Belohnungen) | 20 pur |
+| `0x40000` | `eQuestCloseNow` | Ereignis: `CloseQuest` (Gegenstaende/Gold werden abgenommen, `CLOSE`-Aktionen und -Belohnungen) | nur mit Solved |
+
+Damit sind die bisherigen Namen aufgeloest: `0.FT.AS` = FirstTime + TakeNow,
+`0.QNS.AE` = NotSolved, `0.QS.AE` = Solved + CloseNow, `0.QC` = Closed,
+`1.TAKE` = NotSolved + TakeNow, `0.FT` = FirstTime ohne Annahme, `0.QNT` =
+NotTaken.
+
+Weitere Fakten aus dem Code:
+- **Kein freier Zeilen-Hook.** Es gibt keine Bedingung pro Zeile ausser den
+  Zustandsbits und keine Aktion pro Zeile ausser den drei Ereignisbits.
+  Inventar/Gold werden nur indirekt geprueft: `nFinished` wird beim
+  Gespraechsstart fuer `BRING_OBJECT`, `BRING_GOLD`, `FIND_PLACE`,
+  `FIND_LOCATION` berechnet und ergibt Solved/NotSolved. Fuer `KILL` ist die
+  Pruefung im SDK auskommentiert, dort zaehlt der Questzustand.
+- `HEAR` feuert beim allerersten Gespraechsstart (vor der ersten Zeile),
+  sofern der Ruf reicht, und setzt den Dialogzustand auf NotTaken.
+- `TALK`-Aufgaben werden beim Gespraechsstart mit dem Ziel-NPC geloest
+  (`CheckQuestTalk`), die `SOLVE`-Aktionen laufen nach dem Gespraech. Das
+  ist der im SKILL beschriebene Effekt "Angebot wird uebersprungen".
+- Der Loader kennt eine im Retail nicht benutzte Aktion
+  `ACTION NPC_DIALOG <zeit> NPC_<n> <baumname>` (`AddActionNPCDialog`), die
+  zu einem Quest-Ereignis einen beliebigen Baum mit dem NPC abspielt.
+  **[PRUEFEN]** am Spiel, dann Kandidat fuer "Aktion: Gespraech starten".
+- Antwortmenues: alle 1109 Eintraege mit mehreren `next` zeigen
+  ausschliesslich auf Held-Zeilen. NPC-Zeilen haben genau einen Nachfolger
+  pro Zustand; Verzweigung nach Zustand laeuft ueber Held-Zeilen mit
+  verschiedenen Zustandsbits (z. B. `next [24, 37]` mit 24 = Solved,
+  37 = NotSolved, das Spiel zeigt nur die spielbare). **Kanten ueber
+  Zustands-Grenzen sind also Retail-Alltag**, der Punkt in 5.1 ist damit
+  entschieden: sie muessen erlaubt sein.
+- Ereignisbit-Verteilung: In 1647 von 2026 Faellen traegt auch der
+  Nachfolger einer TakeNow-Zeile TakeNow; die 379 Ausnahmen fuehren in
+  neutrale `0x0`-Fragemenues (z. B. `DQ_4` Zeile 15 nach 19/25/32). Da Q_4
+  nachweislich annimmt, obwohl das Gespraech in neutralen Zeilen endet,
+  reicht es, dass **eine** gespielte Zeile das Bit traegt. Das Tool setzt
+  das Bit trotzdem wie Retail auf den ganzen Annahme-Pfad (sicher unter
+  beiden Lesarten).
+- Negative `next`: alle 264 Faelle in DQ-Baeumen zeigen auf eine Zeile mit
+  kleinerem Index, also auf eine schon gespielte Zeile (Rueckschleife).
+  Deckt sich mit dem SKILL-Befund "wird nicht angezeigt". Das Tool erzeugt
+  keine, reicht sie beim Retail-Round-Trip aber durch.
+- **Startzeile [PRUEFEN]:** Beim Durchzaehlen ist die erste spielbare
+  Zeile in Dateireihenfolge in 90 bis 95 % der Baeume eine NPC-Zeile, die
+  Ausnahmen sind neutrale Fragemenues und Kampf-Zeilen. Ob das Spiel die
+  erste spielbare Zeile nimmt oder anders waehlt, steht nicht im Skript
+  (das macht die Engine). Die getestete Reihenfolge FirstTime, NotSolved,
+  Solved, Closed (`build_quest_tago.py`) funktioniert; der Export haelt sie
+  ein.
+
+*Schritt 3, unbekannte Felder.* `next_pad`, `cam_pad` und der Baum-`pad`
+sind in allen 9799 Zeilen 1. `anim1 == anim2` in allen Zeilen (13 Werte,
+0 bis 17); `cams` ist immer leer oder ein einzelner Wert 1, 2, 6, 7. Nichts
+davon traegt versteckte Bedingungen.
+
+*Schritt 4, Spieltest (Marco, offen):* a) Angebot mit zwei Held-Zeilen, nur
+eine mit TakeNow, Ablehnen waehlen, danach muss eine NotTaken-Zeile (`0x2`)
+spielen und das Tagebuch leer bleiben. b) TakeNow nur auf der letzten Zeile
+statt auf dem ganzen Pfad. c) `ACTION NPC_DIALOG`.
+
+**Folge fuer den Bau (Bauweise "nur Zustands-Flags" aus der Tabelle unten,
+mit Praezisierung):** NPC-Nodes bekommen keinen Bedingungs-Port. Die
+Bedingung einer Zeile ist ihr Zustand, und der wird ueber die Ebene gesetzt.
+Zusaetzlich gibt es pro Zeile drei Haken fuer die Ereignisbits:
+"Nimmt die Quest an" (TakeNow), "Schliesst die Quest ab" (CloseNow,
+Standard in der Ebene Erfuellt), "Kampf beginnt" (FightNow, unter
+Erweitert). Aktionen haengen weiter an Quest-Ereignissen (6.2), die
+Ableitung aus der Ebene ist jetzt begruendet: `TAKE` feuert, wenn ein
+Gespraech ueber eine TakeNow-Zeile lief, `CLOSE` ueber eine CloseNow-Zeile.
+
 
 | Ergebnis | NPC-Node | Bedingungs-Nodes |
 |---|---|---|
@@ -680,14 +794,36 @@ Entschieden am 2026-09-13 (Umsetzung M2):
 17. Nur im Quellcode-Modus (nicht in der Exe): "Quest > Debug: 300
     Test-Nodes" und die Frame-Zeit des letzten Drags in der Statusleiste.
 
+Entschieden am 2026-09-13 (nach der Pruefung 6.3, vor M3):
+
+18. **Ein Graph pro Quest** statt ein Graph pro Tab (Marco, Widget). Jeder
+    Dialog-Node traegt seine Ebene (`state`: `first`, `known`, `running`,
+    `taken`, `solved`, `closed`, `failed`, `lowrep`, `neutral`) und die drei
+    Ereignis-Haken (`take`, `close`, `fight`). Je Ebene gibt es einen festen
+    Einstieg-Node (`entry:<state>`), die Tabs ueber dem Graph springen zum
+    Einstieg und blenden Nodes anderer Ebenen ab (neutrale bleiben sichtbar).
+    Neue Nodes bekommen die Ebene des aktiven Tabs. Retail-Baeume laden 1:1,
+    Kanten ueber Ebenen sind normale Kanten. Das M2-Schema `quest.tabs`
+    wird zu `quest.graph` mit einem Node-Feld `state`; Projektformat bleibt
+    `format: 1`, weil noch keine Projekte existieren.
+19. Ebenen-zu-Bits-Tabelle des Exports (6.3): `first` = 0x1, `known` = 0x2,
+    `running` = 0x100, `solved` = 0x200, `closed` = 0x8, `failed` = 0x10,
+    `lowrep` = 0x1|0x20, `neutral` = 0x0; `take` addiert 0x20000, `close`
+    addiert 0x40000 (Standard an in `solved`), `fight` addiert 0x10000.
+    `taken` (0x4, 137 Retail-Zeilen) wird beim Laden als eigene Ebene
+    "Angenommen" gefuehrt, im Tool aber nicht angeboten (Laeuft deckt den
+    Fall ab).
+
 Offen:
 
 - Ob `quest_creator_gui.py` nach dem ersten erfolgreichen Spieltest aus
   `main` entfernt wird.
-- Alle `[PRUEFEN]`-Punkte: Bedingungen/Aktionen pro Zeile (6.3, vor M3,
-  Flag-Bits + SDK + Spieltest), Annahme/Ablehnen (5.2), Kanten ueber
-  Tab-Grenzen (5.1), `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4). Ergebnis
-  kommt in dieses Dokument.
+- `[PRUEFEN]`-Punkte, Stand 2026-09-13: Bedingungen/Aktionen pro Zeile
+  (6.3) **per SDK geklaert**, nur der Spieltest 4a/4b/4c steht aus.
+  Annahme/Ablehnen (5.2) **geklaert, Hypothese A**, Spieltest als
+  Bestaetigung. Kanten ueber Tab-Grenzen (5.1) **geklaert, erlaubt**.
+  Offen: `AOQ TAKE TAKE` vs `PROMOTE TAKE` (6.4), Startzeilen-Regel der
+  Engine (6.3), `ACTION NPC_DIALOG` (6.3).
 
 ---
 
