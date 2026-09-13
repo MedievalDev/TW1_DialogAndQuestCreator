@@ -727,7 +727,7 @@ dazu Questgeber, Gruppe, Aufgabe in einem Satz, Anzahl Dialogzeilen).
 | M3 | **Zuerst** Pruefung 6.3 (Flag-Bits, SDK). Dann Sprecher-Box, Spieler-/NPC-Nodes, Tabs, Eigenschaften-Panel, Cue-Suche | Pruefergebnis im Plan; ein Dialog laesst sich komplett bauen. **Fertig 2026-09-13:** Pruefung in 6.3 eingetragen; `palette.py` (Sprecher-Box mit Dialog Vorhandener/Neuer NPC, Ziehen und Doppelklick), `inspector.py` (Formulare je Node-Typ, Quest-Panel, Cue-Suche), Modell auf einen Graphen pro Quest umgestellt; Beispiel-Dialog mit Angebot/Frage/Annahme, Laeuft, Erfuellt gebaut, gespeichert, wieder geoeffnet, byte-gleich; 27 Tests gruen |
 | M4 | Export Dialog zu `.lan`-Baum, Retail-Baum laden | `translateDQ_205` laden und ohne Aenderung exportieren = byte-gleich. **Fertig 2026-09-13:** `export.py` (`tree_to_graph`, `graph_to_tree`, `preview_text`), "Quest > Dialog aus dem Spiel laden", "Vorschau als Text", "Quest wechseln". Round-Trip byte-gleich fuer **alle 378 Retail-Quest-Baeume** der Basis-`.lan` sowie alle 457 Baeume aus Yamalin.wd und Content02_Lan.wd, auch nach Speichern und Laden des Projekts; Import des groessten Baums (DQ_359, 74 Zeilen) 1 ms. 31 Tests gruen |
 | M5 | Aufgabe-Block, Aktions- und Bedingungs-Nodes, Kachel-Picker, Export `.qtx`, Packen, Registry | Quest aus dem Tool laeuft im Spiel (Marco testet). **Code fertig 2026-09-13, Spieltest bestanden 2026-09-14 (12.53, 12.55):** Aufgabe-Node, angedockte Aktionen und Bedingungen, Aktionen ohne Dialog, `mappicker.py`, `.qtx`-Block und AOQ-Einfuegen, volle `.lan` plus `ZZ_`-Overlay, Packen mit Verifikation, Registry. Einmischen in eine Kopie von Yamalin.wd: 2,9 s, alle 47 unberuehrten Eintraege samt `.lnd`/`.par`-Metadaten identisch. Testprojekte fuer 6.3 Schritt 4a/4b in `testprojekte/`. 38 Tests gruen |
-| M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen. **Code fertig 2026-09-13, Spieltest steht aus:** `timeline.py`, `retail.py`; Ansicht mit Rueckfrage bei der ersten Aenderung, Duplizieren, Loeschen, Einzelexport, Vorlagen; alle 500 Bloecke und 378 Baeume unveraendert byte-gleich; Aenderung an Q_4 in eine Yamalin-Kopie exportiert, restliche `.qtx` identisch (12.40 bis 12.43) |
+| M6 | Zeitleiste mit Retail-Quests, Retail-Quest bearbeiten | Retail-Quest aendern und im Spiel sehen. **Code fertig 2026-09-13, Spieltest bestanden 2026-09-14 (12.56):** `timeline.py`, `retail.py`; Ansicht mit Rueckfrage bei der ersten Aenderung, Duplizieren, Loeschen, Einzelexport, Vorlagen; alle 500 Bloecke und 378 Baeume unveraendert byte-gleich; Aenderung an Q_4 in eine Yamalin-Kopie exportiert, restliche `.qtx` identisch (12.40 bis 12.43) |
 | M7 | Validierung komplett | Alle Regeln aus Abschnitt 8 mit Sprung zum Node. **Fertig 2026-09-13:** `validate.py`, F7-Fenster, Statusleiste, Sprung zu Node, Aktion ohne Dialog oder Quest-Panel (12.44) |
 | M8 | Rundgang und Tutorial | Tutorial fuehrt ohne Vorwissen zur laufenden Test-Quest. **Code fertig 2026-09-13:** `guide.py`; Tutorial ohne Fenster komplett durchgespielt bis zum Export; ob die Test-Quest im Spiel laeuft, klaert Marcos Spieltest (12.45) |
 | M9 | Exe-Build, Performance-Pass, Ueber-Dialog, Icons | Eine `.exe`, Start unter 2 s auf einem normalen PC. **Fertig 2026-09-13:** `dist\TW1QuestCreator.exe` 11,5 MB, zweiter Start 0,38 s bis bereit, 1,86 s gesamt; Ueber-Dialog mit Icon und Version 2.0.0 (12.48) |
@@ -1074,12 +1074,21 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     Bestaetigt: TakeNow (`0x20000`) nur auf der letzten NPC-Zeile des
     Angebots reicht; die Held-Zeile "Warum?" davor ohne TakeNow nimmt nicht
     an. Der Annahme-Haken muss also nicht auf dem ganzen Pfad sitzen.
+56. Spieltest M6 bestanden (Marco 2026-09-14). Retail-Quest Q_4 "Ein
+    Lichtstreif..." im Tool aus dem Spiel geladen (`build_game_quest`,
+    Import mit Signatur), Belohnung `REWARD GLD TAKE SMALL` auf 777, Titel
+    und alle 33 Dialogzeilen mit `[TEST M6]` markiert, als
+    `testprojekte/Test_M6_Q4Belohnung` in Yamalin.wd exportiert. Im Archiv
+    geaendert nur der Q_4-Block der `.qtx` (Rest byte-gleich, fremde
+    Rohzeile `AOQ PROMOTE TAKE Q_386` erhalten), 34 Q_4-Schluessel der
+    Master-`.lan` (alle 601 Baumstrukturen identisch) und das neue Overlay.
+    Neues Spiel: Texte, Titel und 777 Gold erscheinen, laeuft sauber durch.
+    Damit sind alle Meilensteine im Spiel bestaetigt.
 
 Offen:
 
-- Ob `quest_creator_gui.py` nach dem ersten erfolgreichen Spieltest aus
-  `main` entfernt wird (Marco 2026-09-13: wird nach dem Spieltest
-  entschieden).
+- `quest_creator_gui.py` bleibt vorerst in `main` neben QuestForge 2
+  (Marco 2026-09-14, nach den bestandenen Spieltests entschieden).
 - `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,
   sonst geklaert):
   - Bedingungen/Aktionen pro Zeile (6.3): **per SDK geklaert, im Spiel
@@ -1094,8 +1103,8 @@ Offen:
     getestete Reihenfolge ein.
   - `ACTION NPC_DIALOG` (6.3): offen, im Tool nicht angeboten.
   - NPC-Block neuer NPCs (12.34): offen, Spalten 7 bis 12 von der Vorlage.
-- Spieltests (Marco): 4a und 4b bestanden (12.53, 12.55). Offen: eine
-  geaenderte Retail-Quest (M6).
+- Spieltests (Marco): alle geplanten bestanden, 4a, 4b und die geaenderte
+  Retail-Quest (12.53, 12.55, 12.56).
 
 ---
 

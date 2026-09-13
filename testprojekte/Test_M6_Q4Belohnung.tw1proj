@@ -1,0 +1,997 @@
+{
+  "format": 1,
+  "tool_version": "2.1.1",
+  "name": "Test_M6_Q4Belohnung",
+  "target_archive": "Yamalin.wd",
+  "quests": [
+    {
+      "id": 4,
+      "title": "Ein Lichtstreif... [TEST M6]",
+      "group": 3,
+      "journal": {
+        "take": "Tago hat von einem Fremden erzählt, der in Komorin auf dich wartet. Du findest ihn im südlichen Teil der Stadt. Es muss derselbe Mann sein, der vor zwei Wochen um ein Treffen in Thalmont angefragt hat.",
+        "solve": "",
+        "close": "Du hast Gandohar im südlichen Teil von Komorin getroffen."
+      },
+      "giver": 3,
+      "giver_type": "ACTIVE",
+      "map_sign": "AUTO_CLOSE_ON_SOLVE",
+      "offered": true,
+      "enable_level": 1,
+      "speakers": [
+        {
+          "id": 3,
+          "name": "Tago",
+          "lector": 123,
+          "tile": "E1",
+          "new": false
+        }
+      ],
+      "graph": {
+        "nodes": {
+          "entry:first": {
+            "type": "entry",
+            "state": "first",
+            "x": 40,
+            "y": 40
+          },
+          "entry:running": {
+            "type": "entry",
+            "state": "running",
+            "x": 40,
+            "y": 493
+          },
+          "entry:solved": {
+            "type": "entry",
+            "state": "solved",
+            "x": 40,
+            "y": 639
+          },
+          "entry:closed": {
+            "type": "entry",
+            "state": "closed",
+            "x": 40,
+            "y": 725
+          },
+          "task": {
+            "type": "task",
+            "fc": "TALK",
+            "args": {
+              "npc": 5
+            },
+            "x": -230,
+            "y": 631.0
+          },
+          "n1": {
+            "type": "player",
+            "state": "first",
+            "x": 270,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Was suchst du auch hier? Ich sagte doch, dass ich dich nicht mehr brauche.",
+                "cue": "CUE_0001_0095",
+                "cam": 7,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_1",
+                "order": 0
+              }
+            ]
+          },
+          "n2": {
+            "type": "npc",
+            "state": "first",
+            "x": 550,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Der Dorfälteste schickt mich mit deiner Belohnung. Nur für den Fall, dass du nicht ins Dorf zurück kommst.",
+                "cue": "CUE_0123_0002",
+                "cam": 1,
+                "anim": 16,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_2",
+                "order": 1
+              }
+            ]
+          },
+          "n3": {
+            "type": "player",
+            "state": "first",
+            "x": 830,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Unsinn! Warum sollte ich nicht zurückkommen?",
+                "cue": "CUE_0001_0096",
+                "cam": 6,
+                "anim": 17,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_3",
+                "order": 2
+              }
+            ]
+          },
+          "n4": {
+            "type": "npc",
+            "state": "first",
+            "x": 1110,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Kurz nachdem du weg warst, bekamen wir merkwürdigen Besuch. Sie haben nach dir gefragt.",
+                "cue": "CUE_0123_0003",
+                "cam": 2,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_4",
+                "order": 3
+              }
+            ]
+          },
+          "n5": {
+            "type": "player",
+            "state": "first",
+            "x": 1390,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Wie hat der Besuch ausgesehen?",
+                "cue": "CUE_0001_0097",
+                "cam": 6,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_5",
+                "order": 4
+              }
+            ]
+          },
+          "n6": {
+            "type": "npc",
+            "state": "first",
+            "x": 1670,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Es waren Krieger. Keine sehr angenehmen Zeitgenossen. Einer von ihnen ist immer noch da und wartet auf deine Rückkehr.",
+                "cue": "CUE_0123_0004",
+                "cam": 1,
+                "anim": 16,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_6",
+                "order": 5
+              }
+            ]
+          },
+          "n7": {
+            "type": "player",
+            "state": "first",
+            "x": 1950,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Und ihr habt gedacht, ich würde mich nicht zurück trauen? Warum habt ihr nicht einfach gewartet, ob ich das Gold abhole?",
+                "cue": "CUE_0001_0098",
+                "cam": 7,
+                "anim": 10,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_7",
+                "order": 6
+              }
+            ]
+          },
+          "n8": {
+            "type": "npc",
+            "state": "first",
+            "x": 2230,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Ich verstehe nicht ganz?",
+                "cue": "CUE_0123_0005",
+                "cam": 1,
+                "anim": 8,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_8",
+                "order": 7
+              }
+            ]
+          },
+          "n9": {
+            "type": "player",
+            "state": "first",
+            "x": 2510,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Da wo ich herkomme, zahlen die Leute nur, wenn man sie dazu zwingt.",
+                "cue": "CUE_0001_0099",
+                "cam": 7,
+                "anim": 9,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_9",
+                "order": 8
+              }
+            ]
+          },
+          "n10": {
+            "type": "npc",
+            "state": "first",
+            "x": 2790,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Wir sind hier in Thalmont. Wir schätzen gute Arbeit!",
+                "cue": "CUE_0123_0006",
+                "cam": 1,
+                "anim": 8,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_10",
+                "order": 9
+              }
+            ]
+          },
+          "n11": {
+            "type": "player",
+            "state": "first",
+            "x": 3070,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Ich muss wohl noch eine Menge lernen über diese Gegend. Wirst du mit mir zurück gehen?",
+                "cue": "CUE_0001_0100",
+                "cam": 7,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_11",
+                "order": 10
+              }
+            ]
+          },
+          "n12": {
+            "type": "npc",
+            "state": "first",
+            "x": 3350,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Aber dieser Mann...",
+                "cue": "CUE_0123_0007",
+                "cam": 1,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_12",
+                "order": 11
+              }
+            ]
+          },
+          "n13": {
+            "type": "player",
+            "state": "first",
+            "x": 3630,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Ich habe ihn bereits erwartet ...",
+                "cue": "CUE_0001_0101",
+                "cam": 6,
+                "anim": 10,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_13",
+                "order": 12
+              }
+            ]
+          },
+          "n14": {
+            "type": "npc",
+            "state": "first",
+            "x": 3910,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Ein Freund von dir?",
+                "cue": "CUE_0123_0008",
+                "cam": 1,
+                "anim": 17,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_14",
+                "order": 13
+              }
+            ]
+          },
+          "n15": {
+            "type": "player",
+            "state": "first",
+            "x": 4190,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Nein, er hat etwas, wonach ich schon lange suche. Sag mir wo ich ihn finde.",
+                "cue": "CUE_0001_0102",
+                "cam": 7,
+                "anim": 8,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_15",
+                "order": 14
+              }
+            ]
+          },
+          "n16": {
+            "type": "npc",
+            "state": "first",
+            "x": 4470,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Im südlichen Teil des Ortes. Wir haben ihm eine bessere Bleibe angeboten, aber er hat abgelehnt. Du kannst ihn nicht verfehlen.",
+                "cue": "CUE_0123_0009",
+                "cam": 2,
+                "anim": 0,
+                "take": true,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.FT.AS_16",
+                "order": 15
+              }
+            ]
+          },
+          "n17": {
+            "type": "npc",
+            "state": "running",
+            "x": 270,
+            "y": 493,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Der Fremde, der nach dir gefragt hat, ist nicht aus Thalmont. Eine Rüstung, wie er sie trägt, haben wir hier noch nie gesehen.",
+                "cue": "CUE_0123_0010",
+                "cam": 2,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.QNS.AE_0",
+                "order": 16
+              }
+            ]
+          },
+          "n18": {
+            "type": "npc",
+            "state": "solved",
+            "x": 270,
+            "y": 639,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "",
+                "cue": "CUE_0123_0010",
+                "cam": 2,
+                "anim": 0,
+                "take": false,
+                "close": true,
+                "fight": false,
+                "tid": "translateDQ_4_0.QS.AE_0",
+                "order": 17,
+                "notext": true
+              }
+            ]
+          },
+          "n19": {
+            "type": "npc",
+            "state": "closed",
+            "x": 270,
+            "y": 725,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Pass auf dich auf.",
+                "cue": "CUE_0123_0011",
+                "cam": 1,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_0.QC_0",
+                "order": 18
+              }
+            ]
+          },
+          "n20": {
+            "type": "player",
+            "state": "neutral",
+            "x": 4750,
+            "y": 40,
+            "speaker": "player",
+            "kind": "question",
+            "lines": [
+              {
+                "text": "[TEST M6] Erzähl mir etwas über Thalmont.",
+                "cue": "",
+                "cam": 7,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I1_1",
+                "order": 19
+              },
+              {
+                "text": "[TEST M6] Habt ihr auch Ärger von den Orks zu befürchten?",
+                "cue": "",
+                "cam": 6,
+                "anim": 17,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_1",
+                "order": 25
+              },
+              {
+                "text": "[TEST M6] Ich muss jetzt weiter.",
+                "cue": "",
+                "cam": 7,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.BYE_1",
+                "order": 32
+              }
+            ]
+          },
+          "n21": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 5030,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Seit Haus Skelden die Macht in Thalmont übernommen hat, das war vor fünf Jahren, sind schlimme Zeiten angebrochen. Die Siedlungen sind alle sich selbst überlassen.",
+                "cue": "CUE_0123_0012",
+                "cam": 1,
+                "anim": 10,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I1_2",
+                "order": 20
+              }
+            ]
+          },
+          "n22": {
+            "type": "player",
+            "state": "neutral",
+            "x": 5310,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Habt ihr mich deswegen beauftragt, statt die Soldaten zu rufen?",
+                "cue": "CUE_0001_0103",
+                "cam": 6,
+                "anim": 17,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I1_3",
+                "order": 21
+              }
+            ]
+          },
+          "n23": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 5590,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Ebrat Skelden kümmert sich nur um die Rebellen. Auf ihn und seine Leute können wir lange warten.",
+                "cue": "CUE_0123_0013",
+                "cam": 2,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I1_4",
+                "order": 22
+              }
+            ]
+          },
+          "n24": {
+            "type": "player",
+            "state": "neutral",
+            "x": 5870,
+            "y": 40,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Mir ist aufgefallen, dass es keine Straßenpatrouillen gibt.",
+                "cue": "CUE_0001_0104",
+                "cam": 6,
+                "anim": 7,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I1_5",
+                "order": 23
+              }
+            ]
+          },
+          "n25": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 6150,
+            "y": 40,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Das liegt daran, dass sie Angst vor den Rebellen haben. Ultar Karga will die Macht zurück und sein Karga Clan hat hier in den Bergen viel Rückhalt.",
+                "cue": "CUE_0123_0014",
+                "cam": 2,
+                "anim": 11,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I1_6",
+                "order": 24,
+                "next_ref": {
+                  "to": "n20",
+                  "sel": [
+                    0,
+                    1,
+                    2
+                  ],
+                  "neg": [
+                    0
+                  ]
+                }
+              }
+            ]
+          },
+          "n26": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 5030,
+            "y": 201,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Einen Ork hab' ich hier noch nie gesehen. Uns machen die Groms und die Banditen zu schaffen. Dabei sind die größten Banditen die Leute von Lord Skelden. Wenn sie dich verdächtigen, die Rebellen zu unterstützen,  lassen sie dich in den Minen schuften.",
+                "cue": "CUE_0123_0015",
+                "cam": 2,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_2",
+                "order": 26
+              }
+            ]
+          },
+          "n27": {
+            "type": "player",
+            "state": "neutral",
+            "x": 5310,
+            "y": 201,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Wer sind die Rebellen?",
+                "cue": "CUE_0001_0105",
+                "cam": 6,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_3",
+                "order": 27
+              }
+            ]
+          },
+          "n28": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 5590,
+            "y": 201,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Ultar Karga hatte früher die Macht in Thalmont. Aber ein königlicher Erlass hat ihn gezwungen, die Macht an das Haus Skelden abzugeben. Das war vor fünf Jahren.",
+                "cue": "CUE_0123_0016",
+                "cam": 1,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_4",
+                "order": 28
+              }
+            ]
+          },
+          "n29": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 5870,
+            "y": 201,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Wir dachten zunächst, der Karga Clan würde Thalmont verlassen. Aber dann waren sie zurück und mit ihnen das Gerücht, dass Lord Skelden das Königreich in Cathalon an sich reißen will.",
+                "cue": "CUE_0123_0017",
+                "cam": 2,
+                "anim": 10,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_5",
+                "order": 29
+              }
+            ]
+          },
+          "n30": {
+            "type": "player",
+            "state": "neutral",
+            "x": 6150,
+            "y": 201,
+            "speaker": "player",
+            "kind": "answer",
+            "lines": [
+              {
+                "text": "[TEST M6] Ist an dem Gerücht was dran?",
+                "cue": "CUE_0001_0106",
+                "cam": 6,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_6",
+                "order": 30
+              }
+            ]
+          },
+          "n31": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 6430,
+            "y": 201,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Woher sollen wir einfachen Leute das wissen? Aber wundern würde es mich nicht. Ebrat Skelden hat sich mehr als einmal als skrupelloser Herrscher erwiesen.",
+                "cue": "CUE_0123_0018",
+                "cam": 1,
+                "anim": 16,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.I2_7",
+                "order": 31,
+                "next_ref": {
+                  "to": "n20",
+                  "sel": [
+                    0,
+                    1,
+                    2
+                  ],
+                  "neg": [
+                    1
+                  ]
+                }
+              }
+            ]
+          },
+          "n32": {
+            "type": "npc",
+            "state": "neutral",
+            "x": 5030,
+            "y": 407,
+            "speaker": 3,
+            "lines": [
+              {
+                "text": "[TEST M6] Viel Glück!",
+                "cue": "CUE_0123_0019",
+                "cam": 1,
+                "anim": 0,
+                "take": false,
+                "close": false,
+                "fight": false,
+                "tid": "translateDQ_4_M.BYE_2",
+                "order": 33
+              }
+            ]
+          },
+          "n33": {
+            "type": "condition",
+            "cond": "level",
+            "attached_to": "entry:first",
+            "x": 40,
+            "y": 84,
+            "slot": 0,
+            "quest": 4,
+            "event": "TAKE",
+            "level": 1,
+            "guild": "(null)",
+            "min_rep": 0
+          }
+        },
+        "edges": [
+          [
+            "n1",
+            0,
+            "n2"
+          ],
+          [
+            "n2",
+            0,
+            "n3"
+          ],
+          [
+            "n3",
+            0,
+            "n4"
+          ],
+          [
+            "n4",
+            0,
+            "n5"
+          ],
+          [
+            "n5",
+            0,
+            "n6"
+          ],
+          [
+            "n6",
+            0,
+            "n7"
+          ],
+          [
+            "n7",
+            0,
+            "n8"
+          ],
+          [
+            "n8",
+            0,
+            "n9"
+          ],
+          [
+            "n9",
+            0,
+            "n10"
+          ],
+          [
+            "n10",
+            0,
+            "n11"
+          ],
+          [
+            "n11",
+            0,
+            "n12"
+          ],
+          [
+            "n12",
+            0,
+            "n13"
+          ],
+          [
+            "n13",
+            0,
+            "n14"
+          ],
+          [
+            "n14",
+            0,
+            "n15"
+          ],
+          [
+            "n15",
+            0,
+            "n16"
+          ],
+          [
+            "n16",
+            0,
+            "n20"
+          ],
+          [
+            "n17",
+            0,
+            "n20"
+          ],
+          [
+            "n19",
+            0,
+            "n20"
+          ],
+          [
+            "n20",
+            0,
+            "n21"
+          ],
+          [
+            "n21",
+            0,
+            "n22"
+          ],
+          [
+            "n22",
+            0,
+            "n23"
+          ],
+          [
+            "n23",
+            0,
+            "n24"
+          ],
+          [
+            "n24",
+            0,
+            "n25"
+          ],
+          [
+            "n25",
+            0,
+            "n20"
+          ],
+          [
+            "n20",
+            1,
+            "n26"
+          ],
+          [
+            "n26",
+            0,
+            "n27"
+          ],
+          [
+            "n27",
+            0,
+            "n28"
+          ],
+          [
+            "n28",
+            0,
+            "n29"
+          ],
+          [
+            "n29",
+            0,
+            "n30"
+          ],
+          [
+            "n30",
+            0,
+            "n31"
+          ],
+          [
+            "n31",
+            0,
+            "n20"
+          ],
+          [
+            "n20",
+            2,
+            "n32"
+          ],
+          [
+            "entry:first",
+            0,
+            "n1"
+          ],
+          [
+            "entry:running",
+            0,
+            "n17"
+          ],
+          [
+            "entry:solved",
+            0,
+            "n18"
+          ],
+          [
+            "entry:closed",
+            0,
+            "n19"
+          ]
+        ]
+      },
+      "actions": [
+        {
+          "kind": "REWARD",
+          "verb": "GLD",
+          "args": {
+            "amount": "777"
+          },
+          "when": "TAKE"
+        }
+      ],
+      "retail": true,
+      "qtx": {
+        "block": "QUEST Q_4 1 3 (null) 0 True\n  GIVER ACTIVE NPC_3 AUTO_CLOSE_ON_SOLVE NONE\n  FC TALK NPC_5\n  AOQ PROMOTE TAKE Q_386\n  REWARD GLD TAKE SMALL\nEND\n",
+        "raw": [
+          [
+            "AOQ",
+            [
+              "PROMOTE",
+              "TAKE",
+              "Q_386"
+            ]
+          ]
+        ],
+        "log": true,
+        "group_raw": "3",
+        "group_int": 3,
+        "giver_remove": "NONE",
+        "sig": "[[\"Q_4\", \"1\", \"3\", \"(null)\", \"0\", \"True\"], [[\"GIVER\", [\"ACTIVE\", \"NPC_3\", \"AUTO_CLOSE_ON_SOLVE\", \"NONE\"]], [\"FC\", [\"TALK\", \"NPC_5\"]], [\"AOQ\", [\"PROMOTE\", \"TAKE\", \"Q_386\"]], [\"REWARD\", [\"GLD\", \"TAKE\", \"SMALL\"]]]]"
+      },
+      "import": {
+        "lines": 34,
+        "menus": 1,
+        "notes": 0,
+        "source": "Yamalin.wd"
+      }
+    }
+  ]
+}
