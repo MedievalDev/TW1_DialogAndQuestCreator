@@ -1096,9 +1096,11 @@ Offen:
   - Annahme/Ablehnen (5.2): **Hypothese A, im Spiel bestaetigt** (4a,
     12.53).
   - Kanten ueber Ebenen (5.1): **geklaert, erlaubt**.
-  - `AOQ TAKE TAKE` gegen `PROMOTE TAKE` (6.4): `PROMOTE TAKE` funktioniert
-    im Spiel (4a, 12.53); `TAKE TAKE` ungetestet, beide Wege bleiben
-    waehlbar.
+  - `AOQ TAKE TAKE` gegen `PROMOTE TAKE` (6.4): **geklaert, nicht noetig**
+    (Marco 2026-09-15). `PROMOTE TAKE` mit Angebot ist der Normalfall und im
+    Spiel bestaetigt (4a, 12.53). `TAKE TAKE` (ohne Angebot sofort
+    angenommen) bleibt als Schalter im Quest-Panel, ein eigener Spieltest
+    ist erst noetig, wenn es jemand nutzt.
   - Startzeilen-Regel der Engine (6.3): offen; der Export haelt die
     getestete Reihenfolge ein.
   - `ACTION NPC_DIALOG` (6.3): offen, im Tool nicht angeboten.

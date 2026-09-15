@@ -156,7 +156,7 @@ END
 
 | Regel | Grund |
 |---|---|
-| Quest-ID **381–699** | 1–380 ist Einzelspieler, 700–959 ist Multiplayer, dazwischen ist alles frei. Der Parser selbst kennt keine Obergrenze — die mitgelieferten Mehrspieler-Kartendateien nutzen IDs wie 2001 und 4001. Eine engine-seitige Array-Grenze irgendwo in diesem Bereich lässt sich aus den Daten allein nicht ausschließen; sie würde sich als Quest zeigen, die einfach nie erscheint. |
+| Quest-ID **381–399** | Im Einzelspieler gibt es eine harte Grenze bei 400, im Spiel getestet: ab 400 löst die Engine jede AOQ-Referenz auf Quest 0 auf, die Quest erscheint nie und das Tagebuch zeigt einen Phantom-Eintrag `translateQ_0`. Dieselbe Quest lief als `Q_389` sofort. Es bleiben 19 freie IDs; danach IDs erledigter Original-Quests wiederverwenden. QuestForge 2 lässt nur 381–399 zu. |
 | `enableLevel 1` | wie die Retail-Startquests; `0` funktionierte in Tests nicht zuverlässig |
 | Kopfzeile letzte Spalte `True` | sonst kein Tagebucheintrag |
 | Symbolische Belohnungen sind mager | `MEDIUM` Gold ≈ 160, `SMALL` EXP ≈ 20 — konkrete Zahlen benutzen (Retail tut das auch: `REWARD GLD SOLVE 5000`) |
@@ -420,6 +420,9 @@ Wunsch mit einem Tutorial eine Test-Quest.
 
 ### 13.1 Starten
 
+Die fertige Exe liegt bei jedem Release auf GitHub:
+<https://github.com/MedievalDev/TW1_DialogAndQuestCreator/releases>
+
 ```
 TW1QuestCreator.exe                 fertige Exe, kein Python nötig
 py -3.12 -m questforge2             aus dem Quelltext (Repo-Ordner)
@@ -511,10 +514,14 @@ Version und Startzeit in die Datei und beendet das Programm.
 
 ### 13.6 Offene Punkte
 
-Was nur am Spiel geklärt werden kann, steht mit **[PRUEFEN]** in
-`NODE_EDITOR_PLAN.md` (Ablehnen und Annahme, Startzeilen-Regel,
-`AOQ TAKE TAKE` gegen `PROMOTE TAKE`, NPC-Blöcke neuer NPCs,
-`ACTION NPC_DIALOG`). Die Testprojekte dafür liegen in `testprojekte\`.
+Im Spiel bestätigt (Stand 2.1.1): Ablehnen und Annahme im Angebot,
+Annahme nur auf der letzten Zeile, eine komplett mit dem Tool gebaute Quest
+und eine geänderte Original-Quest. Die Testprojekte liegen in
+`testprojekte\`.
+
+Noch offen, Details in `NODE_EDITOR_PLAN.md` Abschnitt 12: die
+Startzeilen-Regel der Engine, die übernommenen Spalten im NPC-Block neuer
+NPCs und `ACTION NPC_DIALOG` (im Tool nicht angeboten).
 
 ## 14. Credits und Lizenz
 
