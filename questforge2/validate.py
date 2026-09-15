@@ -10,6 +10,7 @@ showed such edges are normal retail practice (decision 12.18).
 """
 
 from . import model
+from .data import MIN_QUEST_ID, RETAIL_LIMIT
 from .model import entry_id
 
 INTERIOR_HINT = '_'
@@ -80,8 +81,14 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None):
 
     # -- quest fields -----------------------------------------------------------
     if own:
-        if not isinstance(qid, int) or not 381 <= qid <= 399:
-            E.append((t('val.id.range', id=qid), None))
+        limit = getattr(index, 'quest_limit', None) or RETAIL_LIMIT
+        if not isinstance(qid, int) or qid < MIN_QUEST_ID:
+            E.append((t('val.id.range', id=qid, last=limit - 1), None))
+        elif qid >= limit:
+            # above the limit the engine turns the quest into quest 0
+            E.append((t('val.id.limit', id=qid, limit=limit), None))
+        elif qid >= RETAIL_LIMIT:
+            W.append((t('warn.id.limit600', id=qid), None))
         elif index and index.quest(qid):
             src = index.quest(qid)['source']
             if src == 'retail' or (archive and src != archive):

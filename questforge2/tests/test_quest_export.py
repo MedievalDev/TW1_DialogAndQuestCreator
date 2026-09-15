@@ -118,7 +118,7 @@ class QtxBlock(unittest.TestCase):
         model.set_task(q.graph, 'KILL')
         E, _ = export.validate_quest(q, _Index())
         keys = ' '.join(e[0] for e in E)
-        self.assertIn('val.id.range', keys)
+        self.assertIn('val.id.limit', keys)  # above limit 400
         self.assertIn('val.journal.solve', keys)
         self.assertIn('val.task.field', keys)
         q.id = 390

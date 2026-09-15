@@ -156,7 +156,7 @@ END
 
 | Regel | Grund |
 |---|---|
-| Quest-ID **381–399** | Im Einzelspieler gibt es eine harte Grenze bei 400, im Spiel getestet: ab 400 löst die Engine jede AOQ-Referenz auf Quest 0 auf, die Quest erscheint nie und das Tagebuch zeigt einen Phantom-Eintrag `translateQ_0`. Dieselbe Quest lief als `Q_389` sofort. Es bleiben 19 freie IDs; danach IDs erledigter Original-Quests wiederverwenden. QuestForge 2 lässt nur 381–399 zu. |
+| Quest-ID **381–399** | Im Einzelspieler gibt es eine harte Grenze bei 400, im Spiel getestet: ab 400 löst die Engine jede AOQ-Referenz auf Quest 0 auf, die Quest erscheint nie und das Tagebuch zeigt einen Phantom-Eintrag `translateQ_0`. Dieselbe Quest lief als `Q_389` sofort. Es bleiben 19 freie IDs; danach IDs erledigter Original-Quests wiederverwenden. QuestForge 2 lässt 381–399 zu, mit der Questgrenze 600 (13.2) 381–599. |
 | `enableLevel 1` | wie die Retail-Startquests; `0` funktionierte in Tests nicht zuverlässig |
 | Kopfzeile letzte Spalte `True` | sonst kein Tagebucheintrag |
 | Symbolische Belohnungen sind mager | `MEDIUM` Gold ≈ 160, `SMALL` EXP ≈ 20 — konkrete Zahlen benutzen (Retail tut das auch: `REWARD GLD SOLVE 5000`) |
@@ -470,6 +470,17 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
 - **Hilfe:** Rundgang, Tutorial, diese Dokumentation, klickbare Links (GitHub-Repo, Alchemy Fox, Guide-Seite, Community), Über.
 - **Sprache:** `DE · EN` oben rechts in der Menüleiste schaltet sofort um.
   Projekt und Ansicht bleiben erhalten.
+- **Questgrenze** (Quest > Questgrenze, oder Klick auf "Grenze" in der
+  Statusleiste): Das Spiel kennt ab Werk 400 Questnummern. "Auf 600 anheben"
+  liest das Original-Questskript `PQuests.eco` aus `Update16.wd`, setzt die
+  41 Stellen mit 400 auf 600 und legt es als `Mods\QuestLimit600.wd` mit
+  frischer GUID ab (die Engine führt Skripte über die GUID, mit der
+  Original-GUID liefe weiter die 400). Die Mod-Schalter werden vorher nach
+  `backup\` exportiert. Danach sind eigene IDs bis 599 frei; die Validierung
+  sperrt IDs über der wirksamen Grenze und warnt ab 400, dass Spieler die
+  Grenz-Mod ebenfalls brauchen. Gilt nur für neue Spiele. "Zurück auf 400"
+  entfernt die Datei und schaltet sie aus. Übernommen aus dem TW1 Quest Limit
+  Patcher 1.0, gleicher Dateiname, beide Werkzeuge erkennen sich gegenseitig.
 
 ### 13.3 Was der Export macht
 

@@ -14,7 +14,8 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from . import APP_NAME, VERSION, data, export, model, retail, theme, validate
+from . import (APP_NAME, VERSION, data, export, model, questlimit, retail,
+               theme, validate)
 from .graph import GraphView
 from .guide import Coach, show_docs
 from .i18n import t, set_lang, get_lang, detect_lang
@@ -27,6 +28,7 @@ GUIDE_URL = 'https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/'
 GITHUB_URL = 'https://github.com/MedievalDev/TW1_DialogAndQuestCreator'
 COMMUNITY_URL = 'https://twmp.alchemy-fox.de/'
 SITE_URL = 'https://alchemy-fox.de/'
+NL = chr(10)
 LINKS = (('about.github', GITHUB_URL), ('about.site', SITE_URL),
          ('about.guide', GUIDE_URL), ('about.community', COMMUNITY_URL))
 DEBUG = not getattr(sys, 'frozen', False)
@@ -48,6 +50,7 @@ class App:
         self.preview = None            # game quest shown but not in the project
         self._preview_snap = None
         self._val_job = None
+        self.quest_limit = data.RETAIL_LIMIT   # eQuestsNum the game runs with
 
         self.root = tk.Tk()
         self.root.withdraw()
@@ -281,6 +284,10 @@ class App:
                       state=self._state(self.quest is not None))
         m.add_command(label=t('quest.template'), command=self.save_template,
                       state=self._state(self.quest is not None))
+        m.add_separator()
+        m.add_command(label=t('quest.limit', n=self.quest_limit),
+                      command=self.show_quest_limit,
+                      state=self._state(bool(self.cfg.get('game_dir'))))
         if DEBUG:
             m.add_separator()
             m.add_command(label=t('quest.debug300'), command=self.debug_nodes,
@@ -619,7 +626,14 @@ class App:
             i for i in range(data.MIN_QUEST_ID, data.MAX_QUEST_ID + 1)
             if i not in taken]
         if not free:
-            messagebox.showwarning(APP_NAME, t('quest.noid'), parent=self.root)
+            if self.quest_limit < questlimit.NEW_LIMIT:
+                if messagebox.askyesno(APP_NAME, t('quest.noid.raise'),
+                                       parent=self.root):
+                    self.show_quest_limit()
+            else:
+                messagebox.showwarning(
+                    APP_NAME, t('quest.noid', last=self.quest_limit - 1),
+                    parent=self.root)
             return None
         return free[0]
 
@@ -677,6 +691,24 @@ class App:
         self.project.quests.append(q)
         self.mark_dirty()
         self.open_quest(q)
+
+    # -- quest limit (questlimit.py) -------------------------------------------
+
+    def refresh_quest_limit(self):
+        """Read the limit the game runs with (retail 400, 600 with
+        QuestLimit600.wd or another active quest-script mod)."""
+        t0 = time.perf_counter()
+        self.quest_limit = questlimit.effective_limit(self.cfg.get('game_dir'))
+        if self.index is not None:
+            self.index.quest_limit = self.quest_limit
+        self.limit_ms = (time.perf_counter() - t0) * 1000
+        self._update_status()
+        return self.quest_limit
+
+    def show_quest_limit(self):
+        if not self.cfg.get('game_dir'):
+            return
+        QuestLimitWindow(self)
 
     def show_preview(self, quest=None):
         quest = quest or self.quest
@@ -1229,8 +1261,8 @@ class App:
         bar = ttk.Frame(self.root, style='Status.TFrame')
         bar.pack(fill='x', side='bottom')
         self.status = {}
-        for i, key in enumerate(('project', 'game', 'quest', 'nodes',
-                                 'validation')):
+        for i, key in enumerate(('project', 'game', 'limit', 'quest',
+                                 'nodes', 'validation')):
             if i:
                 ttk.Label(bar, text='|', style='StatusSep.TLabel'
                           ).pack(side='left')
@@ -1241,6 +1273,9 @@ class App:
                                             text=t('status.validation.none'))
         self.status['validation'].bind('<Button-1>',
                                        lambda e: self.validate_ui())
+        self.status['limit'].configure(cursor='hand2')
+        self.status['limit'].bind('<Button-1>',
+                                  lambda e: self.show_quest_limit())
         self.status['info'] = ttk.Label(bar, text='', style='Status.TLabel')
         self.status['info'].pack(side='right')
         self.status['hint'] = ttk.Label(bar, text='', style='Status.TLabel')
@@ -1257,6 +1292,10 @@ class App:
             s['project'].configure(text=t('status.noproject'))
         s['game'].configure(text=self.cfg.get('game_dir')
                             or t('status.nogame'))
+        s['limit'].configure(
+            text=t('status.limit', n=self.quest_limit),
+            style=('StatusOk.TLabel' if self.quest_limit > data.RETAIL_LIMIT
+                   else 'Status.TLabel'))
         qtext = t('status.noquest')
         if self.quest and self.quest.id:
             qtext = f'Q_{self.quest.id}'
@@ -1444,6 +1483,7 @@ class App:
 
     def _index_ready(self, index, from_cache, seconds):
         self.index = index
+        self.refresh_quest_limit()
         total = time.perf_counter() - self.t_start
         how = (t('status.index.cache', s=seconds) if from_cache
                else t('status.index.built', s=seconds))
@@ -1748,6 +1788,172 @@ class ProblemWindow:
         if sel and sel[0] < len(self.rows) and self.rows[sel[0]]:
             q, nid = self.rows[sel[0]]
             self.app.goto_problem(q, nid)
+
+
+class QuestLimitWindow:
+    """Raise the quest limit to 600 or go back to 400 (questlimit.py,
+    taken over from TW1 Quest Limit Patcher 1.0)."""
+
+    def __init__(self, app):
+        self.app = app
+        self.game = app.cfg.get('game_dir')
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('limit.title'))
+        self.win.transient(app.root)
+        self.win.geometry('600x540')
+        self.win.minsize(520, 460)
+        theme.dark_titlebar(self.win)
+        self.win.bind('<Escape>', lambda e: self.win.destroy())
+        f = ttk.Frame(self.win, padding=16)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('limit.head'), style='Brand.TLabel'
+                  ).pack(anchor='w')
+        ttk.Label(f, text=t('limit.sub'), style='Muted.TLabel',
+                  wraplength=560, justify='left').pack(anchor='w',
+                                                        pady=(2, 10))
+        box = ttk.Frame(f, style='Panel.TFrame')
+        box.pack(fill='x')
+        ttk.Label(box, text=t('limit.next'), style='PanelTitle.TLabel'
+                  ).pack(anchor='w')
+        self.big = ttk.Label(box, style='Panel.TLabel',
+                             font=('Segoe UI Semibold', 30))
+        self.big.pack(anchor='w', padx=8)
+        self.note = ttk.Label(box, style='PanelMuted.TLabel', wraplength=540,
+                              justify='left')
+        self.note.pack(anchor='w', padx=8, pady=(0, 8))
+        btns = ttk.Frame(f)
+        btns.pack(fill='x', pady=(12, 0))
+        self.btn_apply = ttk.Button(btns, text=t('limit.apply'),
+                                    style='Accent.TButton',
+                                    command=self.apply_clicked)
+        self.btn_apply.pack(side='left')
+        self.btn_remove = ttk.Button(btns, text=t('limit.remove'),
+                                     command=self.remove_clicked)
+        self.btn_remove.pack(side='left', padx=6)
+        ttk.Button(btns, text=t('limit.backups'),
+                   command=self.open_backups).pack(side='right')
+        self.txt = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=7)
+        self.txt.pack(fill='both', expand=True, pady=(12, 0))
+        self.txt.tag_configure('ok', foreground=theme.OK)
+        self.txt.tag_configure('err', foreground=theme.ERR)
+        self.txt.tag_configure('warn', foreground='#e0a050')
+        self.txt.configure(state='disabled')
+        ttk.Button(f, text=t('close'), command=self.win.destroy
+                   ).pack(anchor='e', pady=(10, 0))
+        self.refresh()
+
+    def _put(self, text, tag=None):
+        self.txt.configure(state='normal')
+        self.txt.insert('end', text + NL, tag)
+        self.txt.see('end')
+        self.txt.configure(state='disabled')
+
+    def log(self, msg):
+        kind = msg[0]
+        tag = None
+        if kind == 'source':
+            text = t('limit.log.source', name=msg[1], n=msg[2],
+                     state=t('limit.verified') if msg[3]
+                     else t('limit.unverified'))
+        elif kind == 'sites':
+            text = t('limit.log.sites', n=msg[1])
+        elif kind == 'regbackup':
+            text = t('limit.log.regbackup', path=msg[1])
+        elif kind == 'oldmod':
+            text = t('limit.log.oldmod', name=msg[1])
+        elif kind == 'written':
+            text = t('limit.log.written', name=msg[1], guid=msg[2])
+            tag = 'ok'
+        elif kind == 'otheractive':
+            text = t('limit.log.other', name=msg[1])
+            tag = 'warn'
+        elif kind == 'removed':
+            text = t('limit.log.removed', name=msg[1])
+        elif kind == 'switchedoff':
+            text = t('limit.log.off', name=msg[1])
+        else:
+            text = ' '.join(str(x) for x in msg)
+        self._put(text, tag)
+
+    def refresh(self):
+        try:
+            st = questlimit.State(self.game)
+            err = st.error
+        except Exception as e:           # shown in the window
+            st, err = None, str(e)
+        if st is None or err:
+            self.big.configure(text='-', foreground=theme.DIM)
+            self.note.configure(text=t('limit.error', e=err))
+            self.btn_apply.state(['disabled'])
+            self.btn_remove.state(['disabled'])
+            return
+        eff = st.effective
+        last = data.max_quest_id(eff)
+        self.big.configure(text=str(eff), foreground=theme.OK
+                           if eff > questlimit.OLD_LIMIT else theme.GOLD)
+        notes = [t('limit.ids', last=last,
+                   n=last - data.MIN_QUEST_ID + 1)]
+        if st.mod_present and st.mod_active and st.mod_limit:
+            notes.append(t('limit.mod.on', name=questlimit.MOD_NAME))
+        elif st.mod_present:
+            notes.append(t('limit.mod.off', name=questlimit.MOD_NAME))
+        elif eff == questlimit.OLD_LIMIT:
+            notes.append(t('limit.retail',
+                           src=os.path.basename(st.source or '')))
+        for name, lim, active in st.others:
+            if active:
+                notes.append(t('limit.other', name=name, n=lim or '?'))
+        if not st.source_verified:
+            notes.append(t('limit.notverified'))
+        notes.append(t('limit.newgames'))
+        self.note.configure(text=NL.join(notes))
+        self.btn_apply.state(['!disabled'])
+        can_remove = (st.mod_present
+                      or questlimit.MOD_NAME in questlimit.reg_mods())
+        self.btn_remove.state(['!disabled'] if can_remove else ['disabled'])
+        self.app.refresh_quest_limit()
+
+    def _guard(self):
+        if export.game_running():
+            messagebox.showerror(t('limit.title'), t('export.running'),
+                                 parent=self.win)
+            return False
+        return True
+
+    def apply_clicked(self):
+        if not self._guard():
+            return
+        try:
+            questlimit.apply(self.game, self.log)
+            self._put(t('limit.done.apply'), 'ok')
+        except Exception as e:           # shown in the log
+            self._put(t('limit.failed', e=e), 'err')
+        self.refresh()
+        self.app.schedule_validation(10)
+
+    def remove_clicked(self):
+        if not self._guard():
+            return
+        if not messagebox.askyesno(
+                t('limit.title'),
+                t('limit.remove.q', name=questlimit.MOD_NAME),
+                parent=self.win):
+            return
+        try:
+            questlimit.remove(self.game, self.log)
+            self._put(t('limit.done.remove'), 'ok')
+        except Exception as e:           # shown in the log
+            self._put(t('limit.failed', e=e), 'err')
+        self.refresh()
+        self.app.schedule_validation(10)
+
+    def open_backups(self):
+        d = questlimit.backup_dir()
+        os.makedirs(d, exist_ok=True)
+        try:
+            os.startfile(d)
+        except OSError:
+            pass
 
 
 class ExportWindow:

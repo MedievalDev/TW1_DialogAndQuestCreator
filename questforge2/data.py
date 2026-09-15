@@ -26,6 +26,13 @@ import tw1_wd
 INDEX_FORMAT = 3      # bump whenever the index content changes
 MIN_QUEST_ID = 381
 MAX_QUEST_ID = 399          # hard engine cap in single-player, see SKILL.md
+RETAIL_LIMIT = 400          # eQuestsNum of the retail PQuests.eco
+
+
+def max_quest_id(limit=RETAIL_LIMIT):
+    """Highest usable quest id for the quest limit the game runs with
+    (400 retail, 600 with QuestLimit600.wd, see questlimit.py)."""
+    return max(MAX_QUEST_ID, int(limit or RETAIL_LIMIT) - 1)
 REG_GAME = r'SOFTWARE\Reality Pump\TwoWorlds'
 REG_MODS = REG_GAME + r'\Mods'
 INNER_QTX = 'Scripts\\Quests\\TwoWorldsQuests.qtx'
@@ -627,6 +634,7 @@ class Index:
         self.markers = d['markers']
         self.cues = d['cues']
         self.lectors = d['lectors']
+        self.quest_limit = RETAIL_LIMIT  # set by the app (questlimit.py)
 
     def quest(self, qid):
         return self.quests.get(str(qid))
@@ -644,7 +652,8 @@ class Index:
 
     def free_ids(self, taken=()):
         used = {int(k) for k in self.quests} | set(taken)
-        return [i for i in range(MIN_QUEST_ID, MAX_QUEST_ID + 1)
+        return [i for i in range(MIN_QUEST_ID,
+                                 max_quest_id(self.quest_limit) + 1)
                 if i not in used]
 
     def retail_quest_ids(self):

@@ -186,7 +186,8 @@ class Inspector(ttk.Frame):
         self.title.configure(text=t('insp.quest'))
         taken = {qq.id for qq in self.app.project.quests if qq is not q}
         free = (idx.free_ids(taken) if idx else
-                [i for i in range(data.MIN_QUEST_ID, data.MAX_QUEST_ID + 1)
+                [i for i in range(data.MIN_QUEST_ID,
+                                  data.max_quest_id(self.app.quest_limit) + 1)
                  if i not in taken])
         if q.id and q.id not in free:
             free = sorted(free + [q.id])

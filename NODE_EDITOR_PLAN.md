@@ -97,6 +97,7 @@ neue Tool nicht mit den Root-Skripten vermischt wird.
 | `questforge2/validate.py` | Regelpruefung vor dem Export (Abschnitt 8) |
 | `questforge2/guide.py` | Rundgang-Guide und Tutorial-Quest, Doku-Fenster |
 | `questforge2/retail.py` | (ergaenzt in M6) Spielquest-Bloecke ins Modell und byte-gleich zurueck |
+| `questforge2/questlimit.py` | (2.5.0) Questgrenze 400/600: `PQuests.eco` patchen, `QuestLimit600.wd`, wirksame Grenze lesen |
 | `questforge2/assets/` | (ergaenzt in M9) Programm-Icon |
 | `questforge2/tests/` | Round-Trip-Tests (M4), Modell-Tests, Validierungs-Tests; laufen ohne Spieldaten mit kleinen Fixtures, Retail-Tests zusaetzlich mit `base/` |
 | `build_exe.spec`, `build_exe.bat` | Exe-Build (Repo-Root) |
@@ -160,7 +161,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.1.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.5.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1084,9 +1085,29 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     Master-`.lan` (alle 601 Baumstrukturen identisch) und das neue Overlay.
     Neues Spiel: Texte, Titel und 777 Gold erscheinen, laeuft sauber durch.
     Damit sind alle Meilensteine im Spiel bestaetigt.
+57. Questgrenze integriert (Marco 2026-09-15, Version 2.5.0, Branch `v2.5`).
+    Der TW1 Quest Limit Patcher 1.0 (`Desktop\TW1QuestLimitPatcher`, eigenes
+    Repo, unveraendert) ist als `questforge2/questlimit.py` uebernommen: 41
+    Immediates in `PQuests.eco` (Update16, SHA-256 geprueft) von 400 auf
+    600, Ablage als `Mods\QuestLimit600.wd` mit frischer GUID, Flags 0x3b,
+    Ressource `PQuests`, Klasse 4, Rueckleseprobe, Registry-Export vor jeder
+    Aenderung. Das Tool liest beim Start die wirksame Grenze (eigene Mod,
+    sonst eine andere aktive Mod mit eigenem Questskript wie
+    `QuestMigrate.wd`, sonst 400; 6 ms): freie IDs 381 bis Grenze-1,
+    Statusleiste "Grenze", Quest-Menue "Questgrenze", Fenster mit Anheben und
+    Zuruecknehmen, bei vollen IDs Angebot zum Anheben. Validierung: Fehler bei
+    ID ueber der Grenze (`val.id.limit`), Warnung ab 400
+    (`warn.id.limit600`: Spieler brauchen die Grenz-Mod, nur neue Spiele).
+    Beleg fuer die Grenze im Spiel: Q_400 bis 402 und Q_599 liefen am
+    11.09.2026 mit Grenze 600 und frischer GUID (Kira-Kampagne, HANDOFF).
+    Ein Spieltest einer mit dem Tool exportierten Quest ueber 399 steht aus;
+    Marco hat entschieden, ohne ihn zu releasen. Tests
+    `test_questlimit.py` (Patch, Archiv-Rundlauf, apply/remove mit
+    Ersatz-Registry, andere Mod mit 600, Validierung).
 
 Offen:
 
+- Spieltest einer Tool-Quest mit ID ueber 399 bei Questgrenze 600 (12.57).
 - `quest_creator_gui.py` bleibt vorerst in `main` neben QuestForge 2
   (Marco 2026-09-14, nach den bestandenen Spieltests entschieden).
 - `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,
