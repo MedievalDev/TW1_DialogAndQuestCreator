@@ -1,0 +1,17 @@
+{
+  "kind": "enemy",
+  "title": {
+    "de": "3 Banditen, Stufe 10",
+    "en": "3 bandits, level 10"
+  },
+  "note": {
+    "de": "Feindliche Partei 20. Marker und Kachel eintragen.",
+    "en": "Hostile party 20. Fill in marker and map cell."
+  },
+  "args": {
+    "enemy": "ENEMY_BANDIT",
+    "count": 3,
+    "level": 10,
+    "party": 20
+  }
+}

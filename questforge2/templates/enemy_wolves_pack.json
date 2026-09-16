@@ -1,0 +1,17 @@
+{
+  "kind": "enemy",
+  "title": {
+    "de": "Wolfsrudel (5, Stufe 6)",
+    "en": "Wolf pack (5, level 6)"
+  },
+  "note": {
+    "de": "Partei 18 sind Tiere.",
+    "en": "Party 18 is the animals."
+  },
+  "args": {
+    "enemy": "ENEMY_ANIMAL",
+    "count": 5,
+    "level": 6,
+    "party": 18
+  }
+}

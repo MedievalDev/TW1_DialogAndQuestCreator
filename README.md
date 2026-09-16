@@ -468,6 +468,21 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Überfahren.
 - **Kopfleiste:** Neben "+ Neue Quest" liegen die Knöpfe "Questgrenze" mit der
   wirksamen Grenze und "Gegnerstufen".
+- **Guide (F1, Hilfe > Guide):** eigenes Fenster mit 14 Kapiteln von "Erste
+  Quest in 10 Minuten" bis "Fehlersuche", Suchfeld, Deutsch und Englisch. Die
+  Tabellen (Aufgaben, Aktionen, Marker-Sorten, Parteien, Gilden, AOQ,
+  Animationen) werden aus denselben Code-Tabellen erzeugt wie die
+  Auswahllisten, mit Quelle und Status "belegt" oder "ungeprüft".
+- **Neue Quest:** leer, aus einer mitgelieferten Vorlage (Bring-Quest,
+  Töte-X, Sprich-mit-NPC, Questkette mit Tor) oder als Kopie einer
+  bestehenden Quest. Die Kopie bekommt eine freie Nummer, Verweise auf sich
+  selbst werden umgeschrieben, Verweise auf andere Quests aufgelistet.
+- **Vorlagen:** liegen als JSON in `questforge2/templates/`. Format:
+  `{"template": {"kind": "quest"|"enemy", "title": {"de", "en"}, "note":
+  {"de", "en"}}, ...}`; Quest-Vorlagen tragen dazu eine vollständige Quest
+  (`Quest.to_dict`), Gegner-Vorlagen `args` für `ACTION ENEMY_CREATE`. Neue
+  Datei ablegen genügt. Gegnergruppen stehen im Aktionsformular "Gegner
+  erzeugen" als Auswahl. Stellen mit `TODO` meldet die Prüfung als Warnung.
 - **Hilfe im Formular:** Neben Panel-Titeln und erklärungsbedürftigen Feldern
   steht ein `?`. Überfahren zeigt eine kurze Erklärung, Klick öffnet die
   Dokumentation. Eingabefelder zeigen ein Beispiel, ungültige Eingaben werden

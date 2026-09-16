@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1188,6 +1188,20 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     - Live-Vorschau der qtx-Zeile unter Aufgabe und Aktion.
     - Kontextmenue auf angedockten Aktionen und Bedingungen: Bearbeiten,
       nach oben, nach unten (Reihenfolge ueber `slot`).
+63. Usability-Update, Teil 2 (Version 2.9.0, Punkte 5, 7, 8):
+    - Guide-Fenster `questforge2/guidebook.py` (Hilfe > Guide, F1): 14
+      Kapitel DE/EN, Suche mit Trefferliste und Markierung, die `?`-Marken
+      springen ins passende Kapitel (`HELP_CHAPTER`). Tabellen werden aus
+      `model.NUMBER_LISTS`, `FC_SPECS`, `ACTION_SPECS`, `data._FC_MARKERS`,
+      `_ACTION_MARKERS` erzeugt, mit Quelle und Status. Kapitel "Mods einbinden"
+      beschreibt den heutigen Stand; eigene Mod-Quellen und die Karte folgen.
+    - Vorlagen `questforge2/templates/*.json`: vier Quest-Vorlagen (Bring,
+      Toete, Sprich, Kette mit Tor ueber enable_level 2), vier
+      Gegnergruppen. Mit dem Modell erzeugt, Test baut jede Quest-Vorlage und
+      packt alle in ein Archiv. Im Spiel noch nicht einzeln gespielt.
+    - Dialog "Neue Quest": leer, Vorlage, Kopie (Projekt- und Spielquests);
+      `model.copy_references` schreibt Selbstverweise um und listet fremde.
+    - Warnung `warn.todo` fuer uebrig gebliebene TODO-Stellen.
 
 Offen:
 

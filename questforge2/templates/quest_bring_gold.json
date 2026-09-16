@@ -1,0 +1,300 @@
+{
+  "id": 390,
+  "title": "Bring-Quest (Gold)",
+  "group": 0,
+  "journal": {
+    "take": "TODO",
+    "solve": "TODO",
+    "close": "TODO"
+  },
+  "giver": 3,
+  "giver_type": "ACTIVE",
+  "map_sign": "BACK_TO_GIVER_MAP_SIGN",
+  "offered": true,
+  "enable_level": 1,
+  "speakers": [
+    {
+      "id": 3,
+      "name": "Tago",
+      "lector": 123,
+      "tile": "E1",
+      "new": false
+    }
+  ],
+  "graph": {
+    "nodes": {
+      "entry:first": {
+        "type": "entry",
+        "state": "first",
+        "x": 40,
+        "y": 40
+      },
+      "entry:running": {
+        "type": "entry",
+        "state": "running",
+        "x": 40,
+        "y": 242
+      },
+      "entry:solved": {
+        "type": "entry",
+        "state": "solved",
+        "x": 40,
+        "y": 328
+      },
+      "entry:closed": {
+        "type": "entry",
+        "state": "closed",
+        "x": 40,
+        "y": 485
+      },
+      "task": {
+        "type": "task",
+        "fc": "BRING_GOLD",
+        "args": {
+          "gold": 100
+        },
+        "x": -230,
+        "y": 320.0
+      },
+      "n1": {
+        "type": "condition",
+        "cond": "after",
+        "attached_to": "entry:first",
+        "x": 40,
+        "y": 84,
+        "slot": 0,
+        "quest": 4,
+        "event": "TAKE",
+        "level": 1,
+        "guild": "(null)",
+        "min_rep": 0
+      },
+      "n2": {
+        "type": "condition",
+        "cond": "level",
+        "attached_to": "entry:first",
+        "x": 40,
+        "y": 112,
+        "slot": 1,
+        "quest": 4,
+        "event": "TAKE",
+        "level": 1,
+        "guild": "(null)",
+        "min_rep": 0
+      },
+      "n3": {
+        "type": "npc",
+        "state": "first",
+        "x": 270,
+        "y": 40,
+        "speaker": 3,
+        "lines": [
+          {
+            "text": "TODO: das Angebot",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n4": {
+        "type": "player",
+        "state": "first",
+        "x": 550,
+        "y": 40,
+        "speaker": "player",
+        "kind": "question",
+        "lines": [
+          {
+            "text": "TODO: annehmen",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": "TODO: ablehnen",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n5": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 40,
+        "speaker": 3,
+        "lines": [
+          {
+            "text": "TODO: Dank fuer die Zusage",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n6": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 141,
+        "speaker": 3,
+        "lines": [
+          {
+            "text": "TODO: Antwort auf die Absage",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n7": {
+        "type": "npc",
+        "state": "running",
+        "x": 270,
+        "y": 242,
+        "speaker": 3,
+        "lines": [
+          {
+            "text": "TODO: noch nicht erledigt",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n8": {
+        "type": "npc",
+        "state": "solved",
+        "x": 270,
+        "y": 384,
+        "speaker": 3,
+        "lines": [
+          {
+            "text": "TODO: Dank und Belohnung",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": true,
+            "fight": false
+          }
+        ]
+      },
+      "n9": {
+        "type": "npc",
+        "state": "closed",
+        "x": 270,
+        "y": 485,
+        "speaker": 3,
+        "lines": [
+          {
+            "text": "TODO: danach",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n10": {
+        "type": "action",
+        "kind": "REWARD",
+        "verb": "GLD",
+        "args": {
+          "amount": "500"
+        },
+        "when": null,
+        "attached_to": "n8",
+        "x": 270,
+        "y": 352,
+        "slot": 0
+      },
+      "n11": {
+        "type": "action",
+        "kind": "REWARD",
+        "verb": "EXP",
+        "args": {
+          "amount": "250"
+        },
+        "when": null,
+        "attached_to": "n8",
+        "x": 270,
+        "y": 324,
+        "slot": 1
+      }
+    },
+    "edges": [
+      [
+        "entry:first",
+        0,
+        "n3"
+      ],
+      [
+        "n3",
+        0,
+        "n4"
+      ],
+      [
+        "n4",
+        0,
+        "n5"
+      ],
+      [
+        "n4",
+        1,
+        "n6"
+      ],
+      [
+        "entry:running",
+        0,
+        "n7"
+      ],
+      [
+        "entry:solved",
+        0,
+        "n8"
+      ],
+      [
+        "entry:closed",
+        0,
+        "n9"
+      ]
+    ]
+  },
+  "actions": [],
+  "links": [],
+  "retail": false,
+  "template": {
+    "kind": "quest",
+    "title": {
+      "de": "Bring-Quest (Gold)",
+      "en": "Bring quest (gold)"
+    },
+    "note": {
+      "de": "Der Questgeber will Gold. Passe Text, Menge und Belohnung an.",
+      "en": "The giver wants gold. Change texts, amount and reward."
+    }
+  }
+}

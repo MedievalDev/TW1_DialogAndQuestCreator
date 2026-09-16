@@ -268,6 +268,58 @@ class Packing(unittest.TestCase):
             self.assertIn('Language\\ZZ_QF_C.lan', ents)
             self.assertIn('Language\\ZZ_QF_D.lan', ents)
 
+    def test_shipped_templates_build(self):
+        """Every quest template validates, builds its block and packs into
+        an archive; every enemy template fills a valid ENEMY_CREATE."""
+        from questforge2 import data, validate
+        from questforge2 import retail as rt
+        quests = data.builtin_templates('quest')
+        enemies = data.builtin_templates('enemy')
+        self.assertGreaterEqual(len(quests), 4)
+        self.assertGreaterEqual(len(enemies), 4)
+        with tempfile.TemporaryDirectory() as d:
+            base = os.path.join(d, 'base')
+            os.makedirs(base)
+            with open(os.path.join(base, 'TwoWorldsQuests.qtx'), 'wb') as f:
+                f.write(QTX.encode('latin-1'))
+            with open(os.path.join(base, 'TwoWorldsQuests.lan'), 'wb') as f:
+                f.write(tw1_lan.build({'translateQ_4': 'Alt'}, [],
+                                      tw1_lan.build_trees([])))
+            game = os.path.join(d, 'game')
+            os.makedirs(os.path.join(game, 'Mods'))
+            p = Project('Templates')
+            for i, tp in enumerate(quests):
+                raw = dict(tp['data'])
+                raw.pop('template', None)
+                q = rt.make_own(Quest.from_dict(raw), 390 + i)
+                E, W = validate.validate_quest(q, _Index())
+                self.assertEqual(E, [], tp['name'])
+                self.assertIn('warn.todo', ' '.join(m for m, _ in W))
+                self.assertIsNotNone(export.build_quest_block(q))
+                p.quests.append(q)
+            res = export.export_mod(p, game, base, _Index(), lambda m: None,
+                                    register=False)
+            qtx = {e.path: e.data for e in tw1_wd.read(res['archive'])}[
+                export.INNER_QTX]
+            for i in range(len(quests)):
+                self.assertIn(b'QUEST Q_%d ' % (390 + i), qtx)
+        for tp in enemies:
+            args = dict(tp['data']['args'], marker=3, tile='E1')
+            toks = model.op_tokens(
+                model.ACTION_SPECS[('ACTION', 'ENEMY_CREATE')], args)
+            self.assertEqual(len(toks), 6, tp['name'])
+            self.assertIn(args['party'], model.PARTIES)
+
+    def test_copy_references(self):
+        q = make_quest(390)
+        q.links = [{'type': 'PROMOTE', 'event': 'SOLVE', 'quest': 390},
+                   {'type': 'DISABLE', 'event': 'TAKE', 'quest': 12}]
+        foreign = model.copy_references(q, 390, 395)
+        self.assertEqual(q.links[0]['quest'], 395)       # self reference
+        self.assertEqual(q.links[1]['quest'], 12)        # stays
+        kinds = sorted(k for k, _q, _t in foreign)
+        self.assertEqual(kinds, ['condition', 'link'])   # Q_4 and Q_12
+
     def test_archive_name(self):
         p = Project('Meine Mod!')
         self.assertEqual(export.archive_name(p), 'MeineMod.wd')

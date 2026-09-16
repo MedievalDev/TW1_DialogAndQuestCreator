@@ -15,6 +15,7 @@ a = Analysis(
         ('questforge2/assets/icon.png', 'questforge2/assets'),
         ('questforge2/assets/icon64.png', 'questforge2/assets'),
         ('questforge2/assets/icon.ico', 'questforge2/assets'),
+        ('questforge2/templates/*.json', 'questforge2/templates'),
     ],
     hiddenimports=['tw1_lan', 'tw1_qtx', 'tw1_wd', 'wdio', 'winreg'],
     hookspath=[],

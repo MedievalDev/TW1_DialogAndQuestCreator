@@ -86,7 +86,7 @@ class Timeline(ttk.Frame):
                         style='Panel.TCheckbutton',
                         command=self._resize).pack(side='left')
         self.new_btn = ttk.Button(bar, text='+ ' + t('quest.new'),
-                                  command=app.new_quest)
+                                  command=app.new_quest_dialog)
         self.new_btn.pack(side='right', padx=6, pady=2)
         self.enemy_btn = ttk.Button(bar, text=t('tl.enemylevels'),
                                     command=app.show_enemy_levels)
@@ -368,7 +368,7 @@ class Timeline(ttk.Frame):
     def _click(self, ev):
         qid = self._qid_at(ev)
         if qid == 'new':
-            self.app.new_quest()
+            self.app.new_quest_dialog()
         elif qid is not None:
             self.app.open_any_quest(qid)
 

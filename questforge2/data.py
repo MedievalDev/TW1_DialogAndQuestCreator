@@ -681,6 +681,35 @@ def templates_dir():
     return os.path.join(ROOT, 'templates')
 
 
+def builtin_templates(kind=None):
+    """Templates shipped in questforge2/templates/*.json (point 7 of the
+    usability update). Every file is a JSON object with a ``template`` part:
+    ``{"kind": "quest"|"enemy", "title": {"de", "en"}, "note": {"de", "en"}}``;
+    quest templates carry a full quest (``Quest.to_dict``), enemy templates
+    ``args`` for ``ACTION ENEMY_CREATE``. Add a file, it shows up."""
+    d = resource_path('questforge2', 'templates')
+    out = []
+    if not os.path.isdir(d):
+        return out
+    for name in sorted(os.listdir(d)):
+        if not name.endswith('.json'):
+            continue
+        path = os.path.join(d, name)
+        try:
+            with open(path, encoding='utf-8') as f:
+                obj = json.load(f)
+        except (OSError, ValueError):
+            continue
+        info = obj.get('template') if 'template' in obj else obj
+        k = info.get('kind')
+        if kind and k != kind:
+            continue
+        out.append({'name': os.path.splitext(name)[0], 'kind': k,
+                    'title': info.get('title', {}), 'note': info.get('note', {}),
+                    'path': path, 'data': obj})
+    return out
+
+
 def list_templates():
     d = templates_dir()
     if not os.path.isdir(d):

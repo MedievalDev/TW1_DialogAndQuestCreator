@@ -1,0 +1,17 @@
+{
+  "kind": "enemy",
+  "title": {
+    "de": "Untoten-Patrouille (4, Stufe 20)",
+    "en": "Undead patrol (4, level 20)"
+  },
+  "note": {
+    "de": "Partei 21 sind Untote.",
+    "en": "Party 21 is the undead."
+  },
+  "args": {
+    "enemy": "ENEMY_SKELETON",
+    "count": 4,
+    "level": 20,
+    "party": 21
+  }
+}

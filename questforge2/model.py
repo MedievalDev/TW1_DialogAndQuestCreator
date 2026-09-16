@@ -592,6 +592,31 @@ def make_condition(cond='after', **values):
     return n
 
 
+def copy_references(quest, old_id, new_id):
+    """After copying a quest: links that pointed at the quest itself now
+    point at the copy. Returns the references to other quests that the user
+    has to check: [('link'|'condition', quest id, text)]."""
+    foreign = []
+    for link in quest.links:
+        if not isinstance(link, dict):
+            continue
+        if link.get('quest') == old_id:
+            link['quest'] = new_id
+        elif link.get('quest') is not None:
+            foreign.append(('link', link['quest'],
+                            f"AOQ {link.get('type')} {link.get('event')} "
+                            f"Q_{link['quest']}"))
+    for n in quest.graph['nodes'].values():
+        if n.get('type') == 'condition' and n.get('cond') == 'after':
+            if n.get('quest') == old_id:
+                n['quest'] = new_id
+            else:
+                foreign.append(('condition', n.get('quest'),
+                                f"after Q_{n.get('quest')} "
+                                f"{n.get('event', 'TAKE')}"))
+    return foreign
+
+
 def add_default_conditions(quest):
     """New quests: offered after taking Q_4, level 1 (plan 6.3)."""
     g = quest.graph

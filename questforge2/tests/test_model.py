@@ -84,6 +84,31 @@ class ModelRoundTrip(unittest.TestCase):
         self.assertEqual(q.node_count(), 0)
 
 
+class Guidebook(unittest.TestCase):
+    """Help > Guide (2.9.0): chapters in both languages, tables from the
+    same source as the pickers, every "?" lands on a chapter."""
+
+    def test_chapters(self):
+        from questforge2 import guidebook, i18n
+        ids = {c for c, _t, _f in guidebook.CHAPTERS}
+        for lang in ('de', 'en'):
+            i18n.set_lang(lang)
+            for cid, titles, fn in guidebook.CHAPTERS:
+                text = fn()
+                self.assertTrue(text.startswith('# '), cid)
+                self.assertNotIn('{', text.replace('{n}', ''), cid)
+        i18n.set_lang('de')
+        self.assertTrue(set(guidebook.HELP_CHAPTER.values()) <= ids)
+        ref = guidebook.ch_reference()
+        for name in model.NUMBER_LISTS:
+            self.assertIn(name, ref)
+        self.assertIn('ungeprueft', ref)
+        tasks = guidebook.ch_tasks()
+        for fc in model.FC_SPECS:
+            self.assertIn(f'FC {fc}', tasks)
+        self.assertIn('AOQ ENABLE', guidebook.ch_links())
+
+
 class Colours(unittest.TestCase):
     """One colour per journal group in the timeline (2.7.0)."""
 

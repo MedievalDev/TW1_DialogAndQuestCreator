@@ -30,4 +30,4 @@ cache/
 # QuestForge 2 build output and user data
 build/
 dist/
-templates/
+/templates/

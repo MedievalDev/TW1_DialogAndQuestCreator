@@ -1,0 +1,17 @@
+{
+  "kind": "enemy",
+  "title": {
+    "de": "Einzelner Boss (Stufe 40)",
+    "en": "Single boss (level 40)"
+  },
+  "note": {
+    "de": "Ein starker Gegner; Stufe an die Heldenstufe anpassen.",
+    "en": "One strong enemy; match the level to the hero."
+  },
+  "args": {
+    "enemy": "ENEMY_NECRO",
+    "count": 1,
+    "level": 40,
+    "party": 23
+  }
+}

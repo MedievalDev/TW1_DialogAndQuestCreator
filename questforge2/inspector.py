@@ -405,6 +405,29 @@ class Inspector(ttk.Frame):
                                                            pady=(4, 0))
         self._hint('insp.links.hint')
 
+    def _enemy_templates(self, nid, node):
+        """Prepared enemy groups; filling them in keeps marker and tile."""
+        tps = data.builtin_templates('enemy')
+        if not tps:
+            return
+        from .i18n import get_lang
+        lang = get_lang()
+        self._label(t('insp.enemytpl'), help_key='help.enemytpl')
+        names = [tp['title'].get(lang) or tp['name'] for tp in tps]
+        var = tk.StringVar(value='')
+        cb = ttk.Combobox(self.body, textvariable=var, values=names,
+                          state='readonly')
+        cb.pack(fill='x')
+
+        def apply(_ev=None):
+            if var.get() not in names:
+                return
+            tp = tps[names.index(var.get())]
+            self._edit(cb, lambda: node['args'].update(tp['data']['args']),
+                       nid)
+            self.after_idle_refresh()
+        cb.bind('<<ComboboxSelected>>', apply)
+
     def _add_link(self, q):
         self.app.push_undo('link')
         q.links.append({'type': 'PROMOTE', 'event': 'TAKE', 'quest': None})
@@ -612,6 +635,8 @@ class Inspector(ttk.Frame):
                             lambda v: node.__setitem__('when',
                                                        'SOLVE' if v else None),
                             nid)
+        if cur == ('ACTION', 'ENEMY_CREATE'):
+            self._enemy_templates(nid, node)
         self._fields(model.ACTION_SPECS[cur], node['args'], nid)
         unverified = model.UNVERIFIED_FIELDS.get(cur)
         if unverified:

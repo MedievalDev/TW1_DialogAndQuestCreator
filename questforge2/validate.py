@@ -106,6 +106,12 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None):
             elif index and not index.quest(tgt) and not (
                     project and project.quest_by_id(tgt)):
                 W.append((t('val.link.unknown', id=tgt), None))
+        # templates mark the places to fill in with TODO
+        todo = [v for v in (quest.title, *quest.journal.values()) if 'TODO' in (v or '')]
+        todo += [ln.get('text') for n in nodes.values()
+                 for ln in (n.get('lines') or []) if 'TODO' in (ln.get('text') or '')]
+        if todo:
+            W.append((t('warn.todo', n=len(todo)), None))
         if project and sum(1 for q in project.quests if q.id == qid) > 1:
             E.append((t('val.id.twice', id=qid), None))
         if not (quest.title or '').strip():

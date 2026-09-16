@@ -246,7 +246,7 @@ class App:
         m.add_cascade(label=t('view.lang'), menu=lang)
 
     def _fill_quest(self, m):
-        m.add_command(label=t('quest.new'), command=self.new_quest,
+        m.add_command(label=t('quest.new'), command=self.new_quest_dialog,
                       state=self._state(self.project is not None))
         m.add_command(label=t('quest.loadretail'), command=self.load_retail,
                       state=self._state(self.project is not None
@@ -297,6 +297,8 @@ class App:
                           state=self._state(self.quest is not None))
 
     def _fill_help(self, m):
+        m.add_command(label=t('help.guide'), accelerator='F1',
+                      command=lambda: self.show_guide('start'))
         m.add_command(label=t('help.tour'),
                       command=lambda: self.coach.start('tour'))
         m.add_command(label=t('help.tutorial'),
@@ -498,6 +500,59 @@ class App:
         self.project.quests.append(q)
         self.mark_dirty()
         self.open_quest(q)
+
+    def new_quest_dialog(self):
+        """Empty, from a template or as a copy (point 5 of the update)."""
+        if not self.project:
+            return
+        dlg = NewQuestDialog(self)
+        self.root.wait_window(dlg.win)
+        if not dlg.result:
+            return
+        how, what = dlg.result
+        if how == 'empty':
+            self.new_quest()
+        elif how == 'template':
+            self.new_from_template_data(what)
+        elif how == 'copy':
+            self.copy_quest_as_new(what)
+
+    def new_from_template_data(self, tpl):
+        qid = self._free_id()
+        if qid is None:
+            return
+        d = dict(tpl['data'])
+        d.pop('template', None)
+        q = retail.make_own(Quest.from_dict(d), qid)
+        lang = get_lang()
+        q.title = tpl['title'].get(lang) or q.title
+        self.project.quests.append(q)
+        self.mark_dirty()
+        self.open_quest(q)
+        note = tpl['note'].get(lang)
+        if note:
+            self.set_info(note, 'Status.TLabel')
+
+    def copy_quest_as_new(self, qid_or_quest):
+        src = (qid_or_quest if isinstance(qid_or_quest, Quest)
+               else self.quest_for(qid_or_quest))
+        if src is None:
+            return
+        qid = self._free_id()
+        if qid is None:
+            return
+        new = retail.make_own(src, qid)
+        new.title = (src.title or '') + t('quest.copysuffix')
+        foreign = model.copy_references(new, src.id, qid)
+        self.project.quests.append(new)
+        self.mark_dirty()
+        self.open_quest(new)
+        if foreign:
+            messagebox.showinfo(
+                t('quest.copy.title'),
+                t('quest.copy.refs', id=qid) + NL + NL.join(
+                    '  ' + text for _kind, _q, text in foreign),
+                parent=self.root)
 
     def load_retail(self):
         """Pick a dialog of the game (or a mod) and open its quest."""
@@ -709,10 +764,14 @@ class App:
         return self.quest_limit
 
     def show_help(self, key):
-        """The "?" marks call this; until the guide window exists (2.9) it
-        opens the documentation."""
+        """The "?" marks call this: open the guide at the right chapter."""
+        from .guidebook import HELP_CHAPTER
         self.set_hint(t(key))
-        show_docs(self)
+        self.show_guide(HELP_CHAPTER.get(key, 'start'))
+
+    def show_guide(self, chapter='start'):
+        from .guidebook import GuideWindow
+        GuideWindow.show(self, chapter)
 
     def show_quest_limit(self):
         if not self.cfg.get('game_dir'):
@@ -1410,6 +1469,7 @@ class App:
         r.bind('<Control-S>', lambda e: self.save_project_as())
         r.bind('<Control-e>', lambda e: self.export_ui())
         r.bind('<F7>', lambda e: self.validate_ui())
+        r.bind('<F1>', lambda e: self.show_guide('start'))
         g = self.graph
         for seq, fn in (('<Control-z>', self.do_undo),
                         ('<Control-y>', self.do_redo),
@@ -1554,6 +1614,7 @@ class App:
                     f.write(f'version={VERSION} start={total:.3f} '
                             f'index={seconds:.3f} cache={from_cache} '
                             f'quests={len(index.quests)} '
+                            f'templates={len(data.builtin_templates())} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2203,6 +2264,123 @@ class EnemyLevelWindow:
         except Exception as e:           # shown in the log
             self._put(t('limit.failed', e=e), 'err')
         self.refresh()
+
+
+class NewQuestDialog:
+    """Start empty, from a shipped template or as a copy of any quest."""
+
+    def __init__(self, app):
+        self.app = app
+        self.result = None
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('newq.title'))
+        self.win.transient(app.root)
+        self.win.geometry('640x520')
+        theme.dark_titlebar(self.win)
+        self.win.bind('<Escape>', lambda e: self.win.destroy())
+        f = ttk.Frame(self.win, padding=16)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('newq.head'), style='Brand.TLabel').pack(anchor='w')
+        self.how = tk.StringVar(value='empty')
+        for key in ('empty', 'template', 'copy'):
+            ttk.Radiobutton(f, text=t('newq.' + key), value=key,
+                            variable=self.how, command=self._switch
+                            ).pack(anchor='w', pady=(8 if key == 'empty' else 2, 0))
+        self.search = tk.StringVar()
+        self.ent = ttk.Entry(f, textvariable=self.search)
+        self.ent.pack(fill='x', pady=(10, 4))
+        self.ent.bind('<KeyRelease>', lambda e: self._fill())
+        box = ttk.Frame(f)
+        box.pack(fill='both', expand=True)
+        self.lst = tk.Listbox(box, activestyle='none')
+        sb = ttk.Scrollbar(box, orient='vertical', command=self.lst.yview)
+        self.lst.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+        self.lst.pack(side='left', fill='both', expand=True)
+        self.lst.bind('<<ListboxSelect>>', lambda e: self._note())
+        self.lst.bind('<Double-Button-1>', lambda e: self._ok())
+        self.note = ttk.Label(f, style='Muted.TLabel', wraplength=600,
+                              justify='left')
+        self.note.pack(anchor='w', pady=(6, 0))
+        btns = ttk.Frame(f)
+        btns.pack(fill='x', pady=(10, 0))
+        ttk.Button(btns, text=t('cancel'), command=self.win.destroy
+                   ).pack(side='right')
+        ttk.Button(btns, text=t('ok'), style='Accent.TButton',
+                   command=self._ok).pack(side='right', padx=6)
+        self.items = []
+        self.templates = data.builtin_templates('quest')
+        self._switch()
+        self.win.grab_set()
+
+    def _switch(self):
+        mode = self.how.get()
+        state = 'disabled' if mode == 'empty' else 'normal'
+        self.lst.configure(state=state)
+        self.ent.state(['disabled'] if mode == 'empty' else ['!disabled'])
+        self._fill()
+
+    def _fill(self):
+        self.lst.configure(state='normal')
+        self.lst.delete(0, 'end')
+        self.items = []
+        mode = self.how.get()
+        needle = self.search.get().strip().lower()
+        lang = get_lang()
+        if mode == 'template':
+            for tp in self.templates:
+                title = tp['title'].get(lang) or tp['name']
+                if needle and needle not in title.lower():
+                    continue
+                self.items.append(('template', tp))
+                self.lst.insert('end', title)
+        elif mode == 'copy':
+            seen = set()
+            for q in self.app.project.quests:
+                label = t('newq.own', id=q.id, title=q.title or '-')
+                if needle and needle not in label.lower():
+                    continue
+                self.items.append(('copy', q))
+                self.lst.insert('end', label)
+                seen.add(q.id)
+            idx = self.app.index
+            if idx:
+                for k in sorted(idx.quests, key=int):
+                    qid = int(k)
+                    if qid in seen:
+                        continue
+                    info = idx.quests[k]
+                    label = f"Q_{qid}  {info.get('title') or '-'}"
+                    if needle and needle not in label.lower():
+                        continue
+                    self.items.append(('copy', qid))
+                    self.lst.insert('end', label)
+                    if len(self.items) > 800:
+                        break
+        if mode == 'empty':
+            self.lst.configure(state='disabled')
+            self.note.configure(text=t('newq.empty.note'))
+        else:
+            self.note.configure(text=t('newq.' + mode + '.note'))
+
+    def _note(self):
+        sel = self.lst.curselection()
+        if not sel or self.how.get() != 'template':
+            return
+        tp = self.items[sel[0]][1]
+        self.note.configure(text=tp['note'].get(get_lang()) or '')
+
+    def _ok(self):
+        mode = self.how.get()
+        if mode == 'empty':
+            self.result = ('empty', None)
+        else:
+            sel = self.lst.curselection()
+            if not sel:
+                self.note.configure(text=t('newq.pick'))
+                return
+            self.result = self.items[sel[0]]
+        self.win.destroy()
 
 
 class QuestLimitWindow:
