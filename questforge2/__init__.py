@@ -5,5 +5,5 @@ format modules in the repository root (tw1_qtx, tw1_lan, tw1_wd, wdio) are
 imported; the old quest_creator_gui.py is never touched.
 """
 
-VERSION = '2.5.1'
+VERSION = '2.6.0'
 APP_NAME = 'TW1 Quest Creator'

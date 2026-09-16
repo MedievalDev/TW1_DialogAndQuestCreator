@@ -98,6 +98,7 @@ neue Tool nicht mit den Root-Skripten vermischt wird.
 | `questforge2/guide.py` | Rundgang-Guide und Tutorial-Quest, Doku-Fenster |
 | `questforge2/retail.py` | (ergaenzt in M6) Spielquest-Bloecke ins Modell und byte-gleich zurueck |
 | `questforge2/questlimit.py` | (2.5.0) Questgrenze 400/600: `PQuests.eco` patchen, `QuestLimit600.wd`, wirksame Grenze lesen |
+| `questforge2/enemylevel.py` | (2.6.0) Stufen aller 90 Gegnerarten: Tabelle im Gegner-Skript finden, patchen, `EnemyLevels.wd` |
 | `questforge2/assets/` | (ergaenzt in M9) Programm-Icon |
 | `questforge2/tests/` | Round-Trip-Tests (M4), Modell-Tests, Validierungs-Tests; laufen ohne Spieldaten mit kleinen Fixtures, Retail-Tests zusaetzlich mit `base/` |
 | `build_exe.spec`, `build_exe.bat` | Exe-Build (Repo-Root) |
@@ -161,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.5.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.6.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1119,10 +1120,27 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     aber frei tippbar; darunter ein Hinweis, dass ab 24 neutrale und
     Stadtparteien stehen, die von sich aus nicht angreifen (aus dem SDK
     abgeleitet, nicht im Spiel gemessen).
+59. Gegnerstufen der Welt (Version 2.6.0, nach Orions Frage im Discord, wie
+    man Tiere und Gegner auf Heldenniveau bringt). Gemessen: `CreateEnemy`
+    im SDK (`Scripts\Common\Enemies.ech`) nimmt die mittlere Heldenstufe,
+    addiert den Gruppenzuschlag und klemmt dann je Art auf das Paar aus
+    `InitializeEnemyLevels`; Karten ab Reihe 10 geben plus 5; ein
+    ausdruecklicher Wert in `ENEMY_CREATE` (`nForceLevel`) schlaegt die
+    Klemme. In der `.par` steht davon nichts (Feldnamen des PAR-Editors
+    geprueft). Die 90 Paare liegen im kompilierten Skript als 32-Bit-Werte
+    in Quelltextreihenfolge, je Aufruf `max, min, [marker], typ`; gefunden
+    wird die Reihe ueber die Typnummern, nicht ueber die Stufen, damit auch
+    ein bereits geaendertes Skript gelesen werden kann. Das Fenster
+    (Quest > Gegnerstufen der Welt) zeigt alle Arten nach Gruppen, mit
+    Filter, Regler plus Eingabefeld und Schnellwahl; `apply` schreibt beide
+    Skriptfassungen mit je frischer GUID als `Mods\EnemyLevels.wd`, nach
+    Registry-Sicherung und mit Rueckleseprobe. Tests `test_enemylevel.py`.
+    Offen: Spieltest im Spiel (Stufen neuer Gegner).
 
 Offen:
 
 - Spieltest einer Tool-Quest mit ID ueber 399 bei Questgrenze 600 (12.57).
+- Spieltest der geaenderten Gegnerstufen (12.59).
 - `quest_creator_gui.py` bleibt vorerst in `main` neben QuestForge 2
   (Marco 2026-09-14, nach den bestandenen Spieltests entschieden).
 - `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,

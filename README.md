@@ -473,6 +473,17 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
 - **Hilfe:** Rundgang, Tutorial, diese Dokumentation, klickbare Links (GitHub-Repo, Alchemy Fox, Guide-Seite, Community), Über.
 - **Sprache:** `DE · EN` oben rechts in der Menüleiste schaltet sofort um.
   Projekt und Ansicht bleiben erhalten.
+- **Gegnerstufen** (Quest > Gegnerstufen der Welt): Das Spiel erschafft
+  herumlaufende Tiere und Gegner auf der mittleren Heldenstufe und begrenzt
+  sie dann je Kreaturenart auf ein Minimum und ein Maximum (im SDK
+  `InitializeEnemyLevels`, etwa Grauwolf 6 bis 10, Drache 40 bis 100).
+  Deshalb bleiben Tiere im späten Spiel harmlos. Das Fenster zeigt alle 90
+  Arten nach Gruppen sortiert, mit Filter, Schieberegler und Eingabefeld je
+  Wert, dazu Schnellwahl für die angezeigten Arten: an Heldenstufe koppeln,
+  Zuschlag, Faktor, Originalwerte. "Übernehmen" schreibt beide
+  Gegner-Skripte (`TwoWorldsEnemies.eco` und `TwoWorldsEnemies16.eco`) mit
+  frischer GUID als `Mods\EnemyLevels.wd`. Gilt für neu erschaffene Gegner,
+  also neues Spiel oder noch nicht betretene Gebiete.
 - **Questgrenze** (Quest > Questgrenze, oder Klick auf "Grenze" in der
   Statusleiste): Das Spiel kennt ab Werk 400 Questnummern. "Auf 600 anheben"
   liest das Original-Questskript `PQuests.eco` aus `Update16.wd`, setzt die

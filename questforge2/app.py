@@ -14,8 +14,8 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from . import (APP_NAME, VERSION, data, export, model, questlimit, retail,
-               theme, validate)
+from . import (APP_NAME, VERSION, data, enemylevel, export, model,
+               questlimit, retail, theme, validate)
 from .graph import GraphView
 from .guide import Coach, show_docs
 from .i18n import t, set_lang, get_lang, detect_lang
@@ -287,6 +287,9 @@ class App:
         m.add_separator()
         m.add_command(label=t('quest.limit', n=self.quest_limit),
                       command=self.show_quest_limit,
+                      state=self._state(bool(self.cfg.get('game_dir'))))
+        m.add_command(label=t('quest.enemylevels'),
+                      command=self.show_enemy_levels,
                       state=self._state(bool(self.cfg.get('game_dir'))))
         if DEBUG:
             m.add_separator()
@@ -709,6 +712,11 @@ class App:
         if not self.cfg.get('game_dir'):
             return
         QuestLimitWindow(self)
+
+    def show_enemy_levels(self):
+        if not self.cfg.get('game_dir'):
+            return
+        EnemyLevelWindow(self)
 
     def show_preview(self, quest=None):
         quest = quest or self.quest
@@ -1788,6 +1796,367 @@ class ProblemWindow:
         if sel and sel[0] < len(self.rows) and self.rows[sel[0]]:
             q, nid = self.rows[sel[0]]
             self.app.goto_problem(q, nid)
+
+
+class EnemyLevelWindow:
+    """Minimum and maximum level per creature type (enemylevel.py).
+
+    The engine creates wandering enemies at the hero's level and then clamps
+    that to the range of the creature type, which is why animals stay weak.
+    One row per type, grouped and filterable, each value as a slider with an
+    entry next to it.
+    """
+
+    WIDTH, ROW_H = 980, 26
+
+    def __init__(self, app):
+        self.app = app
+        self.game = app.cfg.get('game_dir')
+        self.state = None
+        self.values = {}
+        self.rows = {}
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('enemy.title'))
+        self.win.transient(app.root)
+        self.win.geometry('980x740')
+        self.win.minsize(820, 560)
+        theme.dark_titlebar(self.win)
+        self.win.bind('<Escape>', lambda e: self.win.destroy())
+        f = ttk.Frame(self.win, padding=14)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('enemy.head'), style='Brand.TLabel').pack(anchor='w')
+        ttk.Label(f, text=t('enemy.sub'), style='Muted.TLabel',
+                  wraplength=930, justify='left').pack(anchor='w', pady=(2, 8))
+        self.state_lbl = ttk.Label(f, style='Muted.TLabel', wraplength=930,
+                                   justify='left')
+        self.state_lbl.pack(anchor='w', pady=(0, 8))
+
+        # filter row
+        bar = ttk.Frame(f)
+        bar.pack(fill='x')
+        ttk.Label(bar, text=t('enemy.filter')).pack(side='left')
+        self.search = tk.StringVar()
+        ent = ttk.Entry(bar, textvariable=self.search, width=18)
+        ent.pack(side='left', padx=(6, 10))
+        ent.bind('<KeyRelease>', lambda e: self.build_rows())
+        self.group = tk.StringVar(value=t('enemy.group.all'))
+        groups = [t('enemy.group.all')] + [t('enemy.group.' + g)
+                                           for g in enemylevel.GROUPS]
+        self.group_keys = [None] + list(enemylevel.GROUPS)
+        cb = ttk.Combobox(bar, textvariable=self.group, values=groups,
+                          state='readonly', width=16)
+        cb.pack(side='left')
+        cb.bind('<<ComboboxSelected>>', lambda e: self.build_rows())
+        self.only_changed = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bar, text=t('enemy.onlychanged'),
+                        variable=self.only_changed,
+                        command=self.build_rows).pack(side='left', padx=10)
+        self.count_lbl = ttk.Label(bar, style='Muted.TLabel')
+        self.count_lbl.pack(side='right')
+
+        # presets, applied to what the filter shows
+        pre = ttk.Frame(f)
+        pre.pack(fill='x', pady=(8, 4))
+        ttk.Label(pre, text=t('enemy.presets')).pack(side='left')
+        ttk.Button(pre, text=t('enemy.preset.hero'),
+                   command=self.preset_hero).pack(side='left', padx=(8, 4))
+        self.plus = tk.StringVar(value='10')
+        ttk.Spinbox(pre, from_=1, to=99, width=4, textvariable=self.plus
+                    ).pack(side='left')
+        ttk.Button(pre, text=t('enemy.preset.plus'),
+                   command=self.preset_plus).pack(side='left', padx=4)
+        self.factor = tk.StringVar(value='1.5')
+        ttk.Spinbox(pre, from_=0.5, to=5.0, increment=0.1, width=5,
+                    textvariable=self.factor).pack(side='left', padx=(10, 0))
+        ttk.Button(pre, text=t('enemy.preset.scale'),
+                   command=self.preset_scale).pack(side='left', padx=4)
+        ttk.Button(pre, text=t('enemy.preset.retail'),
+                   command=self.preset_retail).pack(side='left', padx=(10, 0))
+
+        # table
+        box = ttk.Frame(f)
+        box.pack(fill='both', expand=True, pady=(6, 0))
+        self.canvas = tk.Canvas(box, background=theme.PANEL,
+                                highlightthickness=0)
+        sb = ttk.Scrollbar(box, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+        self.canvas.pack(side='left', fill='both', expand=True)
+        self.table = ttk.Frame(self.canvas, style='Panel.TFrame')
+        self.canvas.create_window((0, 0), window=self.table, anchor='nw',
+                                  tags='table')
+        self.table.bind('<Configure>', lambda e: self.canvas.configure(
+            scrollregion=self.canvas.bbox('all')))
+        self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfigure(
+            'table', width=e.width))
+        self.canvas.bind_all('<MouseWheel>', self._wheel)
+
+        # buttons and log
+        btns = ttk.Frame(f)
+        btns.pack(fill='x', pady=(10, 0))
+        self.btn_apply = ttk.Button(btns, text=t('enemy.apply'),
+                                    style='Accent.TButton',
+                                    command=self.apply_clicked)
+        self.btn_apply.pack(side='left')
+        self.btn_remove = ttk.Button(btns, text=t('enemy.remove'),
+                                     command=self.remove_clicked)
+        self.btn_remove.pack(side='left', padx=6)
+        ttk.Button(btns, text=t('close'), command=self.close
+                   ).pack(side='right')
+        self.txt = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=5)
+        self.txt.pack(fill='x', pady=(10, 0))
+        self.txt.tag_configure('ok', foreground=theme.OK)
+        self.txt.tag_configure('err', foreground=theme.ERR)
+        self.txt.tag_configure('warn', foreground='#e0a050')
+        self.txt.configure(state='disabled')
+        self.refresh()
+
+    # -- helpers ----------------------------------------------------------
+    def close(self):
+        self.canvas.unbind_all('<MouseWheel>')
+        self.win.destroy()
+
+    def _wheel(self, ev):
+        self.canvas.yview_scroll(-1 if ev.delta > 0 else 1, 'units')
+
+    def _put(self, text, tag=None):
+        self.txt.configure(state='normal')
+        self.txt.insert('end', text + NL, tag)
+        self.txt.see('end')
+        self.txt.configure(state='disabled')
+
+    def log(self, msg):
+        kind = msg[0]
+        tag = None
+        if kind == 'patched':
+            text = t('enemy.log.patched', file=msg[1], n=msg[2], src=msg[3])
+        elif kind == 'regbackup':
+            text = t('limit.log.regbackup', path=msg[1])
+        elif kind == 'oldmod':
+            text = t('limit.log.oldmod', name=msg[1])
+        elif kind == 'written':
+            text = t('enemy.log.written', name=msg[1], n=msg[2], guid=msg[3])
+            tag = 'ok'
+        elif kind == 'otheractive':
+            text = t('limit.log.other', name=msg[1])
+            tag = 'warn'
+        elif kind == 'removed':
+            text = t('limit.log.removed', name=msg[1])
+        elif kind == 'switchedoff':
+            text = t('limit.log.off', name=msg[1])
+        else:
+            text = ' '.join(str(x) for x in msg)
+        self._put(text, tag)
+
+    def filtered(self):
+        needle = self.search.get().strip().lower()
+        gi = 0
+        for i, g in enumerate(self.group_keys):
+            label = (t('enemy.group.all') if g is None
+                     else t('enemy.group.' + g))
+            if label == self.group.get():
+                gi = i
+                break
+        group = self.group_keys[gi]
+        retail = enemylevel.retail_values()
+        out = []
+        for num, name, _mark, lo, hi, grp in enemylevel.ENTRIES:
+            if group and grp != group:
+                continue
+            if needle and needle not in name.lower():
+                continue
+            if self.only_changed.get() and self.values.get(num) == retail[num]:
+                continue
+            out.append((num, name, grp))
+        order = {g: i for i, g in enumerate(enemylevel.GROUPS)}
+        out.sort(key=lambda r: (order.get(r[2], 99), r[1]))
+        return out
+
+    # -- state ------------------------------------------------------------
+    def refresh(self):
+        try:
+            self.state = enemylevel.State(self.game)
+            err = self.state.error
+        except Exception as e:           # shown in the window
+            self.state, err = None, str(e)
+        if self.state is None or err:
+            self.state_lbl.configure(text=t('enemy.error', e=err))
+            self.btn_apply.state(['disabled'])
+            self.btn_remove.state(['disabled'])
+            return
+        st = self.state
+        if not self.values:
+            self.values = dict(st.values)
+        notes = []
+        if st.mod_present and st.mod_active:
+            notes.append(t('enemy.mod.on', name=enemylevel.MOD_NAME))
+        elif st.mod_present:
+            notes.append(t('enemy.mod.off', name=enemylevel.MOD_NAME))
+        else:
+            notes.append(t('enemy.retail'))
+        notes.append(t('enemy.files', n=len(st.sources)))
+        for name, active in st.others:
+            if active:
+                notes.append(t('limit.log.other', name=name))
+        notes.append(t('enemy.newgames'))
+        self.state_lbl.configure(text=' '.join(notes))
+        self.btn_apply.state(['!disabled'])
+        can_remove = (st.mod_present
+                      or enemylevel.MOD_NAME in questlimit.reg_mods())
+        self.btn_remove.state(['!disabled'] if can_remove else ['disabled'])
+        self.build_rows()
+
+    def build_rows(self):
+        for w in self.table.winfo_children():
+            w.destroy()
+        self.rows = {}
+        head = ttk.Frame(self.table, style='Panel.TFrame')
+        head.pack(fill='x')
+        ttk.Label(head, text=t('enemy.col.type'), style='PanelTitle.TLabel',
+                  width=26).pack(side='left')
+        ttk.Label(head, text=t('enemy.col.min'), style='PanelTitle.TLabel'
+                  ).pack(side='left')
+        ttk.Label(head, text=t('enemy.col.max'), style='PanelTitle.TLabel'
+                  ).pack(side='left', padx=(150, 0))
+        rows = self.filtered()
+        retail = enemylevel.retail_values()
+        last_group = None
+        for num, name, grp in rows:
+            if grp != last_group:
+                last_group = grp
+                n_in = sum(1 for r in rows if r[2] == grp)
+                ttk.Label(self.table,
+                          text=t('enemy.group.' + grp) + f'  ({n_in})',
+                          style='PanelTitle.TLabel').pack(anchor='w',
+                                                          pady=(8, 0))
+            row = ttk.Frame(self.table, style='Panel.TFrame')
+            row.pack(fill='x')
+            lo, hi = self.values.get(num, retail[num])
+            changed = (lo, hi) != retail[num]
+            ttk.Label(row, text=name, style='Panel.TLabel', width=26,
+                      foreground=theme.GOLD if changed else theme.INK
+                      ).pack(side='left')
+            widgets = {}
+            for which in ('min', 'max'):
+                var = tk.StringVar(value=str(lo if which == 'min' else hi))
+                scale = ttk.Scale(row, from_=enemylevel.MIN_LEVEL,
+                                  to=enemylevel.MAX_LEVEL, length=150,
+                                  value=lo if which == 'min' else hi)
+                scale.pack(side='left', padx=(0, 4))
+                sp = ttk.Spinbox(row, from_=enemylevel.MIN_LEVEL,
+                                 to=enemylevel.MAX_LEVEL, width=4,
+                                 textvariable=var)
+                sp.pack(side='left', padx=(0, 12))
+                widgets[which] = (scale, sp, var)
+                scale.configure(command=lambda v, n=num, w=which:
+                                self._from_scale(n, w, v))
+                sp.configure(command=lambda n=num, w=which:
+                             self._from_entry(n, w))
+                sp.bind('<KeyRelease>', lambda e, n=num, w=which:
+                        self._from_entry(n, w))
+            ttk.Label(row, text=t('enemy.retailvalue',
+                                  lo=retail[num][0], hi=retail[num][1]),
+                      style='PanelMuted.TLabel').pack(side='left')
+            self.rows[num] = widgets
+        self.count_lbl.configure(text=t('enemy.count', n=len(rows),
+                                        all=len(enemylevel.ENTRIES)))
+        self.canvas.yview_moveto(0)
+
+    # -- editing ----------------------------------------------------------
+    def _set(self, num, which, value):
+        lo, hi = self.values.get(num, enemylevel.retail_values()[num])
+        value = max(enemylevel.MIN_LEVEL, min(enemylevel.MAX_LEVEL,
+                                              int(round(value))))
+        if which == 'min':
+            lo = value
+            hi = max(hi, lo)
+        else:
+            hi = value
+            lo = min(lo, hi)
+        self.values[num] = (lo, hi)
+        w = self.rows.get(num)
+        if w:
+            for key, val in (('min', lo), ('max', hi)):
+                scale, sp, var = w[key]
+                if var.get() != str(val):
+                    var.set(str(val))
+                if round(float(scale.get())) != val:
+                    scale.set(val)
+
+    def _from_scale(self, num, which, value):
+        self._set(num, which, float(value))
+
+    def _from_entry(self, num, which):
+        w = self.rows.get(num)
+        if not w:
+            return
+        try:
+            self._set(num, which, int(w[which][2].get()))
+        except ValueError:
+            pass
+
+    # -- presets ----------------------------------------------------------
+    def _types(self):
+        return {num for num, _n, _g in self.filtered()}
+
+    def preset_hero(self):
+        self.values = enemylevel.preset_follow_hero(self.values, self._types())
+        self.build_rows()
+
+    def preset_plus(self):
+        try:
+            plus = int(self.plus.get())
+        except ValueError:
+            return
+        self.values = enemylevel.preset_add(self.values, plus, self._types())
+        self.build_rows()
+
+    def preset_scale(self):
+        try:
+            factor = float(self.factor.get().replace(',', '.'))
+        except ValueError:
+            return
+        self.values = enemylevel.preset_scale(self.values, factor,
+                                              self._types())
+        self.build_rows()
+
+    def preset_retail(self):
+        self.values = enemylevel.preset_retail(self.values, self._types())
+        self.build_rows()
+
+    # -- actions ----------------------------------------------------------
+    def _guard(self):
+        if export.game_running():
+            messagebox.showerror(t('enemy.title'), t('export.running'),
+                                 parent=self.win)
+            return False
+        return True
+
+    def apply_clicked(self):
+        if not self._guard():
+            return
+        try:
+            enemylevel.apply(self.game, self.values, self.log)
+            self._put(t('enemy.done.apply'), 'ok')
+        except Exception as e:           # shown in the log
+            self._put(t('limit.failed', e=e), 'err')
+        self.refresh()
+
+    def remove_clicked(self):
+        if not self._guard():
+            return
+        if not messagebox.askyesno(t('enemy.title'),
+                                   t('enemy.remove.q',
+                                     name=enemylevel.MOD_NAME),
+                                   parent=self.win):
+            return
+        try:
+            enemylevel.remove(self.game, self.log)
+            self.values = {}
+            self._put(t('enemy.done.remove'), 'ok')
+        except Exception as e:           # shown in the log
+            self._put(t('limit.failed', e=e), 'err')
+        self.refresh()
 
 
 class QuestLimitWindow:
