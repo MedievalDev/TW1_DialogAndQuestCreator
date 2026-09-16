@@ -423,7 +423,7 @@ class App:
             self.root.update_idletasks()
             try:
                 if v['timeline'].get():
-                    self.vpane.sashpos(0, 110)
+                    self.vpane.sashpos(0, self.timeline.needed_height())
                 if v['palette'].get():
                     self.hpane.sashpos(0, 240)
                 if show_side:
@@ -1881,9 +1881,11 @@ class App:
         self.status['hint'].configure(text=text[:140])
 
     def timeline_height(self, h):
+        """Timeline pane never smaller than its cards need (the sash was
+        110 px on start and cut the cards on tall bars, 2026-09-16)."""
         try:
             if self.vars['timeline'].get():
-                self.vpane.sashpos(0, h)
+                self.vpane.sashpos(0, max(h, self.timeline.needed_height()))
         except tk.TclError:
             pass
 
@@ -2277,6 +2279,8 @@ class App:
             for name, positions in c['sash'].items():
                 pane = getattr(self, name)
                 for i, pos in enumerate(positions):
+                    if name == 'vpane' and i == 0:
+                        pos = max(pos, self.timeline.needed_height())
                     try:
                         pane.sashpos(i, pos)
                     except tk.TclError:

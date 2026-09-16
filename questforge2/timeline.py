@@ -233,11 +233,19 @@ class Timeline(ttk.Frame):
             self.after_cancel(self._job)
         self._job = self.after(ms, self.refresh)
 
+    def needed_height(self):
+        """Header bar, tab strip, cards with their group label and the
+        scrollbar: what the pane must show so no card is cut."""
+        self.update_idletasks()
+        bar_h = max(self.search.master.winfo_reqheight(), 30)
+        sb_h = max(self.sb.winfo_reqheight(), 14)
+        return bar_h + TAB_H + int(self.canvas.cget('height')) + sb_h + 6
+
     def _resize(self):
         self.size = 'large' if self.big.get() else 'small'
         h = SIZES[self.size][1] + LABEL_H + 18
         self.canvas.configure(height=h)
-        self.app.timeline_height(h + 40)
+        self.app.timeline_height(self.needed_height())
         self.refresh()
 
     def refresh(self):
