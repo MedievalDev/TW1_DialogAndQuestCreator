@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.1.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.2.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1277,6 +1277,20 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       "Marker dieser Quest" im Zeitleisten-Kontextmenue.
     - Tests `tests/test_map.py`: DXT1-Block, PNG, Umrechnung hin und zurueck,
       Gruppen, Punkte aus Spiel und Mod.
+66. Abnahme des Usability-Updates (Version 3.2.0, Abschnitt 9 des Prompts):
+    - Luecken aus dem Abgleich geschlossen: "Rohtext bearbeiten" unter der
+      Vorschau von Aufgabe und Aktion (Punkt 6; Parser ueber
+      `retail.args_from_tokens` und `model.op_tokens`, ungueltige Eingaben
+      aendern nichts), Dialog-Vorlage "Standard-Questgeber"
+      (`templates/dialog_standard_giver.json`, `model.insert_dialog`, Punkt 7),
+      Quellenangabe unter jeder Guide-Tabelle (Tastenkuerzel, Aufgaben,
+      Aktionen, Bedingungen, Fehlersuche).
+    - Projekte: alle vier Testprojekte laden und speichern byte-gleich bis auf
+      `tool_version` (Test), Export (qtx, lan, Overlay) mit 2.7.0 und 3.2.0
+      SHA-1-gleich fuer alle vier Projekte.
+    - Vorlagen: jede Quest-Vorlage validiert, baut ihren Block und packt in ein
+      Archiv (Test); die Dialog-Vorlage baut einen Baum. Im Spiel noch nicht
+      gespielt, siehe Offen.
 
 Offen:
 
@@ -1284,6 +1298,9 @@ Offen:
 - Spieltest der geaenderten Gegnerstufen (12.59).
 - Usability-Update abgeschlossen: Guide und Vorlagen (2.9.0), Mod-Quellen
   (3.0.0), interaktive Karte (3.1.0).
+- Spieltest der mitgelieferten Vorlagen (vier Quests, vier Gegnergruppen,
+  Dialog-Vorlage): je eine Quest exportieren, im neuen Spiel annehmen und
+  abschliessen (Abnahme Punkt 9 "laeuft im Spiel").
 - Kartenpositionen im Spiel nachmessen (Held an einen Marker teleportieren
   und Position vergleichen), bisher nur Sichtpruefung (12.65).
 - Ladereihenfolge zweier Mods im Spiel messen (12.64).

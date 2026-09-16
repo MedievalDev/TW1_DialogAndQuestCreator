@@ -268,6 +268,37 @@ class Packing(unittest.TestCase):
             self.assertIn('Language\\ZZ_QF_C.lan', ents)
             self.assertIn('Language\\ZZ_QF_D.lan', ents)
 
+    def test_dialog_template(self):
+        """The standard giver dialog goes into an empty quest connected and
+        into a quest with dialog beside it; the result builds a tree."""
+        from questforge2 import data
+        tpls = data.builtin_templates('dialog')
+        self.assertEqual(len(tpls), 1)
+        graph = tpls[0]['data']['graph']
+        q = Quest(390, 'Leer')
+        q.add_speaker({'id': 3, 'name': 'Tago', 'lector': 123, 'tile': 'E1',
+                       'new': False})
+        model.add_default_conditions(q)
+        new, connected, skipped = model.insert_dialog(q, graph, 3)
+        self.assertEqual(len(new), 7)
+        self.assertEqual(sorted(connected),
+                         ['closed', 'first', 'running', 'solved'])
+        self.assertEqual(skipped, [])
+        speakers = {q.graph['nodes'][n]['speaker'] for n in new
+                    if q.graph['nodes'][n]['type'] == 'npc'}
+        self.assertEqual(speakers, {3})
+        tree, texts = export.quest_texts(q)
+        self.assertGreaterEqual(len(tree.entries), 7)
+        full = make_quest()
+        before = max(n.get('x', 0) for n in full.graph['nodes'].values()
+                     if n.get('type') in ('npc', 'player'))
+        new2, connected2, skipped2 = model.insert_dialog(full, graph, 3)
+        self.assertEqual(connected2, [])
+        self.assertEqual(sorted(skipped2),
+                         ['closed', 'first', 'running', 'solved'])
+        self.assertTrue(all(full.graph['nodes'][n]['x'] > before
+                            for n in new2))
+
     def test_shipped_templates_build(self):
         """Every quest template validates, builds its block and packs into
         an archive; every enemy template fills a valid ENEMY_CREATE."""

@@ -277,6 +277,13 @@ class App:
             sub_t.add_command(label=t('file.recent.none'), state='disabled')
         m.add_cascade(label=t('quest.fromtemplate'), menu=sub_t,
                       state=self._state(self.project is not None))
+        sub_d = theme.Menu(m, tearoff=0)
+        for tpl in data.builtin_templates('dialog'):
+            sub_d.add_command(label=tpl['title'].get(get_lang()) or tpl['name'],
+                              command=lambda tp=tpl:
+                              self.insert_dialog_template(tp))
+        m.add_cascade(label=t('dialogtpl.menu'), menu=sub_d,
+                      state=self._state(self.quest is not None))
         in_project = bool(self.quest and self.project
                           and self.quest in self.project.quests)
         m.add_command(label=t('quest.duplicate'),
@@ -565,6 +572,31 @@ class App:
         note = tpl['note'].get(lang)
         if note:
             self.set_info(note, 'Status.TLabel')
+
+    def insert_dialog_template(self, tpl):
+        """Dialog template into the open quest, spoken by its giver (or the
+        first NPC speaker)."""
+        q = self.quest
+        if q is None:
+            return
+        npcs = [s['id'] for s in q.speakers if isinstance(s.get('id'), int)]
+        speaker = q.giver if q.giver in npcs else (npcs[0] if npcs else None)
+        if speaker is None:
+            messagebox.showinfo(t('dialogtpl.menu'), t('dialogtpl.nospeaker'),
+                                parent=self.root)
+            return
+        self.push_undo('dialog template')
+        new, connected, skipped = model.insert_dialog(
+            q, tpl['data']['graph'], speaker)
+        self.graph.set_graph(q.graph)
+        self.changed()
+        self._build_tabs()
+        msg = t('dialogtpl.done', n=len(new),
+                speaker=self.speaker_style(speaker)[0])
+        if skipped:
+            msg += '  ' + t('dialogtpl.skipped', states=', '.join(
+                t('state.' + s) for s in skipped))
+        self.set_info(msg, 'StatusOk.TLabel')
 
     def copy_quest_as_new(self, qid_or_quest):
         src = (qid_or_quest if isinstance(qid_or_quest, Quest)

@@ -832,6 +832,17 @@ _DE = {
     'map.tip.game': 'Aus dem Spiel',
     'map.tip.used': 'in einer Quest benutzt',
     'map.tip.unused': 'von keiner Quest benutzt',
+    'insp.rawedit': 'Rohtext bearbeiten',
+    'tip.rawedit': 'Die Zeile direkt tippen. Gueltige Eingaben uebernehmen die Felder sofort, ungueltige werden erklaert und aendern nichts.',
+    'insp.raw.kw': 'Die Zeile muss mit {kw} beginnen.',
+    'insp.raw.unknown': '{op} kennt die Questdatei nicht.',
+    'insp.raw.count': 'Anzahl der Werte passt nicht: erwartet {n}, da sind {got}.',
+    'insp.raw.when': 'Zeitpunkt {when} gibt es nicht. Erlaubt: {allowed}.',
+    'insp.raw.derived': 'Uebernommen. Der Zeitpunkt ergibt sich hier aus der Ebene und bleibt {when}.',
+    'dialogtpl.menu': 'Dialog aus Vorlage einfuegen',
+    'dialogtpl.nospeaker': 'Die Quest hat noch keinen NPC-Sprecher. Lege zuerst einen an (+ Neuer Sprecher).',
+    'dialogtpl.done': '{n} Dialog-Nodes eingefuegt, Sprecher {speaker}.',
+    'dialogtpl.skipped': 'Schon belegt, nicht verbunden: {states}.',
 }
 
 _EN = {
@@ -1633,6 +1644,17 @@ _EN = {
     'map.tip.game': 'From the game',
     'map.tip.used': 'used by a quest',
     'map.tip.unused': 'used by no quest',
+    'insp.rawedit': 'Edit raw text',
+    'tip.rawedit': 'Type the line directly. Valid input fills the fields at once, invalid input is explained and changes nothing.',
+    'insp.raw.kw': 'The line has to start with {kw}.',
+    'insp.raw.unknown': 'The quest file does not know {op}.',
+    'insp.raw.count': 'The number of values does not fit: {n} expected, {got} given.',
+    'insp.raw.when': 'There is no time {when}. Allowed: {allowed}.',
+    'insp.raw.derived': 'Taken over. The time comes from the level here and stays {when}.',
+    'dialogtpl.menu': 'Insert dialog from template',
+    'dialogtpl.nospeaker': 'The quest has no NPC speaker yet. Add one first (+ New speaker).',
+    'dialogtpl.done': '{n} dialog nodes inserted, speaker {speaker}.',
+    'dialogtpl.skipped': 'Already occupied, not connected: {states}.',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

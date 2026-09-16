@@ -611,6 +611,48 @@ def make_condition(cond='after', **values):
     return n
 
 
+def insert_dialog(quest, template_graph, speaker):
+    """Put the dialog of a dialog template (kind ``dialog``) into a quest.
+    NPC nodes get ``speaker``; an entry of the quest without an outgoing edge
+    is connected, an occupied one is left alone. New nodes go to the right
+    of the existing dialog. Returns (new node ids, connected states,
+    skipped states)."""
+    g = quest.graph
+    tnodes = template_graph['nodes']
+    dialog = [n for n in g['nodes'].values()
+              if n.get('type') in ('npc', 'player')]
+    shift = 0
+    if dialog:
+        right = max(n.get('x', 0) for n in dialog)
+        left = min((n.get('x', 0) for n in tnodes.values()
+                    if n.get('type') in ('npc', 'player')), default=0)
+        shift = right + 320 - left
+    mapping = {}
+    for tid, n in tnodes.items():
+        if n.get('type') not in ('npc', 'player'):
+            continue
+        c = copy.deepcopy(n)
+        if c['type'] == 'npc':
+            c['speaker'] = speaker
+        c['x'] = c.get('x', 0) + shift
+        mapping[tid] = add_node(g, c)
+    connected, skipped = [], []
+    for frm, port, to in template_graph['edges']:
+        if to not in mapping:
+            continue
+        if is_entry(frm):
+            state = frm.split(':', 1)[1]
+            ensure_entry(g, state)
+            if any(e[0] == frm for e in g['edges']):
+                skipped.append(state)
+                continue
+            if connect(g, frm, port, mapping[to]):
+                connected.append(state)
+        elif frm in mapping:
+            connect(g, mapping[frm], port, mapping[to])
+    return list(mapping.values()), connected, skipped
+
+
 def copy_references(quest, old_id, new_id):
     """After copying a quest: links that pointed at the quest itself now
     point at the copy. Returns the references to other quests that the user

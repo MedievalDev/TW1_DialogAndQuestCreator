@@ -7,7 +7,7 @@ then the node is redrawn in the graph.
 import tkinter as tk
 from tkinter import ttk
 
-from . import data, model, mods, theme
+from . import data, model, mods, retail, theme
 from .i18n import t
 from .mappicker import MapPicker
 
@@ -203,12 +203,105 @@ class Inspector(ttk.Frame):
         box.configure(state='disabled')
         return box
 
-    def _op_preview(self, keyword, tokens):
+    def _op_preview(self, keyword, tokens, apply_raw=None):
         try:
             line = '  ' + keyword + ' ' + ' '.join(str(x) for x in tokens)
         except Exception:                      # shown as the error text
             line = '?'
-        self._preview(line)
+        box = self._preview(line)
+        if apply_raw is None:
+            return
+        # "edit raw text" (point 6): type the line, valid input updates the
+        # fields, invalid input is explained and changes nothing
+        var = tk.BooleanVar(value=getattr(self, 'raw_mode', False))
+        msg = ttk.Label(self.body, text='', style='PanelMuted.TLabel',
+                        foreground=theme.ERR, wraplength=260, justify='left')
+
+        def toggle():
+            self.raw_mode = var.get()
+            if self.raw_mode:
+                box.configure(state='normal')
+                box.focus_set()
+            else:
+                self.after_idle_refresh()
+
+        def typed(_ev=None):
+            err = apply_raw(box.get('1.0', 'end-1c').split(), box)
+            msg.configure(text=err or '')
+        cb = ttk.Checkbutton(self.body, text=t('insp.rawedit'), variable=var,
+                             style='Panel.TCheckbutton', command=toggle)
+        cb.pack(anchor='w')
+        theme.Tooltip(cb, t('tip.rawedit'))
+        msg.pack(anchor='w')
+        if var.get():
+            box.configure(state='normal')
+        box.bind('<FocusIn>', lambda ev: self._reset_undo(box))
+        box.bind('<KeyRelease>', typed)
+        box.bind('<FocusOut>', typed, add='+')
+
+    def _raw_task(self, nid):
+        """Parser for a typed ``FC <task> <values>`` line."""
+        def apply_raw(toks, box):
+            if len(toks) < 2 or toks[0] != 'FC':
+                return t('insp.raw.kw', kw='FC')
+            fc = toks[1]
+            spec = model.FC_SPECS.get(fc)
+            if spec is None:
+                return t('insp.raw.unknown', op=fc)
+            args = retail.args_from_tokens(spec, toks[2:])
+            if args is None:
+                return t('insp.raw.count', n=len(spec), got=len(toks) - 2)
+            try:
+                model.op_tokens(spec, args)
+            except model.ModelError as e:
+                return str(e)
+            graph = self.app.quest.graph
+
+            def apply():
+                model.set_task(graph, fc)
+                graph['nodes'][nid]['args'].update(args)
+            self._edit(box, apply, nid)
+            return None
+        return apply_raw
+
+    def _raw_action(self, nid, node, free):
+        """Parser for a typed ``ACTION|REWARD <verb> <when> <values>``."""
+        kind = node['kind']
+
+        def apply_raw(toks, box):
+            if len(toks) < 3 or toks[0] != kind:
+                return t('insp.raw.kw', kw=kind)
+            key = (kind, toks[1])
+            spec = model.ACTION_SPECS.get(key)
+            if spec is None:
+                return t('insp.raw.unknown', op=toks[1])
+            args = retail.args_from_tokens(spec, toks[3:])
+            if args is None:
+                return t('insp.raw.count', n=len(spec), got=len(toks) - 3)
+            try:
+                model.op_tokens(spec, args)
+            except model.ModelError as e:
+                return str(e)
+            when = toks[2]
+            allowed = model.REWARD_WHEN if kind == 'REWARD' \
+                else model.ACTION_WHEN
+            if when not in allowed:
+                return t('insp.raw.when', when=when,
+                         allowed=', '.join(allowed))
+
+            def apply():
+                if (node['kind'], node['verb']) != key:
+                    model.set_action_verb(node, *key)
+                node['args'].update(args)
+                if free:
+                    node['when'] = when
+            self._edit(box, apply, nid)
+            if not free:
+                derived = model.action_when(self.app.quest.graph, node)
+                if derived and when != derived:
+                    return t('insp.raw.derived', when=derived)
+            return None
+        return apply_raw
 
     def _entry(self, value, on_change, nid=None):
         var = tk.StringVar(value=value)
@@ -627,7 +720,7 @@ class Inspector(ttk.Frame):
         self._fields(model.FC_SPECS[fc], node['args'], nid)
         try:
             self._op_preview('FC', [fc] + list(model.op_tokens(
-                model.FC_SPECS[fc], node['args'])))
+                model.FC_SPECS[fc], node['args'])), self._raw_task(nid))
         except model.ModelError as e:
             self._hint('insp.preview.bad', error=True, err=e)
         if fc in ('KILL', 'FIND_KILL'):
@@ -687,7 +780,8 @@ class Inspector(ttk.Frame):
             toks = model.op_tokens(model.ACTION_SPECS[cur], node['args'])
             when = node.get('when') or model.action_when(
                 self.app.quest.graph, node) or 'TAKE'
-            self._op_preview(node['kind'], [node['verb'], when] + list(toks))
+            self._op_preview(node['kind'], [node['verb'], when] + list(toks),
+                             self._raw_action(nid, node, free))
         except model.ModelError as e:
             self._hint('insp.preview.bad', error=True, err=e)
         hints = {'SHOW_LOCATION': 'hint.showloc', 'NPC_TELEPORT': 'hint.teleport',

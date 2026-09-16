@@ -541,7 +541,14 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Dokumentation. Eingabefelder zeigen ein Beispiel, ungültige Eingaben werden
   sofort rot erklärt (keine Zahl, falsche Kachel, Semikolon, Umlaut).
 - **Vorschau:** Unter Aufgabe und Aktion steht die Zeile, die so in die
-  Questdatei geschrieben wird.
+  Questdatei geschrieben wird. "Rohtext bearbeiten" macht sie tippbar:
+  gültige Zeilen übernehmen die Felder sofort, ungültige werden erklärt
+  (falscher Befehl, falsche Anzahl Werte, unbekannter Zeitpunkt) und ändern
+  nichts.
+- **Dialog-Vorlage:** Quest > Dialog aus Vorlage einfügen > "Standard-
+  Questgeber" setzt Angebot mit Annehmen/Ablehnen, Antwort während die Quest
+  läuft, Dank beim Erfüllen und einen Satz danach in die offene Quest. Es
+  spricht der Questgeber; freie Einstiege werden verbunden, belegte bleiben.
 - **Quest-Verknüpfungen (AOQ):** Im Quest-Panel lassen sich Zeilen
   `AOQ <Typ> <Auslöser> Q_<Ziel>` anlegen. Typen laut SDK: PROMOTE, TAKE,
   DISABLE, SOLVE, CLOSE, FAIL_CLOSE. Auslöser: ENABLE, TAKE, HEAR, SOLVE,

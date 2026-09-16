@@ -97,7 +97,9 @@ matching chapter here on click. The tour through the window is under
 Help > Start tour.
 
 ## Keyboard shortcuts
-""") + _table([_l('Taste', 'Key'), _l('Wirkung', 'Effect')], rows)
+""") + _table([_l('Taste', 'Key'), _l('Wirkung', 'Effect')], rows) + \
+        '\n\n' + _l('Quelle: Tastenbelegung des Tools (app.py, graph.py).',
+                     'Source: key bindings of the tool (app.py, graph.py).')
 
 
 def ch_first_quest():
@@ -251,7 +253,11 @@ Traps:
 """)
     return head + _table([_l('Aufgabe', 'Task'), 'qtx',
                           _l('Felder', 'Fields')],
-                         _spec_rows(model.FC_SPECS, 'FC'))
+                         _spec_rows(model.FC_SPECS, 'FC')) + '\n\n' + _l(
+        'Quelle: SDK PQuestLoader.ech (ParseFC); die Tabelle kommt aus '
+        'model.FC_SPECS, denselben Daten wie das Formular.',
+        'Source: SDK PQuestLoader.ech (ParseFC); the table comes from '
+        'model.FC_SPECS, the same data as the form.')
 
 
 def ch_actions():
@@ -278,7 +284,11 @@ hover. Right click on an action: edit, move up, move down.
 """)
     rows = _spec_rows(model.ACTION_SPECS, 'ACTION')
     tail = '\n\n' + _l('Zeitpunkte laut SDK: ', 'Times from the SDK: ') + \
-        ', '.join(f'`{w}`' for w in model.ACTION_WHEN)
+        ', '.join(f'`{w}`' for w in model.ACTION_WHEN) + '\n\n' + _l(
+            'Quelle: SDK PQuestLoader.ech (ParseACT, ParseRWD); die Tabelle '
+            'kommt aus model.ACTION_SPECS.',
+            'Source: SDK PQuestLoader.ech (ParseACT, ParseRWD); the table '
+            'comes from model.ACTION_SPECS.')
     return head + _table([_l('Aktion', 'Action'), 'qtx',
                           _l('Felder', 'Fields')], rows) + tail
 
@@ -298,6 +308,9 @@ angeboten wird.
 Ohne "Nach Quest" wird die Quest nie angeboten. "Start" im Quest-Panel
 ausgeschaltet schreibt `AOQ TAKE` statt `PROMOTE`: die Quest steht dann ohne
 Gespraech im Tagebuch.
+
+Quelle: SDK PQuestLoader.ech (ParseQUEST fuer die Kopfzeile, ParseAOQ),
+PQuests.ec (PromoteQuest zaehlt enable_level hoch).
 """, """# Conditions
 
 Conditions hang below the entry Offer and decide when the quest is offered.
@@ -311,6 +324,9 @@ Conditions hang below the entry Offer and decide when the quest is offered.
 Without "After quest" the quest is never offered. "Start" switched off in the
 quest panel writes `AOQ TAKE` instead of `PROMOTE`: the quest then lands in the
 journal without a conversation.
+
+Source: SDK PQuestLoader.ech (ParseQUEST for the header, ParseAOQ),
+PQuests.ec (PromoteQuest counts enable_level up).
 """)
 
 
@@ -372,6 +388,16 @@ def ch_npcs():
 
 Ungeklaert: die Spalten 9 und 10 im NPC-Block (`SMALL True`) sowie was der
 Wert hinter der Einheit genau steuert. Das Tool uebernimmt sie von der Vorlage.
+
+## Dialog-Vorlage
+
+Quest > **Dialog aus Vorlage einfuegen** > "Standard-Questgeber" setzt ein
+fertiges Gespraech in die offene Quest: Angebot mit Annehmen und Ablehnen,
+Antwort solange die Quest laeuft, Dank beim Erfuellen (schliesst die Quest ab),
+ein Satz danach. Es spricht der Questgeber, sonst der erste NPC-Sprecher. Freie
+Einstiege werden verbunden, schon belegte bleiben unveraendert; die neuen Nodes
+stehen dann rechts daneben und du verbindest sie selbst. Die Zeilen mit TODO
+schreibst du um. Vorlagen liegen als JSON in `questforge2/templates/`.
 """, """# NPCs and speakers
 
 "+ New speaker" takes an NPC of the game or creates a new one.
@@ -385,6 +411,16 @@ Wert hinter der Einheit genau steuert. Das Tool uebernimmt sie von der Vorlage.
 
 Unresolved: columns 9 and 10 of the NPC block (`SMALL True`) and what the value
 after the unit controls exactly. The tool takes them from the template.
+
+## Dialog template
+
+Quest > **Insert dialog from template** > "Standard quest giver" puts a ready
+conversation into the open quest: an offer with accept and decline, an answer
+while the quest runs, thanks on solving (closes the quest), a line afterwards.
+The quest giver speaks, otherwise the first NPC speaker. Free entries get
+connected, occupied ones stay as they are; the new nodes then stand to the
+right and you connect them yourself. Rewrite the lines marked TODO. Templates
+are JSON files in `questforge2/templates/`.
 """)
 
 
@@ -749,7 +785,11 @@ def ch_trouble():
               '# Troubleshooting\n\nThe engine reports no errors. These cases '
               'cost hours otherwise.\n\n') + \
         _table([_l('Symptom', 'Symptom'), _l('Ursache', 'Cause'),
-                _l('Loesung', 'Fix')], rows)
+                _l('Loesung', 'Fix')], rows) + '\n\n' + _l(
+            'Quelle: README Abschnitte 3 und 9 (gemessene Fallen) und die '
+            'Spieltests des Projekts (NODE_EDITOR_PLAN.md, Abschnitt 12).',
+            'Source: README sections 3 and 9 (measured pitfalls) and the game '
+            'tests of the project (NODE_EDITOR_PLAN.md, section 12).')
 
 
 def ch_build():

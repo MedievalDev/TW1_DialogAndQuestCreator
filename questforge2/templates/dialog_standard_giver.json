@@ -1,0 +1,214 @@
+{
+  "template": {
+    "kind": "dialog",
+    "title": {
+      "de": "Standard-Questgeber (Angebot, Rueckfrage, Abschluss)",
+      "en": "Standard quest giver (offer, question, closing)"
+    },
+    "note": {
+      "de": "Angebot mit Annehmen/Ablehnen, Antwort waehrend die Quest laeuft, Dank beim Erfuellen, Satz danach. Der Questgeber spricht alle NPC-Zeilen; Stellen mit TODO anpassen. Freie Einstiege werden verbunden, belegte bleiben wie sie sind.",
+      "en": "Offer with accept/decline, answer while the quest runs, thanks on solving, a line afterwards. The quest giver speaks every NPC line; change the TODO places. Free entries get connected, occupied ones stay as they are."
+    }
+  },
+  "graph": {
+    "nodes": {
+      "entry:first": {
+        "type": "entry",
+        "state": "first",
+        "x": 40,
+        "y": 40
+      },
+      "entry:running": {
+        "type": "entry",
+        "state": "running",
+        "x": 40,
+        "y": 242
+      },
+      "entry:solved": {
+        "type": "entry",
+        "state": "solved",
+        "x": 40,
+        "y": 328
+      },
+      "entry:closed": {
+        "type": "entry",
+        "state": "closed",
+        "x": 40,
+        "y": 485
+      },
+      "n3": {
+        "type": "npc",
+        "state": "first",
+        "x": 270,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": "TODO: das Angebot",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n4": {
+        "type": "player",
+        "state": "first",
+        "x": 550,
+        "y": 40,
+        "speaker": "player",
+        "kind": "question",
+        "lines": [
+          {
+            "text": "TODO: annehmen",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": "TODO: ablehnen",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n5": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": "TODO: Dank fuer die Zusage",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n6": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 141,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": "TODO: Antwort auf die Absage",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n7": {
+        "type": "npc",
+        "state": "running",
+        "x": 270,
+        "y": 242,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": "TODO: noch nicht erledigt",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n8": {
+        "type": "npc",
+        "state": "solved",
+        "x": 270,
+        "y": 384,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": "TODO: Dank und Belohnung",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": true,
+            "fight": false
+          }
+        ]
+      },
+      "n9": {
+        "type": "npc",
+        "state": "closed",
+        "x": 270,
+        "y": 485,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": "TODO: danach",
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      }
+    },
+    "edges": [
+      [
+        "entry:first",
+        0,
+        "n3"
+      ],
+      [
+        "n3",
+        0,
+        "n4"
+      ],
+      [
+        "n4",
+        0,
+        "n5"
+      ],
+      [
+        "n4",
+        1,
+        "n6"
+      ],
+      [
+        "entry:running",
+        0,
+        "n7"
+      ],
+      [
+        "entry:solved",
+        0,
+        "n8"
+      ],
+      [
+        "entry:closed",
+        0,
+        "n9"
+      ]
+    ]
+  }
+}
