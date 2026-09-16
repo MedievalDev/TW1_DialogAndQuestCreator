@@ -109,5 +109,45 @@ class Rules(unittest.TestCase):
         self.assertTrue(any('val.id.twice' in m for _, m, _ in errors))
 
 
+class Links(unittest.TestCase):
+    """AOQ lines of a quest (2.8.0): types and triggers from the SDK."""
+
+    def test_export_and_rules(self):
+        from questforge2 import export, model as m
+        idx = _Index()
+        q = make_quest()
+        q.links.append({'type': 'DISABLE', 'event': 'TAKE', 'quest': 12})
+        E, W = validate.validate_quest(q, idx)
+        self.assertEqual(keys(E), '')
+        line = [ln.strip() for ln in export.build_quest_block(q).emit()
+                .splitlines() if ln.strip().startswith('AOQ')]
+        self.assertEqual(line, ['AOQ DISABLE TAKE Q_12'])
+        # unknown type, unknown trigger, target missing, target unknown
+        q.links = [{'type': 'ENABLE', 'event': 'TAKE', 'quest': 12},
+                   {'type': 'TAKE', 'event': 'NOW', 'quest': 12},
+                   {'type': 'TAKE', 'event': 'TAKE', 'quest': None},
+                   {'type': 'TAKE', 'event': 'TAKE', 'quest': 4444}]
+        E, W = validate.validate_quest(q, idx)
+        k = keys(E)
+        self.assertIn('val.link.type', k)
+        self.assertIn('val.link.event', k)
+        self.assertIn('val.link.target', k)
+        self.assertIn('val.link.unknown', keys(W))
+        self.assertIn('AOQ ENABLE', 'AOQ ENABLE')      # does not exist
+        self.assertNotIn('ENABLE', m.AOQ_TYPES)
+
+    def test_field_checks(self):
+        from questforge2 import inspector
+        self.assertTrue(inspector.field_problem('npc', 'abc'))
+        self.assertFalse(inspector.field_problem('npc', 'NPC_3'))
+        self.assertTrue(inspector.field_problem('tile', '99'))
+        self.assertFalse(inspector.field_problem('tile', 'F01_1'))
+        self.assertTrue(inspector.field_problem('int', 'x'))
+        self.assertFalse(inspector.field_problem('int', '100'))
+        self.assertTrue(inspector.field_problem('object', 'Gruesse;'))
+        self.assertTrue(inspector.field_problem('object', 'Grüße'))
+        self.assertFalse(inspector.field_problem('object', 'QITEM_112'))
+
+
 if __name__ == '__main__':
     unittest.main()

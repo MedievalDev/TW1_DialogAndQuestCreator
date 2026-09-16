@@ -95,6 +95,17 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None):
                 E.append((t('val.id.taken', id=qid, src=src), None))
             else:
                 W.append((t('val.id.replace', id=qid, src=src), None))
+        for link in [x for x in quest.links if isinstance(x, dict)]:
+            tgt = link.get('quest')
+            if link.get('type') not in model.AOQ_TYPES:
+                E.append((t('val.link.type', type=link.get('type')), None))
+            if link.get('event') not in model.AOQ_TRIGGERS:
+                E.append((t('val.link.event', event=link.get('event')), None))
+            if not isinstance(tgt, int) or tgt == qid:
+                E.append((t('val.link.target', id=tgt), None))
+            elif index and not index.quest(tgt) and not (
+                    project and project.quest_by_id(tgt)):
+                W.append((t('val.link.unknown', id=tgt), None))
         if project and sum(1 for q in project.quests if q.id == qid) > 1:
             E.append((t('val.id.twice', id=qid), None))
         if not (quest.title or '').strip():

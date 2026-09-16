@@ -449,6 +449,10 @@ def build_quest_block(quest):
     task = quest.task()
     subs.append(tw1_qtx.sub_fc(task['fc'], *model.op_tokens(
         model.FC_SPECS[task['fc']], task['args'])))
+    for link in quest.links_list():
+        subs.append(tw1_qtx.sub_aoq(link.get('type', 'PROMOTE'),
+                                    link.get('event', 'TAKE'),
+                                    int(link['quest'])))
     acts, rewards = [], []
     for a, when, _ in all_actions(quest):
         toks = model.op_tokens(model.ACTION_SPECS[(a['kind'], a['verb'])],

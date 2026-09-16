@@ -468,6 +468,16 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Überfahren.
 - **Kopfleiste:** Neben "+ Neue Quest" liegen die Knöpfe "Questgrenze" mit der
   wirksamen Grenze und "Gegnerstufen".
+- **Hilfe im Formular:** Neben Panel-Titeln und erklärungsbedürftigen Feldern
+  steht ein `?`. Überfahren zeigt eine kurze Erklärung, Klick öffnet die
+  Dokumentation. Eingabefelder zeigen ein Beispiel, ungültige Eingaben werden
+  sofort rot erklärt (keine Zahl, falsche Kachel, Semikolon, Umlaut).
+- **Vorschau:** Unter Aufgabe und Aktion steht die Zeile, die so in die
+  Questdatei geschrieben wird.
+- **Quest-Verknüpfungen (AOQ):** Im Quest-Panel lassen sich Zeilen
+  `AOQ <Typ> <Auslöser> Q_<Ziel>` anlegen. Typen laut SDK: PROMOTE, TAKE,
+  DISABLE, SOLVE, CLOSE, FAIL_CLOSE. Auslöser: ENABLE, TAKE, HEAR, SOLVE,
+  CLOSE, FAIL, FIGHT, NONE. `AOQ ENABLE` gibt es nicht.
 - **Eigenschaften** (rechts): Formular des gewählten Elements, ohne Auswahl
   die Quest selbst. ID-Felder haben einen Kachel-Picker, Dialogzeilen eine
   Cue-Suche. Das Feld Partei listet die Fraktionsnummern des SDK mit Namen

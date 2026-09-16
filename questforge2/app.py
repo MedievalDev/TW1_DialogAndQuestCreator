@@ -708,6 +708,12 @@ class App:
         self._update_status()
         return self.quest_limit
 
+    def show_help(self, key):
+        """The "?" marks call this; until the guide window exists (2.9) it
+        opens the documentation."""
+        self.set_hint(t(key))
+        show_docs(self)
+
     def show_quest_limit(self):
         if not self.cfg.get('game_dir'):
             return
@@ -888,6 +894,37 @@ class App:
                 sub.add_command(label=t('op.FC.' + fc),
                                 command=lambda fc=fc: self._set_task(fc))
             menu.add_cascade(label=t('ctx.settask'), menu=sub)
+        if kind in ('action', 'condition'):
+            # edit, order, remove: the same things the panel offers, but
+            # reachable with the right mouse button (2.8.0)
+            menu.add_command(label=t('ctx.edit'),
+                             command=lambda: self.inspector.show({nid}))
+            menu.add_command(label=t('ctx.moveup'),
+                             command=lambda: self.move_docked(nid, -1))
+            menu.add_command(label=t('ctx.movedown'),
+                             command=lambda: self.move_docked(nid, 1))
+
+    def move_docked(self, nid, step):
+        """Move a docked action or condition up or down in its stack."""
+        g = self.quest.graph if self.quest else None
+        node = g['nodes'].get(nid) if g else None
+        if not node:
+            return
+        group = sorted([(n.get('slot', 0), i) for i, n in g['nodes'].items()
+                        if n.get('type') == node['type']
+                        and n.get('attached_to') == node.get('attached_to')])
+        order = [i for _s, i in group]
+        pos = order.index(nid)
+        new = max(0, min(len(order) - 1, pos + step))
+        if new == pos:
+            return
+        self.push_undo('order')
+        order.insert(new, order.pop(pos))
+        for slot, i in enumerate(order):
+            g['nodes'][i]['slot'] = slot
+        model.restack(g, node.get('attached_to'))
+        self.graph.redraw_group(node.get('attached_to'))
+        self.changed()
 
     def _set_task(self, fc):
         self.push_undo('task')

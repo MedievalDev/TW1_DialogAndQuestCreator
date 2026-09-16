@@ -10,6 +10,7 @@ File: ``*.tw1proj``, UTF-8 JSON, LF line endings, git friendly.
 import copy
 import json
 import os
+import re
 
 from . import VERSION
 
@@ -185,6 +186,55 @@ def parse_party(text):
         return text
 
 AOQ_EVENTS = ('TAKE', 'SOLVE', 'CLOSE')
+# AOQ <type> <trigger> Q_<n>: when this quest reaches <trigger>, do <type>
+# with the other quest. Both lists from the SDK loader (PQuestLoader.ech,
+# ParseAOQ); "AOQ ENABLE" does not exist.
+AOQ_TYPES = ('PROMOTE', 'TAKE', 'DISABLE', 'SOLVE', 'CLOSE', 'FAIL_CLOSE')
+AOQ_TRIGGERS = ('ENABLE', 'TAKE', 'HEAR', 'SOLVE', 'CLOSE', 'FAIL', 'FIGHT',
+                'NONE')
+# Animation of a dialog line: the .par carries anTalk0 to anTalk17 per unit,
+# what each one shows is not documented. Retail uses 0, 10, 11 and 17 most.
+ANIMATIONS = tuple(range(18))
+ANIM_COMMON = (0, 10, 11, 17, 7, 8, 16, 9)
+# map cells: A to L plus the row, interiors with _1, _2 ...
+TILE_RE = re.compile(r'^[A-Z]\d{1,2}(_\d+)?$')
+
+
+def anim_label(num, t):
+    """'10  Talk 10 (often used)' for the picker."""
+    try:
+        num = int(str(num).split()[0])
+    except (ValueError, IndexError):
+        return str(num)
+    text = f'{num}  ' + t('anim.name', n=num)
+    if num in ANIM_COMMON:
+        text += ' ' + t('anim.common')
+    return text
+
+
+def parse_anim(text):
+    head = str(text).strip().split()
+    try:
+        return int(head[0])
+    except (IndexError, ValueError):
+        return 0
+
+# Every list of numbers with a fixed meaning in one place: the pickers and
+# the reference tables of the guide read from here.
+# name -> (values, where it is proven, 'proven' or 'unverified')
+NUMBER_LISTS = {
+    'party': (PARTIES, 'SDK Enums.ech (ePartyX)', 'proven'),
+    'guild': (GUILDS, 'SDK Enums.ech (eGuildX)', 'proven'),
+    'aoq_type': (AOQ_TYPES, 'SDK PQuestLoader.ech (ParseAOQ)', 'proven'),
+    'aoq_trigger': (AOQ_TRIGGERS, 'SDK PQuestLoader.ech (ParseAOQ)',
+                    'proven'),
+    'action_when': (ACTION_WHEN, 'SDK PQuestLoader.ech (ParseACT)', 'proven'),
+    'animation': (ANIMATIONS, 'TwoWorlds.par anTalk0 to anTalk17',
+                  'unverified'),
+}
+# fields whose numbers nobody could trace: shown with a warning
+UNVERIFIED_FIELDS = {('ACTION', 'SET_WORLD_STATE'): ('number',),
+                     ('ACTION', 'PLAY_CUTSCENE'): ('number',)}
 # ParseEnemyType in PQuestLoader.ech (unknown names fall back to goblins)
 ENEMY_TYPES = (
     'ENEMY_ANIMAL', 'ENEMY_BANDIT', 'ENEMY_DAEMON', 'ENEMY_GOBLIN',
@@ -224,12 +274,14 @@ class Quest:
         self.graph = new_graph()
         self.actions = []                # actions without dialog (6.2):
         #   [{'kind','verb','args','when'}]; docked ones live in the graph
+        self.links = []                  # AOQ lines of this quest:
+        #   [{'type','event','quest'}], see AOQ_TYPES / AOQ_TRIGGERS
         self.retail = False              # True = edited retail quest
         self.extra = {}                  # unknown keys, preserved
 
     _FIELDS = ('title', 'group', 'journal', 'giver', 'giver_type',
                'map_sign', 'offered', 'enable_level', 'speakers', 'graph',
-               'actions', 'retail')
+               'actions', 'links', 'retail')
 
     def to_dict(self):
         d = {'id': self.id}
@@ -271,6 +323,11 @@ class Quest:
 
     def task(self):
         return ensure_task(self.graph)
+
+    def links_list(self):
+        """AOQ lines of this quest: [{'type', 'event', 'quest'}]."""
+        return [x for x in self.links
+                if isinstance(x, dict) and x.get('quest') is not None]
 
     def conditions_list(self):
         return [n for n in self.graph['nodes'].values()

@@ -18,15 +18,69 @@ MAP_SIGNS = ('BACK_TO_GIVER_MAP_SIGN', 'AUTO_CLOSE_ON_SOLVE', 'BACK_TO_GIVER',
              'NONE')
 
 
+def help_mark(parent, key, app=None):
+    """Small "?" that explains a panel or a field (point 4 of the update)."""
+    lbl = ttk.Label(parent, text='?', style='Panel.TLabel',
+                    foreground=theme.GOLD, cursor='hand2')
+    lbl.pack(side='left', padx=(6, 0))
+    theme.Tooltip(lbl, t(key))
+    if app is not None:
+        lbl.bind('<Button-1>', lambda ev: app.show_help(key))
+    return lbl
+
+
+def placeholder(widget, var, text):
+    """Grey example inside an empty entry; gone as soon as something is typed."""
+    def show():
+        if not var.get():
+            widget.configure(foreground=theme.DIM)
+            var.set(text)
+            widget._placeholder = True
+
+    def clear(_ev=None):
+        if getattr(widget, '_placeholder', False):
+            var.set('')
+            widget.configure(foreground=theme.INK)
+            widget._placeholder = False
+
+    widget.bind('<FocusIn>', clear, add='+')
+    widget.bind('<FocusOut>', lambda ev: show(), add='+')
+    show()
+    return widget
+
+
+def field_problem(kind, value):
+    """Text for a value that the qtx would reject, else '' (point 3)."""
+    value = (value or '').strip()
+    if not value:
+        return ''
+    if kind == 'npc' and not any(c.isdigit() for c in value):
+        return t('check.npc')
+    if kind in ('int', 'party') and not value.split()[0].lstrip('-').isdigit():
+        return t('check.int')
+    if kind == 'tile' and not model.TILE_RE.match(value.upper()):
+        return t('check.tile')
+    for bad, key in ((';', 'check.semicolon'), (chr(13), 'check.cr')):
+        if bad in value:
+            return t(key)
+    if any(ord(c) > 127 for c in value):
+        # the qtx parser is ASCII: accents break the whole file
+        return t('check.charset')
+    return ''
+
+
 class Inspector(ttk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, style='Panel.TFrame')
         self.app = app
         self.current = None            # ('quest',) | ('node', nid) | ('multi', n)
         self._undo_for = None          # widget that already pushed a snapshot
-        self.title = ttk.Label(self, text=t('panel.inspector'),
+        head = ttk.Frame(self, style='Panel.TFrame')
+        head.pack(anchor='w', fill='x')
+        self.title = ttk.Label(head, text=t('panel.inspector'),
                                style='PanelTitle.TLabel')
-        self.title.pack(anchor='w', fill='x')
+        self.title.pack(side='left')
+        help_mark(head, 'help.inspector', self.app)
         # scrollable body
         outer = ttk.Frame(self, style='Panel.TFrame')
         outer.pack(fill='both', expand=True)
@@ -130,10 +184,31 @@ class Inspector(ttk.Frame):
             self.app.graph.redraw_node(nid)
         self.app.changed(from_inspector=True)
 
-    def _label(self, text, muted=False):
-        ttk.Label(self.body, text=text,
+    def _label(self, text, muted=False, help_key=None):
+        row = ttk.Frame(self.body, style='Panel.TFrame')
+        row.pack(anchor='w', fill='x', pady=(8, 1))
+        ttk.Label(row, text=text,
                   style='PanelMuted.TLabel' if muted else 'Panel.TLabel'
-                  ).pack(anchor='w', pady=(8, 1))
+                  ).pack(side='left')
+        if help_key:
+            help_mark(row, help_key, self.app)
+        return row
+
+    def _preview(self, text):
+        """The qtx line this form builds, read only (point 6 of the update)."""
+        self._label(t('insp.preview'), muted=True, help_key='help.preview')
+        box = tk.Text(self.body, height=2, wrap='word', font=theme.FONT_MONO)
+        box.pack(fill='x')
+        box.insert('1.0', text)
+        box.configure(state='disabled')
+        return box
+
+    def _op_preview(self, keyword, tokens):
+        try:
+            line = '  ' + keyword + ' ' + ' '.join(str(x) for x in tokens)
+        except Exception:                      # shown as the error text
+            line = '?'
+        self._preview(line)
 
     def _entry(self, value, on_change, nid=None):
         var = tk.StringVar(value=value)
@@ -191,7 +266,7 @@ class Inspector(ttk.Frame):
                  if i not in taken])
         if q.id and q.id not in free:
             free = sorted(free + [q.id])
-        self._label(t('insp.id'))
+        self._label(t('insp.id'), help_key='help.id')
         if q.retail:
             ttk.Label(self.body, text=f'Q_{q.id}', style='Panel.TLabel'
                       ).pack(anchor='w')
@@ -207,7 +282,7 @@ class Inspector(ttk.Frame):
                         labels=[f'Q_{i}' for i in free])
             ttk.Label(self.body, text=t('insp.id.hint'),
                       style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
-        self._label(t('insp.title'))
+        self._label(t('insp.title'), help_key='help.title')
         self._entry(q.title, lambda v: setattr(q, 'title', v))
         self._label(t('insp.group'))
         groups = sorted(((int(k), v) for k, v in idx.groups.items()), key=lambda kv: kv[0]) \
@@ -256,6 +331,8 @@ class Inspector(ttk.Frame):
             var.set('')
             ttk.Label(self.body, text='-> ' + archive_name(self.app.project),
                       style='PanelMuted.TLabel').pack(anchor='w')
+        if not q.retail:
+            self._links_form(q)
         self._label(t('insp.qactions'))
         for i, a in enumerate(q.actions):
             row = ttk.Frame(self.body, style='Panel.TFrame')
@@ -280,6 +357,66 @@ class Inspector(ttk.Frame):
                   style='PanelMuted.TLabel', wraplength=260).pack(anchor='w', pady=4)
 
     # -- task / actions / conditions ------------------------------------------
+
+    def _links_form(self, q):
+        """AOQ lines of this quest: when it reaches <trigger>, do <type>
+        with another quest (point 6 of the update)."""
+        self._label(t('insp.links'), help_key='help.links')
+        idx = self.app.index
+        targets = sorted({qq.id for qq in self.app.project.quests if qq.id}
+                         | {int(k) for k in (idx.quests if idx else {})})
+        for i, link in enumerate([x for x in q.links
+                                  if isinstance(x, dict)]):
+            row = ttk.Frame(self.body, style='Panel.TFrame')
+            row.pack(fill='x', pady=1)
+            tv = tk.StringVar(value=link.get('type', 'PROMOTE'))
+            cb = ttk.Combobox(row, textvariable=tv, width=11, state='readonly',
+                              values=list(model.AOQ_TYPES))
+            cb.pack(side='left')
+            cb.bind('<<ComboboxSelected>>', lambda ev, l=link, v=tv:
+                    self._edit(ev.widget, lambda: l.__setitem__('type',
+                                                                v.get())))
+            ev_ = tk.StringVar(value=link.get('event', 'TAKE'))
+            cb2 = ttk.Combobox(row, textvariable=ev_, width=9,
+                               state='readonly',
+                               values=list(model.AOQ_TRIGGERS))
+            cb2.pack(side='left', padx=2)
+            cb2.bind('<<ComboboxSelected>>', lambda ev, l=link, v=ev_:
+                     self._edit(ev.widget, lambda: l.__setitem__('event',
+                                                                 v.get())))
+            qv = tk.StringVar(value=f"Q_{link.get('quest')}")
+            cb3 = ttk.Combobox(row, textvariable=qv, width=8,
+                               values=[f'Q_{i}' for i in targets])
+            cb3.pack(side='left', padx=2)
+
+            def set_target(link=link, var=qv):
+                text = var.get().strip().upper().replace('Q_', '')
+                if text.isdigit():
+                    link['quest'] = int(text)
+            cb3.bind('<<ComboboxSelected>>', lambda ev, f=set_target:
+                     self._edit(ev.widget, f))
+            cb3.bind('<KeyRelease>', lambda ev, f=set_target:
+                     self._edit(ev.widget, f))
+            ttk.Button(row, text='\u00d7', width=2,
+                       command=lambda l=link: self._del_link(q, l)
+                       ).pack(side='left', padx=2)
+        ttk.Button(self.body, text=t('insp.links.add'),
+                   command=lambda: self._add_link(q)).pack(anchor='w',
+                                                           pady=(4, 0))
+        self._hint('insp.links.hint')
+
+    def _add_link(self, q):
+        self.app.push_undo('link')
+        q.links.append({'type': 'PROMOTE', 'event': 'TAKE', 'quest': None})
+        self.app.changed(from_inspector=True)
+        self.after_idle_refresh()
+
+    def _del_link(self, q, link):
+        self.app.push_undo('link')
+        if link in q.links:
+            q.links.remove(link)
+        self.app.changed(from_inspector=True)
+        self.after_idle_refresh()
 
     def _hint(self, key, error=False, **fmt):
         ttk.Label(self.body, text=t(key, **fmt), wraplength=260,
@@ -344,6 +481,25 @@ class Inspector(ttk.Frame):
             else:
                 w = ttk.Entry(row, textvariable=var)
             w.pack(side='left', fill='x', expand=True)
+            example = t('example.' + kind.split(':')[0])
+            if example != 'example.' + kind:
+                placeholder(w, var, example)
+            warn = ttk.Label(self.body, style='PanelMuted.TLabel',
+                             wraplength=260)
+            widgets[key + '.warn'] = warn
+
+            def check(key=key, kind=kind, var=var, w=w, warn=warn):
+                # the grey example is not a value
+                msg = ('' if getattr(w, '_placeholder', False)
+                       else field_problem(kind, var.get()))
+                if msg:
+                    warn.configure(text=msg, foreground=theme.ERR)
+                    warn.pack(anchor='w')
+                else:
+                    warn.pack_forget()
+            check()
+            w.bind('<KeyRelease>', lambda ev, c=check: c(), add='+')
+            w.bind('<<ComboboxSelected>>', lambda ev, c=check: c(), add='+')
             if kind == 'party':
                 self._label(t('insp.party.hint'), muted=True)
             w.bind('<FocusIn>', lambda ev, w=w: self._reset_undo(w))
@@ -391,7 +547,7 @@ class Inspector(ttk.Frame):
 
     def _task_form(self, nid, node):
         self.title.configure(text=t('node.task'))
-        self._label(t('node.task'))
+        self._label(t('node.task'), help_key='help.task')
         fcs = [None] + list(model.FC_MAIN) + list(model.FC_MORE)
         labels = [t('op.none')] + [t('op.FC.' + f) for f in model.FC_MAIN] + \
             [t('op.more') + ': ' + t('op.FC.' + f) for f in model.FC_MORE]
@@ -405,6 +561,11 @@ class Inspector(ttk.Frame):
         if not fc:
             return
         self._fields(model.FC_SPECS[fc], node['args'], nid)
+        try:
+            self._op_preview('FC', [fc] + list(model.op_tokens(
+                model.FC_SPECS[fc], node['args'])))
+        except model.ModelError as e:
+            self._hint('insp.preview.bad', error=True, err=e)
         if fc in ('KILL', 'FIND_KILL'):
             self._hint('hint.kill')
         if fc in ('TALK', 'FIND_TALK'):
@@ -419,7 +580,7 @@ class Inspector(ttk.Frame):
         free = nid is None
         g = self.app.quest.graph
         self.title.configure(text=t('node.action'))
-        self._label(t('node.action'))
+        self._label(t('node.action'), help_key='help.action')
         keys = list(model.ACTION_MAIN) + list(model.ACTION_MORE)
         labels = [t(f'op.{k}.{v}') for k, v in model.ACTION_MAIN] + \
             [t('op.more') + ': ' + t(f'op.{k}.{v}') for k, v in model.ACTION_MORE]
@@ -452,6 +613,17 @@ class Inspector(ttk.Frame):
                                                        'SOLVE' if v else None),
                             nid)
         self._fields(model.ACTION_SPECS[cur], node['args'], nid)
+        unverified = model.UNVERIFIED_FIELDS.get(cur)
+        if unverified:
+            self._hint('insp.unverified', fields=', '.join(
+                t('field.' + f) for f in unverified))
+        try:
+            toks = model.op_tokens(model.ACTION_SPECS[cur], node['args'])
+            when = node.get('when') or model.action_when(
+                self.app.quest.graph, node) or 'TAKE'
+            self._op_preview(node['kind'], [node['verb'], when] + list(toks))
+        except model.ModelError as e:
+            self._hint('insp.preview.bad', error=True, err=e)
         hints = {'SHOW_LOCATION': 'hint.showloc', 'NPC_TELEPORT': 'hint.teleport',
                  'NPC_GO': 'hint.npcgo', 'PLAY_CUTSCENE': 'hint.cutscene'}
         if node['verb'] in hints:
@@ -573,16 +745,20 @@ class Inspector(ttk.Frame):
         self._combo(cams, line0.get('cam'),
                     lambda v: [ln.__setitem__('cam', v) for ln in lines], nid,
                     labels=[t(k) for _, k in CAMS])
-        self._label(t('insp.anim'))
-        var = tk.StringVar(value=str(line0.get('anim', 0)))
-        sp = ttk.Spinbox(self.body, from_=0, to=17, textvariable=var, width=6)
+        self._label(t('insp.anim'), help_key='help.anim')
+        var = tk.StringVar(value=model.anim_label(line0.get('anim', 0), t))
+        sp = ttk.Combobox(self.body, textvariable=var, width=22,
+                          values=[model.anim_label(a, t)
+                                  for a in model.ANIMATIONS])
         sp.pack(anchor='w')
+        sp.bind('<<ComboboxSelected>>', lambda ev: self._edit(
+            sp, lambda: [ln.__setitem__('anim', model.parse_anim(var.get()))
+                         for ln in lines], nid, redraw=False))
+        ttk.Label(self.body, text=t('insp.anim.hint'),
+                  style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
         sp.bind('<KeyRelease>', lambda ev: self._edit(
-            sp, lambda: [ln.__setitem__('anim', _int(var.get())) for ln in lines],
-            nid, redraw=False))
-        sp.configure(command=lambda: self._edit(
-            sp, lambda: [ln.__setitem__('anim', _int(var.get())) for ln in lines],
-            nid, redraw=False))
+            sp, lambda: [ln.__setitem__('anim', model.parse_anim(var.get()))
+                         for ln in lines], nid, redraw=False))
 
     def _line_flags(self, nid, line, node):
         row = ttk.Frame(self.body, style='Panel.TFrame')

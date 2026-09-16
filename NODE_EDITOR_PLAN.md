@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.7.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1164,11 +1164,37 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       Anzahl plus "Alle", in Kettenreihenfolge, unabhaengig vom gewaehlten
       Filter, waagerecht scrollbar; Klick setzt den Gruppenfilter.
     - Kleine Karten schneiden den Titel einzeilig ab statt umzubrechen.
+62. Usability-Update, Teil 1 (Version 2.8.0, nach
+    `Desktop\PROMPT_QuestCreator_Usability_Update.md`, Punkte 2, 3, 4, 6;
+    5b Mod-Quellen, 5c Karte, 7 Vorlagen und 8 Guide-Fenster kommen danach,
+    Reihenfolge von Marco: Guide zuerst):
+    - Zentrale Tabelle `model.NUMBER_LISTS` (Wert, Quelle, belegt oder
+      ungeprueft) fuer Partei, Gilde, AOQ-Typen, AOQ-Ausloeser,
+      Aktionszeitpunkte und Animationen. Die Picker lesen daraus; die
+      Referenztabellen des Guide-Fensters sollen spaeter dieselbe Quelle
+      nutzen.
+    - Animation ist eine Liste "Geste 0" bis "Geste 17" mit Hinweis: die
+      Bedeutung steht nirgends (`anTalk0..17` in der par), im Original sind
+      0, 10, 11, 17 am haeufigsten. `SET_WORLD_STATE` und `PLAY_CUTSCENE`
+      bekommen den Hinweis "ungeprueft" (`model.UNVERIFIED_FIELDS`).
+    - Quest-Verknuepfungen: `Quest.links` speichert echte AOQ-Zeilen dieser
+      Quest, der Export schreibt sie (`tw1_qtx.sub_aoq`), die Validierung
+      prueft Typ, Ausloeser und Ziel. Damit sind Ketten, Tore und
+      Mehrfachentscheidungen im Tool baubar, nicht nur ueber Bedingungen.
+    - Hilfe-Fragezeichen an Panel-Titeln und Feldern (Tooltip plus Klick
+      oeffnet die Doku; das eigene Guide-Fenster folgt in 2.9.0).
+    - Beispiele als Platzhalter in leeren Feldern, Sofortpruefung mit roter
+      Begruendung (keine Zahl, falsche Kachel, Semikolon, Nicht-ASCII).
+    - Live-Vorschau der qtx-Zeile unter Aufgabe und Aktion.
+    - Kontextmenue auf angedockten Aktionen und Bedingungen: Bearbeiten,
+      nach oben, nach unten (Reihenfolge ueber `slot`).
 
 Offen:
 
 - Spieltest einer Tool-Quest mit ID ueber 399 bei Questgrenze 600 (12.57).
 - Spieltest der geaenderten Gegnerstufen (12.59).
+- Usability-Update Teil 2: Guide-Fenster (2.9.0), danach Mod-Quellen und
+  interaktive Karte; Vorlagen (Punkt 7) noch offen (12.62).
 - `quest_creator_gui.py` bleibt vorerst in `main` neben QuestForge 2
   (Marco 2026-09-14, nach den bestandenen Spieltests entschieden).
 - `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,
