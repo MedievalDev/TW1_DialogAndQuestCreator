@@ -423,6 +423,25 @@ def ch_npcs():
 Ungeklaert: die Spalten 9 und 10 im NPC-Block (`SMALL True`) sowie was der
 Wert hinter der Einheit genau steuert. Das Tool uebernimmt sie von der Vorlage.
 
+## Zeilen selbst aufnehmen
+
+In der Voice-Cue-Zeile jeder Dialogzeile steht neben **Suchen...** der
+Punkt-Knopf. Klick, Zeile sprechen, derselbe Knopf (jetzt ein Quadrat)
+stoppt; waehrenddessen zeigen Zeit und Pegel darunter, dass etwas ankommt.
+Liegt eine Aufnahme vor, stehen darunter Laenge, **Abspielen** (Dreieck) und
+loeschen (x); der Punkt nimmt neu auf. Mikrofon und Probeaufnahme stehen
+unter Datei > **Einstellungen**.
+
+- Format: WAV, 16 Bit, mono, 44,1 kHz (Rate der Sprachbank des Spiels).
+- Ablage: Ordner `<Projekt>_voice` neben der Projektdatei, Name
+  `Q<Quest>_<Node>_<Zeile>.wav`. Das Projekt muss dafuer gespeichert sein.
+- Wechselst du waehrend der Aufnahme zu einem anderen Node, wird sie beendet
+  und fuer ihre Zeile gespeichert. Rueckgaengig (Strg+Z) nimmt die Zuordnung
+  zurueck, die Datei bleibt.
+- **Ins Spiel kommt die Aufnahme so noch nicht:** Dafuer muss sie in die
+  Sprachbank (`Sounds.xsb`, `UnitTalk.xwb`) gebaut und als Cue an die Zeile
+  gehaengt werden. Das macht der Quest Creator nicht.
+
 ## Dialog-Vorlage
 
 Quest > **Dialog aus Vorlage einfuegen** > "Standard-Questgeber" setzt ein
@@ -445,6 +464,23 @@ schreibst du um. Vorlagen liegen als JSON in `questforge2/templates/`.
 
 Unresolved: columns 9 and 10 of the NPC block (`SMALL True`) and what the value
 after the unit controls exactly. The tool takes them from the template.
+
+## Recording lines yourself
+
+In the voice cue row of every dialog line there is a dot button next to
+**Search...**. Click, speak the line, the same button (now a square) stops;
+time and level below show that sound arrives. Once a take exists, its
+length, **Play** (triangle) and delete (x) show below; the dot records again.
+Microphone and test recording are under File > **Settings**.
+
+- Format: WAV, 16 bit, mono, 44.1 kHz (the rate of the game's voice bank).
+- Storage: folder `<project>_voice` next to the project file, name
+  `Q<quest>_<node>_<line>.wav`. The project has to be saved for that.
+- Selecting another node while recording ends the take and stores it for
+  its line. Undo (Ctrl+Z) removes the link, the file stays.
+- **This does not put the recording into the game yet:** it has to be built
+  into the voice bank (`Sounds.xsb`, `UnitTalk.xwb`) and hung on the line as
+  a cue. The Quest Creator does not do that.
 
 ## Dialog template
 

@@ -102,7 +102,7 @@ class Config:
         'panels': {'timeline': True, 'palette': True, 'inspector': True,
                    'coach': True},
         'window': None,
-        'update_check': True, 'update_skip': None,
+        'update_check': True, 'update_skip': None, 'voice_device': None,
     }
 
     def __init__(self, path=None):

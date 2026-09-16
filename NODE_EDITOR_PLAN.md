@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.4.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.5.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0 mit 12.70); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1353,6 +1353,31 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       braucht sie; der erste Test-Build startete nicht. Excludes korrigiert,
       `urllib` wird erst beim Pruefen importiert, der Selbsttest meldet
       `https=ok`.
+70. Zeilen aufnehmen (Version 3.5.0, Marco 2026-09-16: "einfach record
+    tool beim cue ... direkt fuer die line aufnehmen"; 3.4.1 davor: dunkler
+    Hover am Quellen-Knopf, Gruppentitel ueber AOQ-Linien):
+    - `questforge2/recorder.py`: winmm `waveIn*` per ctypes ohne Callback,
+      8 Puffer zu 0,1 s, Thread fragt `WHDR_DONE` in Reihenfolge ab und
+      stellt sie neu ein; PCM 16 Bit mono 44100 Hz (BANK_RATE der
+      Vertonungs-Pipeline), hoechstens 120 s; `write_wav`, `duration`,
+      `play` (winsound), `device_names` (waveInGetDevCapsW).
+    - Inspector (Marco: "record button ... gleich hier rein in die
+      seitenleiste und in den einstellungen den rest"): Punkt-Knopf in der
+      Voice-Cue-Zeile neben Suchen (Aufnehmen, waehrend der Aufnahme
+      Stopp), darunter Zeit und Pegelbalken bzw. Laenge, Abspielen,
+      Loeschen. Neues Fenster Datei > Einstellungen: Mikrofon
+      (`voice_device` in der Konfig), Probeaufnahme 3 s mit Pegel und
+      Wiedergabe, Update-Pruefung, Spielordner. Datei in
+      `<Projekt>_voice/Q<id>_<node>_<zeile>.wav`, `line['voice']` = Name
+      (nur gesetzt, wenn aufgenommen: alte Projekte bleiben byte-gleich).
+      Verlassen der Zeile oder Beenden des Tools stoppt und behaelt die
+      Aufnahme; Undo nimmt die Zuordnung zurueck.
+    - Gemessen: 1,2 s vom Standardgeraet (Razer-Headset) = 53.330 Samples,
+      Rauschen vorhanden; 5 Eingabegeraete auf Marcos Rechner. GUI-Test:
+      Aufnehmen/Stopp, Datei 1,96 s, Undo/Redo, Auto-Stopp beim
+      Node-Wechsel, Projekt speichert `voice`.
+    - Nicht enthalten: Bau in die Sprachbank und Cue-Vergabe (Pipeline in
+      QuestForge: voice_lines, build_soundbank).
 
 Offen:
 

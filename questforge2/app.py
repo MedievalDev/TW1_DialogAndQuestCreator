@@ -172,6 +172,7 @@ class App:
                       command=self.save_project_as)
         m.add_separator()
         m.add_command(label=t('file.gamepath'), command=self.change_game_dir)
+        m.add_command(label=t('settings.menu'), command=self.show_settings)
         m.add_separator()
         can = self._state(bool(self.project and self.project.quests
                                and self.cfg.get('game_dir')))
@@ -788,6 +789,9 @@ class App:
             return
         for p in found:
             self.add_mod(p)
+
+    def show_settings(self):
+        SettingsWindow.show(self)
 
     def show_map(self, **kw):
         """Interactive map (update 5c), see mapwin.MapWindow.show."""
@@ -2109,6 +2113,7 @@ class App:
                             f'maptiles={len(mods.retail_markers(self.cfg.get("game_dir")))} '
                             f'minimaps={self._selftest_minimap()} '
                             f'https={self._selftest_https()} '
+                            f'mics={self._selftest_mics()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2123,6 +2128,11 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    @staticmethod
+    def _selftest_mics():
+        from . import recorder
+        return recorder.input_devices()
 
     @staticmethod
     def _selftest_https():
@@ -2383,6 +2393,8 @@ class App:
         win.grab_set()
 
     def quit(self):
+        if getattr(self, 'voice_rec', None):
+            self.inspector._voice_stop()      # keep the running take
         if not self._confirm_discard():
             return
         try:
@@ -3066,6 +3078,164 @@ class NewQuestDialog:
                 self.note.configure(text=t('newq.pick'))
                 return
             self.result = self.items[sel[0]]
+        self.win.destroy()
+
+
+class SettingsWindow:
+    """Datei > Einstellungen: microphone with a test take, update check,
+    game path."""
+    _open = None
+
+    @classmethod
+    def show(cls, app):
+        if cls._open is not None:
+            try:
+                cls._open.win.lift()
+                return cls._open
+            except tk.TclError:
+                cls._open = None
+        cls._open = cls(app)
+        return cls._open
+
+    def __init__(self, app):
+        from . import recorder
+        self.app = app
+        self.rec = None
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('settings.title'))
+        self.win.transient(app.root)
+        self.win.geometry('600x470')
+        theme.dark_titlebar(self.win)
+        self.win.protocol('WM_DELETE_WINDOW', self.close)
+        self.win.bind('<Escape>', lambda e: self.close())
+        f = ttk.Frame(self.win, padding=16)
+        f.pack(fill='both', expand=True)
+        # -- recording ------------------------------------------------------
+        ttk.Label(f, text=t('settings.voice'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(0, 2))
+        self.names = recorder.device_names()
+        default = t('voice.mic.default')
+        cur = app.cfg.get('voice_device')
+        row = ttk.Frame(f)
+        row.pack(fill='x')
+        ttk.Label(row, text=t('voice.mic')).pack(side='left')
+        self.mic = tk.StringVar(value=cur if cur in self.names else default)
+        cb = ttk.Combobox(row, textvariable=self.mic, state='readonly',
+                          values=[default] + self.names, width=40)
+        cb.pack(side='left', padx=8)
+        cb.bind('<<ComboboxSelected>>', lambda e: self._save_mic())
+        row2 = ttk.Frame(f)
+        row2.pack(fill='x', pady=(8, 0))
+        self.test_btn = ttk.Button(row2, text=t('settings.test'),
+                                   command=self._test)
+        self.test_btn.pack(side='left')
+        self.bar = ttk.Progressbar(row2, maximum=100)
+        self.bar.pack(side='left', fill='x', expand=True, padx=8)
+        self.test_lbl = ttk.Label(f, text=t('settings.test.hint'),
+                                  style='Muted.TLabel', wraplength=560,
+                                  justify='left')
+        self.test_lbl.pack(anchor='w', pady=(4, 0))
+        ttk.Label(f, text=t('settings.voice.hint'), style='Muted.TLabel',
+                  wraplength=560, justify='left').pack(anchor='w',
+                                                       pady=(6, 0))
+        if not self.names:
+            self.test_btn.state(['disabled'])
+            self.test_lbl.configure(text=t('voice.nodevice'))
+        # -- updates ----------------------------------------------------------
+        ttk.Label(f, text=t('settings.updates'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(14, 2))
+        self.upd = tk.BooleanVar(value=bool(app.cfg.get('update_check', True)))
+        ttk.Checkbutton(f, text=t('update.onstart'), variable=self.upd,
+                        command=self._save_updates).pack(anchor='w')
+        ttk.Button(f, text=t('update.menu'),
+                   command=lambda: app.check_updates(manual=True)
+                   ).pack(anchor='w', pady=(4, 0))
+        # -- game -------------------------------------------------------------
+        ttk.Label(f, text=t('settings.game'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(14, 2))
+        row3 = ttk.Frame(f)
+        row3.pack(fill='x')
+        self.game_lbl = ttk.Label(row3, text=app.cfg.get('game_dir') or '-',
+                                  style='Muted.TLabel')
+        self.game_lbl.pack(side='left')
+        ttk.Button(row3, text=t('settings.change'),
+                   command=self._game).pack(side='right')
+        ttk.Button(f, text=t('close'), command=self.close
+                   ).pack(side='bottom', anchor='e')
+
+    def _device(self):
+        v = self.mic.get()
+        return self.names.index(v) if v in self.names else None
+
+    def _save_mic(self):
+        v = self.mic.get()
+        self.app.cfg.set('voice_device', v if v in self.names else None)
+        self.app.cfg.save()
+
+    def _save_updates(self):
+        self.app.cfg.set('update_check', bool(self.upd.get()))
+        self.app.cfg.save()
+        if hasattr(self.app, 'update_var'):
+            self.app.update_var.set(bool(self.upd.get()))
+
+    def _game(self):
+        self.app.change_game_dir()
+        try:
+            self.game_lbl.configure(text=self.app.cfg.get('game_dir') or '-')
+        except tk.TclError:
+            pass
+
+    def _test(self):
+        """Three seconds from the chosen microphone, level shown live, then
+        played back. Nothing is stored."""
+        from . import recorder
+        import tempfile
+        if self.rec is not None:
+            return
+        rc = recorder.Recorder(device=self._device())
+        try:
+            rc.start()
+        except recorder.RecorderError as e:
+            self.test_lbl.configure(text=t('voice.error', err=e))
+            return
+        self.rec = rc
+        self.test_btn.state(['disabled'])
+        loud = [0.0]
+
+        def tick():
+            try:
+                if not self.win.winfo_exists():
+                    rc.stop()
+                    return
+            except tk.TclError:
+                rc.stop()
+                return
+            loud[0] = max(loud[0], rc.level)
+            self.bar.configure(value=min(100, rc.level * 140))
+            self.test_lbl.configure(text=t('settings.testing',
+                                           s=max(0.0, 3 - rc.seconds)))
+            if rc.seconds < 3:
+                self.win.after(80, tick)
+                return
+            pcm = rc.stop()
+            self.rec = None
+            self.bar.configure(value=0)
+            self.test_btn.state(['!disabled'])
+            path = os.path.join(tempfile.gettempdir(), 'qf2_mic_test.wav')
+            recorder.write_wav(path, pcm)
+            recorder.play(path)
+            self.test_lbl.configure(text=t(
+                'settings.test.quiet' if loud[0] < 0.01 else 'settings.test.ok',
+                p=int(loud[0] * 100)))
+        tick()
+
+    def close(self):
+        if self.rec is not None:
+            try:
+                self.rec.stop()
+            except Exception:
+                pass
+        SettingsWindow._open = None
         self.win.destroy()
 
 

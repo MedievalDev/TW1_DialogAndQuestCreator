@@ -4,8 +4,9 @@ Every edit goes through the undo stack (one snapshot per field focus),
 then the node is redrawn in the graph.
 """
 
+import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from . import data, model, mods, retail, theme
 from .i18n import t
@@ -127,6 +128,10 @@ class Inspector(ttk.Frame):
         self.refresh()
 
     def refresh(self):
+        rec = getattr(self.app, 'voice_rec', None)
+        if rec and (self.app.quest is not rec['quest']
+                    or self.current != ('node', rec['nid'])):
+            self._voice_stop()               # left the line: keep the take
         self._clear()
         self._undo_for = None
         self.text_widget = None
@@ -920,7 +925,8 @@ class Inspector(ttk.Frame):
             if i == 0:
                 self.text_widget = tw
             self._line_flags(nid, line, node)
-            self._cue_row(nid, line, node)
+            self._cue_row(nid, line, node, i)
+            self._voice_row(nid, line, i)
         if many:
             ttk.Button(self.body, text='+ ' + t('insp.addline'),
                        command=lambda: self.app.graph._add_line(nid)
@@ -957,14 +963,28 @@ class Inspector(ttk.Frame):
         self._check(t('insp.fight'), line.get('fight'),
                     lambda v: line.__setitem__('fight', v), nid, parent=row)
 
-    def _cue_row(self, nid, line, node):
+    def _cue_row(self, nid, line, node, index=0):
         idx = self.app.index
         row = ttk.Frame(self.body, style='Panel.TFrame')
         row.pack(fill='x', pady=(2, 0))
         cue = line.get('cue') or ''
         ttk.Label(row, text=t('insp.cue') + ': ' + (cue or '-'),
                   style='Panel.TLabel').pack(side='left')
-        ttk.Button(row, text=t('insp.cue.search'), width=10,
+        from . import recorder
+        rec = getattr(self.app, 'voice_rec', None)
+        recording = rec is not None and rec.get('key') == (id(line), nid)
+        has_take = bool(recorder.voice_path(self.app.project, line)
+                        and os.path.isfile(recorder.voice_path(
+                            self.app.project, line)))
+        rb = ttk.Button(row, text='\u25a0' if recording else '\u25cf',
+                        width=3,
+                        command=(lambda: (self._voice_stop(), self.refresh()))
+                        if recording else
+                        (lambda: self._voice_start(nid, line, index)))
+        rb.pack(side='right', padx=(2, 0))
+        theme.Tooltip(rb, t('voice.stop') if recording else (
+            t('voice.again') if has_take else t('voice.record.tip')))
+        ttk.Button(row, text=t('insp.cue.search'), width=9,
                    command=lambda: self._search_cue(nid, line, node)
                    ).pack(side='right')
         if cue:
@@ -979,6 +999,136 @@ class Inspector(ttk.Frame):
                 ttk.Label(self.body, text=t('insp.cue.mismatch'),
                           foreground=theme.ERR, background=theme.PANEL,
                           wraplength=260).pack(anchor='w')
+
+    def _voice_row(self, nid, line, index):
+        """Below the voice cue: the running recording (time, level, stop) or
+        the stored take (length, play, delete). The record button itself
+        sits in the cue row."""
+        from . import recorder
+        app = self.app
+        path = recorder.voice_path(app.project, line)
+        exists = bool(path and os.path.isfile(path))
+        rec = getattr(app, 'voice_rec', None)
+        if rec is not None and rec.get('key') == (id(line), nid):
+            row = ttk.Frame(self.body, style='Panel.TFrame')
+            row.pack(fill='x', pady=(2, 0))
+            info = ttk.Label(row, text='', style='Panel.TLabel',
+                             foreground=theme.ERR)
+            info.pack(side='left')
+            bar = ttk.Progressbar(self.body, maximum=100)
+            bar.pack(fill='x', pady=(2, 0))
+
+            def tick():
+                r = getattr(app, 'voice_rec', None)
+                try:
+                    if r is None or r.get('key') != (id(line), nid) \
+                            or not info.winfo_exists():
+                        return
+                except tk.TclError:
+                    return
+                rc = r['rec']
+                info.configure(text='\u25cf ' + t('voice.recording',
+                                                   s=rc.seconds))
+                bar.configure(value=min(100, rc.level * 140))
+                if not rc.running():
+                    self._voice_stop()
+                    self.refresh()
+                    return
+                self.after(100, tick)
+            tick()
+            return
+        if exists:
+            row = ttk.Frame(self.body, style='Panel.TFrame')
+            row.pack(fill='x', pady=(2, 0))
+            dur = recorder.duration(path)
+            ttk.Label(row, text=t('voice.label') + ': ' + (
+                t('voice.len', s=dur) if dur is not None else '?'),
+                      style='Panel.TLabel').pack(side='left')
+            db = ttk.Button(row, text='\u00d7', width=2,
+                            command=lambda: self._voice_delete(nid, line,
+                                                               path))
+            db.pack(side='right', padx=(2, 0))
+            theme.Tooltip(db, t('voice.delete'))
+            pb = ttk.Button(row, text='\u25b6', width=3,
+                            command=lambda: recorder.play(path))
+            pb.pack(side='right')
+            theme.Tooltip(pb, t('voice.play'))
+        elif line.get('voice'):
+            ttk.Label(self.body, text=t('voice.missing',
+                                        name=line['voice']),
+                      foreground=theme.ERR, background=theme.PANEL,
+                      wraplength=260).pack(anchor='w')
+
+    def _voice_start(self, nid, line, index):
+        from . import recorder
+        app = self.app
+        if getattr(app, 'voice_rec', None):
+            return
+        if not app.project or not app.project.path:
+            if not messagebox.askyesno(t('voice.title'), t('voice.save'),
+                                       parent=app.root) \
+                    or not app.save_project_as():
+                return
+        if recorder.input_devices() == 0:
+            messagebox.showwarning(t('voice.title'), t('voice.nodevice'),
+                                   parent=app.root)
+            return
+        recorder.stop_playing()
+        names = recorder.device_names()
+        chosen = app.cfg.get('voice_device')
+        device = names.index(chosen) if chosen in names else None
+        rc = recorder.Recorder(device=device)
+        try:
+            rc.start()
+        except recorder.RecorderError as e:
+            messagebox.showerror(t('voice.title'), t('voice.error', err=e),
+                                 parent=app.root)
+            return
+        app.voice_rec = {'rec': rc, 'key': (id(line), nid), 'line': line,
+                         'nid': nid, 'index': index, 'quest': app.quest}
+        app.set_info(t('voice.hint'), 'Status.TLabel')
+        self.refresh()
+
+    def _voice_stop(self):
+        """End the running recording and attach it to its line. Does not
+        rebuild the panel (callers do)."""
+        from . import recorder
+        app = self.app
+        r = getattr(app, 'voice_rec', None)
+        if not r:
+            return
+        app.voice_rec = None
+        try:
+            pcm = r['rec'].stop()
+        except recorder.RecorderError as e:
+            messagebox.showerror(t('voice.title'), t('voice.error', err=e),
+                                 parent=app.root)
+            return
+        if len(pcm) < recorder.RATE // 5:       # under 0.1 s: nothing
+            app.set_info(t('voice.short'), 'Status.TLabel')
+            return
+        line, nid = r['line'], r['nid']
+        name = recorder.voice_name(r['quest'], nid, r['index'])
+        path = os.path.join(recorder.voice_dir(app.project), name)
+        recorder.write_wav(path, pcm)
+        app.push_undo('voice')
+        line['voice'] = name
+        app.changed(from_inspector=True)
+        app.set_info(t('voice.saved', s=len(pcm) / (recorder.RATE * 2),
+                       path=path), 'StatusOk.TLabel')
+
+    def _voice_delete(self, nid, line, path):
+        from . import recorder
+        if not messagebox.askyesno(t('voice.title'), t('voice.delete.q'),
+                                   parent=self.app.root):
+            return
+        recorder.stop_playing()
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        self._edit(self, lambda: line.pop('voice', None), nid, redraw=False)
+        self.refresh()
 
     def _search_cue(self, nid, line, node):
         if not self.app.index:

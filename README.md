@@ -572,6 +572,12 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Haken, offene Punkte meldet die Prüfung. Der Geber wird ein neuer NPC mit
   Partei 25; Dialogzeilen ohne Sprecher (MP-Bäume haben keinen Lector)
   gehören ihm. Zeitleiste: MP-Quests tragen "MP".
+- **Zeilen aufnehmen:** Punkt-Knopf in der Voice-Cue-Zeile jeder Dialogzeile
+  (Aufnehmen/Stopp, darunter Zeit und Pegel, danach Abspielen/Löschen).
+  Mikrofon mit Probeaufnahme unter Datei > Einstellungen (gemerkt). WAV 16 Bit mono 44,1 kHz
+  im Ordner `<Projekt>_voice`, verknüpft als `voice` an der Zeile. Aufnahme
+  über winmm ohne Zusatzbibliothek. Ins Spiel kommt sie erst über den Bau
+  der Sprachbank (Sounds.xsb/UnitTalk.xwb), den das Tool nicht macht.
 - **Dialog-Vorlage:** Quest > Dialog aus Vorlage einfügen > "Standard-
   Questgeber" setzt Angebot mit Annehmen/Ablehnen, Antwort während die Quest
   läuft, Dank beim Erfüllen und einen Satz danach in die offene Quest. Es
