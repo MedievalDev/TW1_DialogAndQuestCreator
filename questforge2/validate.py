@@ -107,11 +107,18 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None):
                     project and project.quest_by_id(tgt)):
                 W.append((t('val.link.unknown', id=tgt), None))
         # templates mark the places to fill in with TODO
-        todo = [v for v in (quest.title, *quest.journal.values()) if 'TODO' in (v or '')]
-        todo += [ln.get('text') for n in nodes.values()
-                 for ln in (n.get('lines') or []) if 'TODO' in (ln.get('text') or '')]
-        if todo:
-            W.append((t('warn.todo', n=len(todo)), None))
+        head = [v for v in (quest.title, *quest.journal.values())
+                if 'TODO' in (v or '')]
+        if head:
+            W.append((t('warn.todo.head', n=len(head)), None))
+        for nid, n in nodes.items():
+            k = sum(1 for ln in (n.get('lines') or [])
+                    if 'TODO' in (ln.get('text') or ''))
+            if k:
+                spk = quest.speaker(n.get('speaker'))
+                who = spk['name'] if spk else t('node.player')
+                W.append((t('warn.todo.node', n=k, who=who,
+                            state=t('state.' + str(n.get('state')))), nid))
         if project and sum(1 for q in project.quests if q.id == qid) > 1:
             E.append((t('val.id.twice', id=qid), None))
         if not (quest.title or '').strip():

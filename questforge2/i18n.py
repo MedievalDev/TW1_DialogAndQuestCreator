@@ -897,6 +897,9 @@ _DE = {
     'warn.marker.todo': 'Marker {name} {num} auf {tile} ist noch nicht als gesetzt abgehakt.',
     'tl.mp': 'MP',
     'tl.mp.hint': 'Multiplayer-Quest, laeuft im Einzelspieler nicht',
+    'newq.search': 'Suchen ...',
+    'warn.todo.head': '{n} Stelle(n) in Titel oder Tagebuch tragen noch "TODO" aus der Vorlage.',
+    'warn.todo.node': '{who} ({state}): {n} Zeile(n) tragen noch "TODO" aus der Vorlage.',
 }
 
 _EN = {
@@ -1763,6 +1766,9 @@ _EN = {
     'warn.marker.todo': 'Marker {name} {num} on {tile} is not ticked as placed yet.',
     'tl.mp': 'MP',
     'tl.mp.hint': 'multiplayer quest, does not run in single player',
+    'newq.search': 'Search ...',
+    'warn.todo.head': '{n} place(s) in title or journal still carry "TODO" from the template.',
+    'warn.todo.node': '{who} ({state}): {n} line(s) still carry "TODO" from the template.',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

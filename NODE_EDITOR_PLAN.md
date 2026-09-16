@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.3.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.3.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1317,6 +1317,19 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       Kontextmenue. Dialog "Neue Quest": vierte Option.
     - Echttest mit Q_700: Q_385, NPC_508, Kachel E1, zwei Marker in der Liste,
       Block und NPC-Zeile korrekt; im Spiel nicht getestet (Offen).
+68. Bedienbarkeits-Runde und zwei Debug-Runden (Version 3.3.1):
+    - Leerer Graph: Knopf "+ Neue Quest" direkt im Canvas. Dialog "Neue
+      Quest": bei "Leer" verschwinden Suche und Liste, sonst ist der erste
+      Eintrag vorgewaehlt, Enter = OK, Suchfeld mit Beispieltext.
+    - Quest aus Vorlage: Tagebuchgruppe wie bei leeren Quests (Q_4), danach
+      ist der erste TODO-Node ausgewaehlt und im Panel offen.
+    - TODO-Warnungen je Node mit Sprecher, Ebene und Sprungziel statt einer
+      Sammelmeldung; Titel/Tagebuch als eigene Meldung.
+    - Debug-Runde 1 (Tests, alle GUI-Pruefskripte): ein Fehler im neuen
+      Dialog (`pack before` auf ein nicht gepacktes Widget), behoben.
+      Debug-Runde 2 (Vorlage, Undo, Spielquest uebernehmen, Projekt
+      speichern/laden byte-gleich, Export nur Dateien, Karte/Guide/Mods/
+      Questgrenze/Gegnerstufen oeffnen und schliessen): keine Fehler.
 
 Offen:
 

@@ -437,11 +437,24 @@ class App:
         c = self.graph
         c.delete('placeholder')
         if self.quest is None:
-            c.create_text(c.canvasx(c.winfo_width() // 2),
-                          c.canvasy(c.winfo_height() // 2),
-                          text=t('graph.empty'), fill=theme.MUT,
+            cx, cy = (c.canvasx(c.winfo_width() // 2),
+                      c.canvasy(c.winfo_height() // 2))
+            c.create_text(cx, cy - 14, text=t('graph.empty'), fill=theme.MUT,
                           font=theme.FONT, justify='center',
                           tags='placeholder')
+            if self.project is not None:
+                c.create_rectangle(cx - 70, cy + 14, cx + 70, cy + 40,
+                                   outline=theme.GOLD, dash=(4, 3),
+                                   tags=('placeholder', 'newbtn'))
+                c.create_text(cx, cy + 27, text='+ ' + t('quest.new'),
+                              fill=theme.GOLD, font=theme.FONT_BOLD,
+                              tags=('placeholder', 'newbtn'))
+                c.tag_bind('newbtn', '<Button-1>',
+                           lambda e: self.new_quest_dialog())
+                c.tag_bind('newbtn', '<Enter>',
+                           lambda e: c.configure(cursor='hand2'))
+                c.tag_bind('newbtn', '<Leave>',
+                           lambda e: c.configure(cursor=''))
 
     # -- tabs (level filters) -----------------------------------------------
 
@@ -571,12 +584,25 @@ class App:
         q = retail.make_own(Quest.from_dict(d), qid)
         lang = get_lang()
         q.title = tpl['title'].get(lang) or q.title
+        pred = self.index.quest(4) if self.index else None
+        if not q.group and pred and str(pred['group']) in self.index.groups:
+            q.group = pred['group']
         self.project.quests.append(q)
         self.mark_dirty()
         self.open_quest(q)
+        self.select_first_todo(q)
         note = tpl['note'].get(lang)
         if note:
             self.set_info(note, 'Status.TLabel')
+
+    def select_first_todo(self, q):
+        """After a template: put the first TODO line in front of the user."""
+        for nid, n in q.graph['nodes'].items():
+            if n.get('type') in ('npc', 'player') and any(
+                    'TODO' in (ln.get('text') or '')
+                    for ln in n.get('lines') or []):
+                self.goto_problem(q, nid)
+                return
 
     def insert_dialog_template(self, tpl):
         """Dialog template into the open quest, spoken by its giver (or the
@@ -2736,7 +2762,9 @@ class NewQuestDialog:
         self.ent = ttk.Entry(f, textvariable=self.search)
         self.ent.pack(fill='x', pady=(10, 4))
         self.ent.bind('<KeyRelease>', lambda e: self._fill())
-        box = ttk.Frame(f)
+        from .inspector import placeholder
+        placeholder(self.ent, self.search, t('newq.search'))
+        self.box = box = ttk.Frame(f)
         box.pack(fill='both', expand=True)
         self.lst = tk.Listbox(box, activestyle='none')
         sb = ttk.Scrollbar(box, orient='vertical', command=self.lst.yview)
@@ -2747,7 +2775,8 @@ class NewQuestDialog:
         self.lst.bind('<Double-Button-1>', lambda e: self._ok())
         self.note = ttk.Label(f, style='Muted.TLabel', wraplength=600,
                               justify='left')
-        self.note.pack(anchor='w', pady=(6, 0))
+        self.note.pack(anchor='w', pady=(6, 0), fill='both', expand=True)
+        self.win.bind('<Return>', lambda e: self._ok())
         btns = ttk.Frame(f)
         btns.pack(fill='x', pady=(10, 0))
         ttk.Button(btns, text=t('cancel'), command=self.win.destroy
@@ -2761,10 +2790,16 @@ class NewQuestDialog:
 
     def _switch(self):
         mode = self.how.get()
-        state = 'disabled' if mode == 'empty' else 'normal'
-        self.lst.configure(state=state)
-        self.ent.state(['disabled'] if mode == 'empty' else ['!disabled'])
+        if mode == 'empty':
+            self.ent.pack_forget()
+            self.box.pack_forget()
+        else:
+            self.ent.pack(fill='x', pady=(10, 4), before=self.note)
+            self.box.pack(fill='both', expand=True, before=self.note)
         self._fill()
+        if mode != 'empty' and self.lst.size() and not self.lst.curselection():
+            self.lst.selection_set(0)
+            self._note()
 
     def _fill(self):
         self.lst.configure(state='normal')
@@ -2772,6 +2807,8 @@ class NewQuestDialog:
         self.items = []
         mode = self.how.get()
         needle = self.search.get().strip().lower()
+        if getattr(self.ent, '_placeholder', False):
+            needle = ''
         lang = get_lang()
         if mode == 'template':
             for tp in self.templates:

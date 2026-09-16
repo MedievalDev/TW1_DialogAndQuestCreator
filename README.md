@@ -474,10 +474,13 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Tabellen (Aufgaben, Aktionen, Marker-Sorten, Parteien, Gilden, AOQ,
   Animationen) werden aus denselben Code-Tabellen erzeugt wie die
   Auswahllisten, mit Quelle und Status "belegt" oder "ungeprüft".
-- **Neue Quest:** leer, aus einer mitgelieferten Vorlage (Bring-Quest,
+- **Neue Quest:** Knopf im leeren Graph, in der Kopfleiste und im Quest-Menü;
+  leer, aus einer mitgelieferten Vorlage (Bring-Quest,
   Töte-X, Sprich-mit-NPC, Questkette mit Tor) oder als Kopie einer
   bestehenden Quest. Die Kopie bekommt eine freie Nummer, Verweise auf sich
-  selbst werden umgeschrieben, Verweise auf andere Quests aufgelistet.
+  selbst werden umgeschrieben, Verweise auf andere Quests aufgelistet. Nach
+  einer Vorlage ist der erste TODO-Node ausgewählt; die Prüfung meldet jeden
+  Node mit TODO einzeln, Doppelklick springt hin.
 - **Vorlagen:** liegen als JSON in `questforge2/templates/`. Format:
   `{"template": {"kind": "quest"|"enemy", "title": {"de", "en"}, "note":
   {"de", "en"}}, ...}`; Quest-Vorlagen tragen dazu eine vollständige Quest
