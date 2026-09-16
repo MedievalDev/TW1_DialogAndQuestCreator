@@ -427,18 +427,20 @@ Quest > Enemy levels.
 
 
 def ch_markers():
+    from .mods import MARKER_NAMES
     rows = []
     for fc, (kind, _m, _t) in sorted(data._FC_MARKERS.items()):
-        rows.append((f'`FC {fc}`', f'`{kind}`'))
+        rows.append((f'`FC {fc}`', f'`{kind}`', MARKER_NAMES[kind]))
     for verb, (kind, _m, _t) in sorted(data._ACTION_MARKERS.items()):
-        rows.append((f'`ACTION {verb}`', f'`{kind}`'))
+        rows.append((f'`ACTION {verb}`', f'`{kind}`', MARKER_NAMES[kind]))
     return _l("""# Marker, Orte, Truhen
 
 Viele Aufgaben und Aktionen lesen einen Marker der Karte. Jede liest eine
 bestimmte Sorte. **Falsche Sorte heisst: nichts passiert**, ohne Fehler.
 
 Der Knopf `...` neben dem Marker-Feld oeffnet den Karten-Picker mit Kacheln und
-den Markern dieser Sorte.
+allen Markern dieser Sorte, gelesen aus den Karten des Spiels (`Levels.wd`,
+`Update16.wd`) und der eingebundenen Mods.
 
 """, """# Markers, locations, chests
 
@@ -446,39 +448,155 @@ Many tasks and actions read a marker of the map. Each one reads a specific
 kind. **Wrong kind means: nothing happens**, without an error.
 
 The `...` button next to the marker field opens the map picker with the map
-cells and the markers of that kind.
+cells and every marker of that kind, read from the maps of the game
+(`Levels.wd`, `Update16.wd`) and of the added mods.
 
-""") + _table([_l('Befehl', 'Command'), _l('Marker-Sorte', 'Marker kind')],
+""") + _table([_l('Befehl', 'Command'), _l('Marker-Sorte', 'Marker kind'),
+               _l('Name in der Karte', 'Name in the map')],
               rows) + '\n\n' + _l(
-        'Quelle: SDK PQuestLoader.ech, tw1_lnd.ACTION_MARKER.',
-        'Source: SDK PQuestLoader.ech, tw1_lnd.ACTION_MARKER.')
+        'Quelle: SDK PQuestLoader.ech (Argumente), PEnums.ech (Namen), '
+        'gegen die Karten gemessen (Kapitel Mods).',
+        'Source: SDK PQuestLoader.ech (arguments), PEnums.ech (names), '
+        'measured against the maps (chapter Mods).')
 
 
 def ch_mods():
-    return _l("""# Mods einbinden
+    from . import mods
+    text = _l("""# Mods einbinden
 
-Das Tool liest beim Start die Quests und Texte aller aktiven Mods aus dem
-Ordner `Mods` mit. Karten der Zeitleiste zeigen den Archivnamen, wenn eine Quest
-aus einer Mod stammt.
+Neben dem Spiel und deinem Projekt sind Mods eine dritte Quelle. Alles, was
+aus einer Mod kommt, ist hellblau: Rahmen in der Zeitleiste, Punkt vor dem
+Namen in Listen, Tooltip mit Herkunft (Mod, Datei, Tile).
 
-Exportierst du in eine vorhandene Mod (Quest-Panel, Zielarchiv), bleiben alle
-anderen Dateien darin unveraendert. Vor dem ersten Export legt das Tool
-`<Mod>.wd.qf2backup` an.
+## Mod hinzufuegen
 
-Zwei aktive Mods mit derselben Quest- oder Textdatei kaempfen stumm; die zuletzt
-geladene gewinnt. Das Tool warnt vor dem Export.
+1. Menue **Mods > Mod-Archiv hinzufuegen** (eine `.wd`) oder **Entpackten
+   Mod-Ordner hinzufuegen**. **Mods aus dem Spielordner hinzufuegen** nimmt
+   alle Archive aus `Mods` ausser deinem eigenen Zielarchiv.
+2. Das Tool liest Questdatei, NPCs, Orte, Truhen, Sprachdateien und Karten
+   (`Levels\\Map_E01.lnd` ist das Tile `E1`). Das Ergebnis wird je Mod
+   zwischengespeichert; ein zweites Oeffnen dauert Millisekunden.
+3. Die Liste steht im Projekt, nicht global. **Mods > Mods verwalten** zeigt
+   sie mit Reihenfolge, an/aus und Details.
+
+## Zeitleiste und Filter
+
+Mod-Quests stehen hinter den Questreihen in einem eigenen Bereich, ein Block
+je Mod. **Quellen** oben in der Zeitleiste blendet Spiel, eigene, Mods und
+jede Mod einzeln ein und aus. "MOD neu" ist eine Quest, die es im Spiel nicht
+gibt, "MOD geaendert" ueberschreibt eine Quest des Spiels.
+
+## Mod-Quests bearbeiten
+
+Ein Klick auf eine Mod-Karte oeffnet die Quest aus der Mod. Du bearbeitest sie
+dort, sie wird nicht ins Projekt kopiert. **Speichern (Strg+S)** schreibt
+Questblock und Texte zurueck in die Mod:
+
+- Archiv: mit buglords `wdio`; alle anderen Eintraege bleiben Byte fuer Byte
+  und mit ihren Verzeichnisdaten (Flags, Klassen-Id, GUID) erhalten. Danach
+  vergleicht das Tool die Verzeichnisdaten mit den Archiven des Spiels.
+- Ordner: die Dateien werden direkt geschrieben.
+- Vor dem ersten Schreiben des Tages entsteht `<Mod>.bak-<Datum>` neben der
+  Mod. **Mods > Sicherung wiederherstellen** spielt sie zurueck.
+- Aenderungen kommen nur in einem neuen Spiel an: Das Questskript liest die
+  Questdatei im Zustand `Initialize` (SDK `PQuests.ec`).
+
+Rechtsklick auf eine Mod-Karte: **Als eigene Quest kopieren** holt sie mit
+neuer Nummer ins Projekt.
+
+## Marker aus Mods
+
+Die Markerauswahl zeigt alle Marker aus den Karten des Spiels und der Mods.
+Nimmst du fuer eine eigene Quest einen Marker, den nur eine Mod hat, kommt
+deren Karte mit in dein Archiv, samt allen anderen Aenderungen der Mod an
+dieser Karte. Das Tool fragt vorher; **Mods > Abhaengigkeiten** listet alle
+solchen Karten mit Grund und Pruefergebnis.
+
+- **Rot** ist ein Mod-Tile, in dem Marker des Spiels fehlen. Es wuerde
+  Original-Quests brechen: Seine Marker sind fuer Quests ausserhalb der Mod
+  gesperrt, die Pruefung meldet einen Fehler.
+- Bringen zwei Mods dasselbe Tile und wird ein Marker daraus benutzt, blockiert
+  der Export, bis du unter Abhaengigkeiten eine Mod waehlst.
+- Welche von zwei Mods das Spiel spaeter laedt, ist **ungeprueft**. Das Tool
+  nimmt die Reihenfolge der Mod-Liste, unten gewinnt.
+
+## Welche Aktion welchen Marker liest
+
+Aus dem SDK (`Campaigns/Missions/PInc/PEnums.ech`), am 16.09.2026 gegen die
+Karten gemessen: alle 287 Markerverweise der Original-Quests und alle 216
+NPC-Startmarker liegen unter diesen Namen auf ihrem Tile.
+
 """, """# Using mods
 
-At start the tool reads the quests and texts of all active mods in the `Mods`
-folder. Timeline cards show the archive name when a quest comes from a mod.
+Next to the game and your project, mods are a third source. Everything that
+comes from a mod is light blue: frames in the timeline, a dot in front of the
+name in lists, a tooltip with the origin (mod, file, tile).
 
-When you export into an existing mod (quest panel, target archive), every other
-file in it stays untouched. Before the first export the tool writes
-`<Mod>.wd.qf2backup`.
+## Adding a mod
 
-Two active mods with the same quest or text file fight silently; the one loaded
-last wins. The tool warns before exporting.
+1. Menu **Mods > Add mod archive** (a `.wd`) or **Add unpacked mod folder**.
+   **Add mods from the game folder** takes every archive in `Mods` except
+   your own target archive.
+2. The tool reads the quest file, NPCs, locations, chests, language files and
+   maps (`Levels\\Map_E01.lnd` is the tile `E1`). The result is cached per
+   mod; opening it again takes milliseconds.
+3. The list is stored in the project, not globally. **Mods > Manage mods**
+   shows it with order, on/off and details.
+
+## Timeline and filters
+
+Mod quests stand after the quest lines in their own area, one block per mod.
+**Sources** at the top of the timeline shows or hides the game, own quests,
+mods and every single mod. "MOD new" is a quest the game does not have, "MOD
+changed" overrides a quest of the game.
+
+## Editing mod quests
+
+A click on a mod card opens the quest from the mod. You edit it there, it is
+not copied into the project. **Save (Ctrl+S)** writes the quest block and the
+texts back into the mod:
+
+- Archive: with buglord's `wdio`; every other entry stays byte for byte with
+  its directory data (flags, class id, GUID). Afterwards the tool compares the
+  directory data with the archives of the game.
+- Folder: the files are written directly.
+- Before the first write of the day `<Mod>.bak-<date>` is made next to the
+  mod. **Mods > Restore backup** puts it back.
+- Changes only reach a new game: the quest script reads the quest file in the
+  state `Initialize` (SDK `PQuests.ec`).
+
+Right click on a mod card: **Copy as own quest** brings it into the project
+with a new number.
+
+## Markers from mods
+
+The marker picker lists every marker from the maps of the game and of the
+mods. If an own quest uses a marker only a mod has, that mod's map goes into
+your archive, with every other change the mod made to that map. The tool asks
+first; **Mods > Dependencies** lists all such maps with reason and check
+result.
+
+- **Red** is a mod tile that lacks markers of the game. It would break
+  original quests: its markers are blocked for quests outside the mod and the
+  check reports an error.
+- When two mods bring the same tile and a marker from it is used, the export
+  is blocked until you pick one mod under Dependencies.
+- Which of two mods the game loads later is **unverified**. The tool uses the
+  order of the mod list, the lower one wins.
+
+## Which action reads which marker
+
+From the SDK (`Campaigns/Missions/PInc/PEnums.ech`), measured against the maps
+on 2026-09-16: all 287 marker references of the original quests and all 216
+NPC start markers lie on their tile under these names.
+
 """)
+    rows = list(mods.MARKER_NAMES.items())
+    rows.append(('NPC', mods.NPC_MARKER))
+    rows.append(('CONTAINER', mods.CHEST_MARKER))
+    return text + _table([_l('Art im Tool', 'Kind in the tool'),
+                          _l('Marker in der Karte', 'Marker in the map')],
+                         rows)
 
 
 def ch_reference():

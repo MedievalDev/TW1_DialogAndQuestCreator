@@ -445,7 +445,8 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   die Gruppenüberschrift nennt die Zahl der Quests darin. Klick öffnet eine Quest. Spielquests sind erst
   eine Ansicht und werden bei der ersten Änderung nach Rückfrage Teil des
   Projekts. Rechtsklick: duplizieren als eigene Quest, nur diese Quest
-  exportieren, als Text anzeigen.
+  exportieren, als Text anzeigen. "Quellen" blendet Spiel, eigene Quests,
+  Mods und jede Mod einzeln ein und aus.
 - **Sprecher** (links oben): "+ Neuer Sprecher" wählt einen NPC des Spiels
   oder legt einen neuen an (ID aus dem Two Worlds Editor, Stimme, Kachel,
   Q_Giver-Marker, Vorlage für das Aussehen). Sprecher in den Graph ziehen oder
@@ -483,6 +484,36 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   (`Quest.to_dict`), Gegner-Vorlagen `args` für `ACTION ENEMY_CREATE`. Neue
   Datei ablegen genügt. Gegnergruppen stehen im Aktionsformular "Gegner
   erzeugen" als Auswahl. Stellen mit `TODO` meldet die Prüfung als Warnung.
+- **Mods als Quelle (Menü Mods):** `.wd`-Archive oder entpackte Ordner werden
+  pro Projekt eingebunden (Liste und Reihenfolge stehen in der Projektdatei).
+  Das Tool liest Questdatei, NPCs, Orte, Truhen, Sprachdateien und Karten
+  (`Levels\Map_E01.lnd` = Tile `E1`), zwischengespeichert je Mod unter
+  `cache/mods/`. Alles aus Mods ist hellblau: eigener Bereich in der
+  Zeitleiste ("MOD neu", "MOD geändert"), Punkt vor dem Namen in Listen,
+  Tooltip mit Mod, Datei und Tile.
+  - **Mod-Quests** werden in der Mod bearbeitet: Speichern schreibt Questblock
+    und Texte zurück, beim Archiv mit `wdio` und Prüfung aller übrigen
+    Einträge samt Verzeichnisdaten, danach Vergleich mit den Archiven des
+    Spiels. Vor dem ersten Schreiben des Tages entsteht
+    `<Mod>.bak-<Datum>`, "Sicherung wiederherstellen" spielt sie zurück.
+    Hinweis einmal pro Sitzung: Änderungen wirken erst in einem neuen Spiel
+    (Questdatei wird in `state Initialize` gelesen, SDK `PQuests.ec`).
+  - **Marker:** Der Marker-Picker liest die Karten selbst (Spiel:
+    `Levels.wd`, `Update11-15.wd`, `Update16.wd`, Cache
+    `cache/lnd_markers.json`) und die Karten der Mods. Die Markernamen je
+    Befehl stammen aus SDK `PEnums.ech`; gemessen am 16.09.2026 liegen alle
+    287 Markerverweise der Original-Quests und alle 216 NPC-Startmarker unter
+    diesen Namen auf ihrem Tile.
+  - **Rote Tiles:** Fehlen in einer Mod-Karte Marker des Spiels, ist das Tile
+    rot und seine Marker sind für Quests außerhalb der Mod gesperrt.
+  - **Abhängigkeiten:** Benutzt eine eigene Quest einen Marker, den nur eine
+    Mod hat, kommt deren `.lnd` beim Export mit Flags, Klassen-Id und GUID der
+    Mod ins Archiv (Rückfrage beim Zuweisen, Liste unter Mods >
+    Abhängigkeiten). Zwei Mods mit demselben Tile blockieren den Export, bis
+    eine gewählt ist. Welche Mod das Spiel später lädt, ist ungeprüft; das
+    Tool nimmt die Reihenfolge der Mod-Liste.
+  - Freie Questnummern zählen die Quests der Mods mit; gleiche Nummern
+    meldet die Prüfung.
 - **Hilfe im Formular:** Neben Panel-Titeln und erklärungsbedürftigen Feldern
   steht ein `?`. Überfahren zeigt eine kurze Erklärung, Klick öffnet die
   Dokumentation. Eingabefelder zeigen ein Beispiel, ungültige Eingaben werden

@@ -266,11 +266,17 @@ class Inspector(ttk.Frame):
                  if i not in taken])
         if q.id and q.id not in free:
             free = sorted(free + [q.id])
+        if q.extra.get('mod'):
+            ttk.Label(self.body, text=theme.MOD_DOT + t(
+                'insp.modquest', name=q.extra['mod']['name']),
+                style='Panel.TLabel', foreground=theme.MOD, wraplength=260,
+                justify='left').pack(anchor='w', pady=(0, 6))
         self._label(t('insp.id'), help_key='help.id')
         if q.retail:
             ttk.Label(self.body, text=f'Q_{q.id}', style='Panel.TLabel'
                       ).pack(anchor='w')
-            ttk.Label(self.body, text=t('insp.id.game'),
+            ttk.Label(self.body, text=t('insp.id.mod' if q.extra.get('mod')
+                                        else 'insp.id.game'),
                       style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
             raw = len(q.extra.get('qtx', {}).get('raw', []))
             if raw:
@@ -317,20 +323,21 @@ class Inspector(ttk.Frame):
             self._label(t('insp.offered'))
             self._check(t('insp.offered.check'), q.offered,
                         lambda v: setattr(q, 'offered', v))
-        self._label(t('insp.archive'))
-        archives = self.app.mod_archives()
-        var = tk.StringVar(value=self.app.project.target_archive)
-        cb = ttk.Combobox(self.body, textvariable=var, values=archives)
-        cb.pack(fill='x')
-        cb.bind('<<ComboboxSelected>>', lambda ev: self._edit(
-            cb, lambda: setattr(self.app.project, 'target_archive', var.get())))
-        cb.bind('<KeyRelease>', lambda ev: self._edit(
-            cb, lambda: setattr(self.app.project, 'target_archive', var.get())))
-        if not self.app.project.target_archive:
-            from .export import archive_name
-            var.set('')
-            ttk.Label(self.body, text='-> ' + archive_name(self.app.project),
-                      style='PanelMuted.TLabel').pack(anchor='w')
+        if not q.extra.get('mod'):
+            self._label(t('insp.archive'))
+            archives = self.app.mod_archives()
+            var = tk.StringVar(value=self.app.project.target_archive)
+            cb = ttk.Combobox(self.body, textvariable=var, values=archives)
+            cb.pack(fill='x')
+            cb.bind('<<ComboboxSelected>>', lambda ev: self._edit(
+                cb, lambda: setattr(self.app.project, 'target_archive', var.get())))
+            cb.bind('<KeyRelease>', lambda ev: self._edit(
+                cb, lambda: setattr(self.app.project, 'target_archive', var.get())))
+            if not self.app.project.target_archive:
+                from .export import archive_name
+                var.set('')
+                ttk.Label(self.body, text='-> ' + archive_name(self.app.project),
+                          style='PanelMuted.TLabel').pack(anchor='w')
         if not q.retail:
             self._links_form(q)
         self._label(t('insp.qactions'))

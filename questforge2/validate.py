@@ -286,11 +286,52 @@ def _dedupe(items):
     return out
 
 
-def validate_project(project, index=None, archive=None, t=None):
+def validate_project(project, index=None, archive=None, t=None,
+                     modset=None):
     """[(quest, message, target)] errors and warnings over all quests."""
     errors, warnings = [], []
+    deps = None
+    if modset is not None:
+        from . import mods
+        deps = mods.dependencies(project, modset)
     for q in project.quests:
         E, W = validate_quest(q, index, project, archive, t)
         errors += [(q, m, x) for m, x in E]
         warnings += [(q, m, x) for m, x in W]
+        if modset is not None:
+            E, W = validate_mods(q, project, modset, t, deps)
+            errors += [(q, m, x) for m, x in E]
+            warnings += [(q, m, x) for m, x in W]
+    return errors, warnings
+
+
+def validate_mods(quest, project, modset, t=None, deps=None):
+    """Checks against the mods of the project (update 5b): quest numbers a
+    mod uses too, marker dependencies on red or contested tiles."""
+    from . import mods
+    t = t or (lambda k, **f: k)
+    errors, warnings = [], []
+    if quest.extra.get('mod'):
+        return errors, warnings
+    for info, qid, q in modset.quests():
+        if qid != quest.id:
+            continue
+        if q['state'] == 'new' and not quest.retail:
+            warnings.append((t('warn.mod.id', mod=info['name']), None))
+        elif q['state'] == 'changed' and quest.retail:
+            warnings.append((t('warn.mod.override', mod=info['name']), None))
+    if deps is None:
+        deps = mods.dependencies(project, modset)
+    for d in deps:
+        uses = [u for u in d['uses'] if u[0] == quest.id]
+        if not uses:
+            continue
+        nums = ', '.join(str(n) for _q, _k, n in uses)
+        if d['status'] == 'missing':
+            errors.append((t('val.mod.redtile', tile=d['tile'], mod=d['mod'],
+                             n=len(d['missing']), markers=nums), None))
+        elif d['status'] == 'conflict':
+            errors.append((t('val.mod.conflict', tile=d['tile'],
+                             mods=', '.join(d['providers']), markers=nums),
+                           None))
     return errors, warnings

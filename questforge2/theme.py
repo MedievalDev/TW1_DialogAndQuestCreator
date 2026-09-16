@@ -30,9 +30,13 @@ ENTRY_COLOR = '#43b563'
 COMMENT_COLOR = '#4a453d'
 DIM = '#5c564c'
 SCROLL_THUMB = '#7a7061'     # scrollbar thumb, readable on BG
+# light blue is reserved for content from mods (update 5b): frames, dots,
+# list entries. The journal group palette below keeps away from it.
+MOD = '#56c8ff'
+MOD_DOT = '\u25cf '
 # one colour per journal group so the quest lines are told apart
 CARD_COLORS = ('#d2a044', '#6ca0e0', '#7fbf7f', '#e06c60', '#c090e0',
-               '#5fc7c7', '#e0a050', '#a0b060', '#d4796b', '#8fa8d8',
+               '#5fc7c7', '#e0a050', '#a0b060', '#d4796b', '#d0a0c0',
                '#c7a86b', '#9a8fe0')
 
 
@@ -267,6 +271,41 @@ class Menu(tk.Menu):
 
     def add_cascade(self, cnf=None, **kw):
         super().add_cascade(cnf or {}, **self._soft_disable('cascade', kw))
+
+
+class FloatTip:
+    """A tooltip that follows the mouse over parts of one widget (canvas
+    items, list rows); the caller decides the text."""
+
+    def __init__(self, master):
+        self.master = master
+        self.tip = None
+        self.text = None
+
+    def show(self, text, x_root, y_root):
+        if not text:
+            self.hide()
+            return
+        if self.tip is not None and text == self.text:
+            self.tip.wm_geometry(f'+{x_root + 14}+{y_root + 14}')
+            return
+        self.hide()
+        self.text = text
+        self.tip = tk.Toplevel(self.master)
+        self.tip.wm_overrideredirect(True)
+        self.tip.attributes('-topmost', True)
+        tk.Label(self.tip, text=text, bg=PANEL, fg=INK, bd=1, relief='solid',
+                 justify='left', padx=6, pady=3, font=FONT_SMALL).pack()
+        self.tip.wm_geometry(f'+{x_root + 14}+{y_root + 14}')
+
+    def hide(self):
+        if self.tip is not None:
+            try:
+                self.tip.destroy()
+            except tk.TclError:
+                pass
+        self.tip = None
+        self.text = None
 
 
 class Tooltip:

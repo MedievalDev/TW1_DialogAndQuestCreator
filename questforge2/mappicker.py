@@ -2,17 +2,26 @@
 
 Modes: 'npc', 'location', 'object', 'tile', 'marker' (with a marker kind).
 The tile grid is derived from the tile names in the index (NPC, LOCATION
-and marker usage); outdoor tiles like ``F5`` form the grid, interiors like
-``B8_1`` are listed below it. There is no map image (game data).
+and marker usage) and the game maps; outdoor tiles like ``F5`` form the grid,
+interiors like ``B8_1`` are listed below it. There is no map image yet.
 Result: ``{'value': str|int, 'tile': str}`` or None.
+
+Markers come from the maps themselves (``mods.retail_markers``) plus the
+maps of the project's mods (update 5b): mod entries carry a blue dot and a
+tooltip with their origin. A mod tile that lost markers of the game is red;
+its markers are blocked for quests outside that mod. Picking a mod marker
+for another quest asks first, because the tile goes into the build.
 """
 
 import re
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
-from . import theme
+from . import data, mods, theme
 from .i18n import t
+from .modswin import missing_text, origin_text
+
+NL = chr(10)
 
 CELL = 30
 
@@ -30,6 +39,9 @@ class MapPicker:
         self.result = None
         idx = app.index
         self.idx = idx
+        self.modset = ms = app.modset
+        self.for_mod = app.is_mod_quest(app.quest)
+        self.mkname = mods.MARKER_NAMES.get(kind) if kind else None
         self.tile = (tile or '').upper() or None
         self.win = tk.Toplevel(app.root)
         self.win.title(t('picker.title'))
@@ -45,10 +57,34 @@ class MapPicker:
             self._count(n.get('tile'), 0)
         for loc in idx.locations.values():
             self._count(loc.get('tile'), 1)
-        for key, nums in idx.markers.items():
-            k, tl = key.split('|')
-            self._count(tl, 2, len(nums))
+        if mode == 'marker' and ms and self.mkname:
+            for tl, info in ms.retail_tiles.items():
+                self._count(tl, 2, len(mods.marker_ids(info, self.mkname)))
+        else:
+            for key, nums in idx.markers.items():
+                k, tl = key.split('|')
+                self._count(tl, 2, len(nums))
+        # tiles the mods bring: blue dot; red when game markers are gone
+        self.mod_tiles, self.red = {}, {}
+        for info in (ms.enabled() if ms else []):
+            for tl, rec in info['tiles'].items():
+                self.mod_tiles.setdefault(tl, []).append(info['name'])
+                if rec.get('missing'):
+                    self.red.setdefault(tl, []).append(
+                        (info['name'], rec['missing']))
+                if mode == 'marker' and self.mkname:
+                    base = mods.marker_ids(ms.retail_tiles.get(tl),
+                                           self.mkname)
+                    self._count(tl, 2, len(mods.marker_ids(rec, self.mkname)
+                                           - base))
+            for n in info['npcs'].values():
+                self._count(n.get('tile'), 0)
+            for loc in info['locations'].values():
+                self._count(loc.get('tile'), 1)
         tiles = [tl for tl in idx.tiles if tl and tl != '(null)']
+        if ms:
+            tiles = sorted(set(tiles) | set(ms.retail_tiles)
+                           | set(self.mod_tiles), key=data._tile_key)
         outdoor = [tl for tl in tiles if _split(tl)]
         self.interior = sorted(tl for tl in tiles if not _split(tl))
         cols = sorted({_split(tl)[0] for tl in outdoor})
@@ -63,6 +99,9 @@ class MapPicker:
         self.grid_c.pack(anchor='nw')
         self.grid_c.bind('<Button-1>', self._grid_click)
         self.grid_c.bind('<Motion>', self._grid_hover)
+        self.tip = theme.FloatTip(self.win)
+        self.grid_c.bind('<Leave>', lambda e: self.tip.hide())
+        self.win.bind('<Destroy>', lambda e: self.tip.hide(), add='+')
         self.hover = ttk.Label(left, text='', style='Muted.TLabel')
         self.hover.pack(anchor='w', pady=(4, 2))
         ttk.Button(left, text=t('picker.all'),
@@ -98,6 +137,8 @@ class MapPicker:
         sb.pack(side='right', fill='y')
         self.lst.bind('<Double-Button-1>', lambda e: self._ok())
         self.lst.bind('<Return>', lambda e: self._ok())
+        self.lst.bind('<Motion>', self._list_hover)
+        self.lst.bind('<Leave>', lambda e: self.tip.hide())
         self.note = ttk.Label(right, text='', style='Muted.TLabel',
                               wraplength=520)
         self.note.pack(anchor='w')
@@ -108,8 +149,11 @@ class MapPicker:
             self.own = tk.StringVar()
             ttk.Entry(own, textvariable=self.own, width=8).pack(side='left',
                                                                 padx=6)
-            self.note.configure(text=t('picker.lnd') + '  '
-                                + t('field.reads', kind=kind))
+            reads = t('field.reads', kind=kind)
+            if self.mkname:
+                reads = t('field.reads', kind=self.mkname)
+            self.note.configure(text=(t('picker.maps') if ms and self.mkname
+                                      else t('picker.lnd')) + '  ' + reads)
         elif mode == 'object':
             self.note.configure(text=t('picker.notile'))
         b = ttk.Frame(right)
@@ -162,6 +206,14 @@ class MapPicker:
                                    outline=theme.GOLD if sel else theme.LINE,
                                    width=2 if sel else 1,
                                    tags=('cell', 't:' + tl))
+                if tl in self.red and not sel:
+                    c.create_rectangle(x + 1, y + 1, x + CELL - 3,
+                                       y + CELL - 3, outline=theme.ERR,
+                                       width=2, tags=('cell', 't:' + tl))
+                if tl in self.mod_tiles:
+                    c.create_oval(x + CELL - 10, y + 3, x + CELL - 5, y + 8,
+                                  fill=theme.MOD, outline='',
+                                  tags=('cell', 't:' + tl))
 
     def _cell_at(self, ev):
         i = int((ev.x - 2) // CELL) - 1
@@ -180,6 +232,38 @@ class MapPicker:
         if tl:
             n, l, m = self.counts.get(tl, [0, 0, 0])
             self.hover.configure(text=t('picker.counts', t=tl, n=n, l=l, m=m))
+            lines = []
+            if tl in self.mod_tiles:
+                lines.append(t('picker.modtile', mods=', '.join(
+                    self.mod_tiles[tl])))
+            for name, missing in self.red.get(tl, []):
+                lines.append(name + ': ' + missing_text(missing))
+            if lines:
+                self.tip.show(NL.join(lines), ev.x_root, ev.y_root)
+            else:
+                self.tip.hide()
+        else:
+            self.tip.hide()
+
+    def _list_hover(self, ev):
+        i = self.lst.nearest(ev.y)
+        box = self.lst.bbox(i) if 0 <= i < len(self.rows_data) else None
+        meta = self.rows_data[i][2] if box and box[1] <= ev.y <= \
+            box[1] + box[3] else None
+        if not meta:
+            self.tip.hide()
+            return
+        extra = []
+        if meta.get('missing'):
+            extra.append(missing_text(meta['missing']))
+        if meta.get('blocked'):
+            extra.append(t('picker.blocked.why'))
+        if meta.get('mod'):
+            text = origin_text(meta['mod'], meta.get('inner'),
+                               meta.get('tile'), meta.get('state'), extra)
+        else:
+            text = NL.join(extra + [meta.get('note', '')]).strip()
+        self.tip.show(text, ev.x_root, ev.y_root)
 
     def _interior_pick(self, ev):
         sel = self.int_list.curselection()
@@ -212,6 +296,15 @@ class MapPicker:
                     continue
                 rows.append((f"{n['name']}  (NPC_{key}, {n['tile']})",
                              int(key), n['tile']))
+            for info in (self.modset.enabled() if self.modset else []):
+                for key, n in sorted(info['npcs'].items(),
+                                     key=lambda kv: kv[1]['name'].lower()):
+                    if tile and n['tile'] != tile:
+                        continue
+                    rows.append((f"{theme.MOD_DOT}{n['name']}  (NPC_{key}, "
+                                 f"{n['tile']})   {info['name']}", int(key),
+                                 n['tile'], {'mod': info, 'inner': info['qtx'],
+                                             'state': n['state']}))
         elif self.mode == 'location':
             for key, loc in sorted(idx.locations.items()):
                 if tile and loc['tile'] != tile:
@@ -220,6 +313,14 @@ class MapPicker:
                 rows.append((f"{loc['name']}  ({key}, {loc['tile']}, Typ "
                              f"{loc['type']}, r {loc['radius']}){warn}", key,
                              loc['tile']))
+            for info in (self.modset.enabled() if self.modset else []):
+                for key, loc in sorted(info['locations'].items()):
+                    if tile and loc['tile'] != tile:
+                        continue
+                    rows.append((f"{theme.MOD_DOT}{key}  ({loc['tile']})   "
+                                 f"{info['name']}", key, loc['tile'],
+                                 {'mod': info, 'inner': info['qtx'],
+                                  'state': loc['state']}))
         elif self.mode == 'object':
             names = idx.object_names
             for obj in idx.objects:
@@ -228,6 +329,38 @@ class MapPicker:
             for tl in idx.tiles:
                 n, l, m = self.counts.get(tl, [0, 0, 0])
                 rows.append((t('picker.counts', t=tl, n=n, l=l, m=m), tl, tl))
+        elif self.mode == 'marker' and self.modset and self.mkname:
+            use = idx.d.get('marker_use', {})
+            listed = set()
+            for num, tl, info, missing in self.modset.marker_rows(self.kind,
+                                                                  tile):
+                qs = use.get(f'{self.kind}|{tl}|{num}', [])
+                used = t('picker.used', q=', '.join(f'Q_{x}' for x in qs[:6]))
+                listed.add((tl, num))
+                if info is None:
+                    rows.append((f'{num}  ({tl})   {used}', num, tl))
+                    continue
+                blocked = bool(missing) and not self.for_mod
+                label = f"{theme.MOD_DOT}{num}  ({tl})   {info['name']}"
+                if blocked:
+                    label += '   ' + t('picker.blocked')
+                rows.append((label, num, tl, {
+                    'mod': info, 'inner': info['tiles'][tl]['inner'],
+                    'tile': tl, 'state': 'new', 'missing': missing,
+                    'blocked': blocked}))
+            # numbers quests use that no loaded map has (other mods)
+            for key, nums in sorted(idx.markers.items()):
+                k, tl = key.split('|')
+                if k != self.kind or (tile and tl != tile):
+                    continue
+                for num in nums:
+                    if (tl, num) in listed or not tl:
+                        continue
+                    qs = use.get(f'{k}|{tl}|{num}', [])
+                    rows.append((f"{num}  ({tl})   " + t(
+                        'picker.used', q=', '.join(f'Q_{x}' for x in qs[:6]))
+                        + '   ' + t('picker.nomap'), num, tl,
+                        {'note': t('picker.nomap.why'), 'dim': True}))
         elif self.mode == 'marker':
             use = idx.d.get('marker_use', {})
             for key, nums in sorted(idx.markers.items()):
@@ -241,11 +374,17 @@ class MapPicker:
                         num, tl))
         self.lst.delete(0, 'end')
         self.rows_data = []
-        for label, value, tl in rows:
+        for row in rows:
+            label, value, tl = row[:3]
+            meta = row[3] if len(row) > 3 else None
             if q and q not in label.lower():
                 continue
-            self.rows_data.append((value, tl))
+            self.rows_data.append((value, tl, meta))
             self.lst.insert('end', label)
+            if meta:
+                self.lst.itemconfigure('end', foreground=(
+                    theme.DIM if meta.get('blocked') or meta.get('dim')
+                    else theme.MOD))
             if len(self.rows_data) >= 1500:
                 break
         if self.rows_data:
@@ -269,6 +408,24 @@ class MapPicker:
         sel = self.lst.curselection()
         if not sel:
             return
-        value, tl = self.rows_data[sel[0]]
+        value, tl, meta = self.rows_data[sel[0]]
+        if meta and meta.get('blocked'):
+            messagebox.showwarning(t('picker.title'), t('picker.blocked.why')
+                                   + NL + NL + missing_text(meta['missing']),
+                                   parent=self.win)
+            return
+        if meta and meta.get('mod') and self.mode == 'marker' and \
+                not self.for_mod:
+            name = meta['mod']['name']
+            if not messagebox.askokcancel(t('picker.title'), t(
+                    'mod.dep.confirm', tile=tl, mod=name), parent=self.win):
+                return
+            project = self.app.project
+            if project is not None and len(
+                    self.modset.tile_providers(tl)) > 1 and \
+                    project.mod_tiles.get(tl) != name:
+                project.mod_tiles[tl] = name
+                self.app.mods_changed(rescan=False)
+        self.tip.hide()
         self.result = {'value': value, 'tile': tl or self.tile or ''}
         self.win.destroy()

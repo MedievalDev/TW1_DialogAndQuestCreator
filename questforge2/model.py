@@ -286,6 +286,10 @@ class Quest:
     def to_dict(self):
         d = {'id': self.id}
         for f in self._FIELDS:
+            # links came with 2.8.0: left out while empty, so projects of
+            # older versions load and save byte-identical
+            if f == 'links' and not self.links:
+                continue
             d[f] = getattr(self, f)
         d.update(self.extra)
         return d
@@ -373,6 +377,8 @@ class Quest:
         for f in self._FIELDS:
             if f in snap:
                 setattr(self, f, copy.deepcopy(snap[f]))
+            elif f == 'links':
+                self.links = []
 
 
 def _graph_from_tabs(tabs):
@@ -414,11 +420,18 @@ class Project:
         self.path = None                 # file path, None = never saved
         self.dirty = False
         self.extra = {}
+        self.mods = []                   # [{'path', 'enabled'}], load order
+        self.mod_tiles = {}              # tile -> chosen mod name
 
     def to_dict(self):
         d = {'format': FORMAT, 'tool_version': VERSION, 'name': self.name,
              'target_archive': self.target_archive,
              'quests': [q.to_dict() for q in self.quests]}
+        # only written when used, so older projects save byte-identical
+        if self.mods:
+            d['mods'] = [dict(m) for m in self.mods]
+        if self.mod_tiles:
+            d['mod_tiles'] = dict(self.mod_tiles)
         d.update(self.extra)
         return d
 
@@ -431,9 +444,15 @@ class Project:
         p = cls(d.get('name', ''))
         p.target_archive = d.get('target_archive', '')
         p.quests = [Quest.from_dict(q) for q in d.get('quests', [])]
+        p.mods = [{'path': str(m.get('path', '')),
+                   'enabled': bool(m.get('enabled', True))}
+                  for m in d.get('mods') or [] if isinstance(m, dict)]
+        p.mod_tiles = {str(k): str(v)
+                       for k, v in (d.get('mod_tiles') or {}).items()}
         p.extra = {k: v for k, v in d.items()
                    if k not in ('format', 'tool_version', 'name',
-                                'target_archive', 'quests')}
+                                'target_archive', 'quests', 'mods',
+                                'mod_tiles')}
         return p
 
     def to_json(self):

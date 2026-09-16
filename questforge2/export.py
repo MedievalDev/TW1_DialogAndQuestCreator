@@ -402,6 +402,7 @@ import io  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
+import struct  # noqa: E402
 import subprocess  # noqa: E402
 import tempfile  # noqa: E402
 
@@ -409,6 +410,7 @@ import tw1_lan  # noqa: E402,F811
 import tw1_qtx  # noqa: E402
 import tw1_wd  # noqa: E402
 import wdio  # noqa: E402
+import zlib  # noqa: E402
 
 INNER_QTX = 'Scripts\\Quests\\TwoWorldsQuests.qtx'
 INNER_LAN = 'Language\\TwoWorldsQuests.lan'
@@ -738,12 +740,32 @@ def _entries(path):
     return {e.path: e for e in tw1_wd.read(path)}
 
 
-def pack_archive(archive, files, log=print, remove=()):
+def staged_blob(entry):
+    """How wdio stages a file with directory metadata: a zlib stream
+    ``FF A1 D0 <flags> [name] [class id] [GUID]`` followed by the stored
+    data (wdio.write_complex_v1). Plain files are just their bytes."""
+    if entry.flags | 0x07 == 0x07:
+        return entry.data
+    if not entry.flags & 0x01:
+        raise model.ModelError(f'{entry.path}: uncompressed entry with '
+                               f'metadata cannot be staged')
+    head = bytes([0xFF, 0xA1, 0xD0, entry.flags])
+    if entry.flags & 0x08:
+        head += bytes([len(entry.extra_str)]) + entry.extra_str
+    if entry.flags & 0x10:
+        head += struct.pack('<I', entry.extra_int)
+    if entry.flags & 0x20:
+        head += (entry.guid or b'')[:16].ljust(16, bytes(1))
+    return zlib.compress(head) + zlib.compress(entry.data)
+
+
+def pack_archive(archive, files, log=print, remove=(), backup=True):
     """Merge ``files`` into ``archive`` (or create it) with buglord's wdio,
     drop the entries in ``remove``, verify content byte for byte and the
     directory metadata of every untouched entry, then replace the archive.
-    A one-time backup ``<archive>.qf2backup`` keeps the state before the
-    first export."""
+    ``files`` values are bytes or ``tw1_wd.Entry`` (map files of a mod keep
+    flags, class id and GUID). With ``backup`` a one-time
+    ``<archive>.qf2backup`` keeps the state before the first export."""
     stage = tempfile.mkdtemp(prefix='qf2_')
     new = archive + '.new'
     remove = set(remove) - set(files)
@@ -762,7 +784,8 @@ def pack_archive(archive, files, log=print, remove=()):
             dest = os.path.join(stage, *inner.split('\\'))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, 'wb') as f:
-                f.write(blob)
+                f.write(staged_blob(blob) if isinstance(blob, tw1_wd.Entry)
+                        else blob)
         log(('pack', os.path.basename(archive)))
         if os.path.exists(new):
             os.remove(new)
@@ -771,7 +794,14 @@ def pack_archive(archive, files, log=print, remove=()):
         after = _entries(new)
         problems = []
         for inner, blob in files.items():
-            if inner not in after or after[inner].data != blob:
+            if isinstance(blob, tw1_wd.Entry):
+                a = after.get(inner)
+                if a is None or a.data != blob.data or (
+                        a.flags, a.extra_str, a.extra_int, a.guid) != (
+                        blob.flags, blob.extra_str, blob.extra_int,
+                        blob.guid):
+                    problems.append(f'{inner}: content or metadata differs')
+            elif inner not in after or after[inner].data != blob:
                 problems.append(f'{inner}: content differs')
         for inner in remove:
             if inner in after:
@@ -785,17 +815,17 @@ def pack_archive(archive, files, log=print, remove=()):
             elif (a.data != e.data or a.flags != e.flags
                   or a.extra_str != e.extra_str
                   or a.extra_int != e.extra_int
-                  or bool(a.guid) != bool(e.guid)):
+                  or a.guid != e.guid):
                 problems.append(f'{inner}: data or metadata differs')
         if problems:
             raise model.ModelError('verification failed: '
                                    + '; '.join(problems[:5]))
         log(('verified', len(after)))
-        if before:
-            backup = archive + '.qf2backup'
-            if not os.path.exists(backup):
-                shutil.copy2(archive, backup)
-                log(('backup', os.path.basename(backup)))
+        if before and backup:
+            keep = archive + '.qf2backup'
+            if not os.path.exists(keep):
+                shutil.copy2(archive, keep)
+                log(('backup', os.path.basename(keep)))
         os.replace(new, archive)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
@@ -877,9 +907,11 @@ def archive_name(project):
 
 
 def export_mod(project, game_dir, base_dir, index=None, log=print,
-               files_only=None, register=True):
+               files_only=None, register=True, entries=None):
     """Full export (plan 3.1 "Exportieren als Mod"). Returns a summary.
-    ``files_only``: write the files into that folder instead of packing."""
+    ``files_only``: write the files into that folder instead of packing.
+    ``entries``: {inner: tw1_wd.Entry} map files of mods the quests depend
+    on (mods.dependency_entries)."""
     name = archive_name(project)
     archive = os.path.join(game_dir, 'Mods', name)
     base_qtx = master_lan = None
@@ -907,8 +939,11 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
                         overlay_stem(project))
     for inner, blob in files.items():
         log(('file', inner, len(blob)))
+    files.update(entries or {})
     if files_only:
         for inner, blob in files.items():
+            if isinstance(blob, tw1_wd.Entry):
+                blob = staged_blob(blob)
             dest = os.path.join(files_only, *inner.split('\\'))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, 'wb') as f:

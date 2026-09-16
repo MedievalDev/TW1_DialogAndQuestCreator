@@ -14,8 +14,8 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from . import (APP_NAME, VERSION, data, enemylevel, export, model,
-               questlimit, retail, theme, validate)
+from . import (APP_NAME, VERSION, data, enemylevel, export, model, mods,
+               modswin, questlimit, retail, theme, validate)
 from .graph import GraphView
 from .guide import Coach, show_docs
 from .i18n import t, set_lang, get_lang, detect_lang
@@ -51,6 +51,11 @@ class App:
         self._preview_snap = None
         self._val_job = None
         self.quest_limit = data.RETAIL_LIMIT   # eQuestsNum the game runs with
+        self.modset = None             # mods of the project (update 5b)
+        self.mod_quests = {}           # (mod path, qid) -> Quest opened
+        self.mod_dirty = set()         # keys of mod quests changed
+        self.mod_hint_done = False     # save hint shown this session
+        self._base_parts = None
 
         self.root = tk.Tk()
         self.root.withdraw()
@@ -95,6 +100,7 @@ class App:
                             ('menu.edit', self._fill_edit),
                             ('menu.view', self._fill_view),
                             ('menu.quest', self._fill_quest),
+                            ('menu.mods', self._fill_mods),
                             ('menu.help', self._fill_help)):
             item = ttk.Label(bar, text=t(key), style='Menubar.TLabel')
             item.pack(side='left')
@@ -295,6 +301,28 @@ class App:
             m.add_separator()
             m.add_command(label=t('quest.debug300'), command=self.debug_nodes,
                           state=self._state(self.quest is not None))
+
+    def _fill_mods(self, m):
+        have = self.project is not None
+        game = bool(self.cfg.get('game_dir'))
+        m.add_command(label=t('mods.manage'), command=self.show_mods,
+                      state=self._state(have))
+        m.add_separator()
+        m.add_command(label=t('mods.add.wd'), command=self.add_mod_archive,
+                      state=self._state(have))
+        m.add_command(label=t('mods.add.folder'),
+                      command=self.add_mod_folder, state=self._state(have))
+        m.add_command(label=t('mods.add.game'), command=self.add_game_mods,
+                      state=self._state(have and game))
+        m.add_separator()
+        m.add_command(label=t('mods.deps'), command=self.show_dependencies,
+                      state=self._state(have and self.modset is not None))
+        m.add_command(label=t('mods.save', n=len(self.mod_dirty)),
+                      accelerator=self._acc('Ctrl+S'),
+                      command=self.save_mod_quests,
+                      state=self._state(bool(self.mod_dirty)))
+        m.add_command(label=t('mods.restore'), command=self.show_mods,
+                      state=self._state(have and bool(self.project.mods)))
 
     def _fill_help(self, m):
         m.add_command(label=t('help.guide'), accelerator='F1',
@@ -516,6 +544,8 @@ class App:
             self.new_from_template_data(what)
         elif how == 'copy':
             self.copy_quest_as_new(what)
+        elif how == 'modcopy':
+            self.copy_mod_quest_as_new(*what)
 
     def new_from_template_data(self, tpl):
         qid = self._free_id()
@@ -553,6 +583,298 @@ class App:
                 t('quest.copy.refs', id=qid) + NL + NL.join(
                     '  ' + text for _kind, _q, text in foreign),
                 parent=self.root)
+
+    # -- mods (update 5b) -----------------------------------------------------
+
+    @staticmethod
+    def mod_key(quest):
+        m = quest.extra.get('mod') or {}
+        return (os.path.normcase(os.path.abspath(m.get('path', ''))),
+                quest.id)
+
+    @staticmethod
+    def is_mod_quest(quest):
+        return bool(quest is not None and quest.extra.get('mod'))
+
+    def _base_qtx_parts(self):
+        game = self.cfg.get('game_dir')
+        qtx_path, _lan = data.ensure_base(game)
+        st = os.stat(qtx_path)
+        stamp = [int(st.st_mtime), st.st_size]
+        if not self._base_parts or self._base_parts[0] != stamp:
+            with open(qtx_path, 'rb') as f:
+                parts = mods.qtx_parts(f.read().decode('latin-1'))
+            self._base_parts = (stamp, parts)
+        return self._base_parts
+
+    def load_modset(self, force=False):
+        """Read the mods of the project (cached per mod) and the markers of
+        the game maps."""
+        game = self.cfg.get('game_dir')
+        if not self.project or not game or not data.valid_game_dir(game):
+            self.modset = None
+            return
+        self.root.configure(cursor='watch')
+        self.root.update_idletasks()
+        try:
+            tiles = mods.retail_markers(game)
+            if self.project.mods:
+                stamp, parts = self._base_qtx_parts()
+                tr = data.load_translations(game)
+                self.modset = mods.open_modset(self.project, game, parts,
+                                               tiles, tr, stamp, force)
+            else:
+                self.modset = mods.ModSet([], [], tiles,
+                                          self.project.mod_tiles)
+        except Exception as e:             # shown, the tool keeps working
+            self.modset = None
+            messagebox.showerror(t('mods.title'), t('mods.loaderror', err=e),
+                                 parent=self.root)
+        finally:
+            self.root.configure(cursor='')
+        self.timeline.schedule(10)
+        self.schedule_validation(50)
+        if modswin.ModsWindow._open:
+            modswin.ModsWindow._open.refresh()
+        if modswin.DependencyWindow._open:
+            modswin.DependencyWindow._open.refresh()
+
+    def mods_changed(self, rescan=True):
+        self.mark_dirty()
+        if rescan:
+            self.load_modset()
+        elif self.modset:
+            self.modset.tile_choice = self.project.mod_tiles
+            self.timeline.schedule(10)
+            self.schedule_validation(50)
+
+    def add_mod(self, path):
+        if not self.project or not path:
+            return
+        path = os.path.normpath(path)
+        key = os.path.normcase(os.path.abspath(path))
+        if any(os.path.normcase(os.path.abspath(m['path'])) == key
+               for m in self.project.mods):
+            self.set_info(t('mods.already', name=mods.mod_name(path)))
+            return
+        self.project.mods.append({'path': path, 'enabled': True})
+        self.mods_changed()
+        info = self.modset.by_path(path) if self.modset else None
+        if info and info.get('error'):
+            messagebox.showwarning(t('mods.title'), t(
+                'mods.error', err=info['error']), parent=self.root)
+        conflicts = self.modset.tile_conflicts() if self.modset else {}
+        mine = {tl: names for tl, names in conflicts.items()
+                if mods.mod_name(path) in names}
+        if mine:
+            messagebox.showwarning(t('mods.title'), t(
+                'mods.tileclash', name=mods.mod_name(path), tiles=NL.join(
+                    f'  {tl}: ' + ', '.join(n) for tl, n in sorted(
+                        mine.items()))), parent=self.root)
+        self.set_info(t('mods.added', name=mods.mod_name(path)),
+                      'StatusOk.TLabel')
+
+    def add_mod_archive(self):
+        game = self.cfg.get('game_dir')
+        paths = filedialog.askopenfilenames(
+            title=t('mods.add.wd'), parent=self.root,
+            initialdir=os.path.join(game, 'Mods') if game else None,
+            filetypes=[(t('mods.filter'), '*.wd')])
+        for p in paths or ():
+            self.add_mod(p)
+
+    def add_mod_folder(self):
+        path = filedialog.askdirectory(title=t('mods.add.folder'),
+                                       parent=self.root)
+        if path:
+            self.add_mod(path)
+
+    def add_game_mods(self):
+        game = self.cfg.get('game_dir')
+        own = export.archive_name(self.project).lower() if self.project \
+            else ''
+        found = [p for p in mods.game_mods(game)
+                 if os.path.basename(p).lower() != own]
+        if not found:
+            messagebox.showinfo(t('mods.title'), t('mods.game.none'),
+                                parent=self.root)
+            return
+        for p in found:
+            self.add_mod(p)
+
+    def show_mods(self):
+        if self.project:
+            modswin.ModsWindow.show(self)
+
+    def show_dependencies(self):
+        if self.project:
+            modswin.DependencyWindow.show(self)
+
+    def _mod_sources(self, path, qid):
+        """(block, tree or None, translations) of a quest in a mod."""
+        text, lans = mods.quest_sources(path)
+        if text is None:
+            raise ModelError(t('mods.noqtx', name=mods.mod_name(path)))
+        block = mods.qtx_parts(text)['quests'].get(qid)
+        if block is None:
+            raise ModelError(t('mods.noquest', id=qid,
+                               name=mods.mod_name(path)))
+        game = self.cfg.get('game_dir')
+        tr = dict(data.load_translations(game)) if game else {}
+        tree = None
+        tid = f'translateDQ_{qid}'
+        import tw1_lan
+        for _inner, blob in lans:
+            try:
+                mtr, _a, rest = tw1_lan.read(blob)
+            except Exception:
+                continue
+            tr.update(mtr)
+            for tt in tw1_lan.parse_trees(rest):
+                if tt.id == tid:
+                    tree = tt
+        if tree is None and game:
+            got = (data.load_trees(game) or {}).get(tid)
+            tree = got[0] if got else None
+        return block, tree, tr
+
+    def build_mod_quest(self, path, qid):
+        block, tree, tr = self._mod_sources(path, qid)
+        q = Quest(qid, tr.get(f'translateQ_{qid}', ''))
+        q.retail = True
+        q.journal = {'take': tr.get(f'translateQ_{qid}_QTD', ''),
+                     'solve': tr.get(f'translateQ_{qid}_QSD', ''),
+                     'close': tr.get(f'translateQ_{qid}_QCD', '')}
+        rep_ = None
+        if tree is not None:
+            rep_ = export.tree_to_graph(q, tree, tr, self.index, qid)
+        retail.import_block(q, block)
+        giver = q.giver
+        if giver is not None and self.index and self.index.npc(giver) and \
+                not any(s['id'] == giver for s in q.speakers):
+            npc = self.index.npc(giver)
+            q.add_speaker({'id': giver, 'name': npc['name'],
+                           'lector': npc['lector'], 'tile': npc['tile'],
+                           'new': False})
+        model.auto_layout(q.graph)
+        q.extra['import'] = {'lines': rep_.entries if rep_ else 0,
+                             'menus': rep_.menus if rep_ else 0,
+                             'notes': len(rep_.lossy) if rep_ else 0,
+                             'source': mods.mod_name(path)}
+        q.extra['mod'] = {'path': path, 'name': mods.mod_name(path)}
+        return q
+
+    def open_mod_quest(self, path, qid):
+        """Timeline click on a mod card: the quest is edited in the mod
+        itself; saving writes it back into the mod's archive or folder."""
+        key = (os.path.normcase(os.path.abspath(path)), qid)
+        q = self.mod_quests.get(key)
+        if q is None:
+            try:
+                q = self.build_mod_quest(path, qid)
+            except (OSError, ValueError, ModelError) as e:
+                messagebox.showerror(t('mods.title'), str(e),
+                                     parent=self.root)
+                return
+            self.mod_quests[key] = q
+        self.preview = None
+        if q is not self.quest:
+            self.open_quest(q)
+            self.show_tab(None)
+            self.graph.fit()
+        self.set_info(t('mods.view', id=qid, name=mods.mod_name(path)),
+                      'Status.TLabel')
+
+    def copy_mod_quest_as_new(self, path, qid):
+        try:
+            src = self.build_mod_quest(path, qid)
+        except (OSError, ValueError, ModelError) as e:
+            messagebox.showerror(t('mods.title'), str(e), parent=self.root)
+            return
+        src.extra.pop('mod', None)
+        self.copy_quest_as_new(src)
+
+    def save_mod_quests(self):
+        """Write every changed mod quest back into its mod. True when all
+        were written."""
+        if not self.mod_dirty:
+            return True
+        game = self.cfg.get('game_dir')
+        if export.game_running():
+            messagebox.showerror(t('mods.title'), t('export.running'),
+                                 parent=self.root)
+            return False
+        if not modswin.ask_save_hint(self):
+            return False
+        _qtx, lan_path = data.ensure_base(game)
+        with open(lan_path, 'rb') as f:
+            master = f.read()
+        ok = True
+        for key in sorted(self.mod_dirty, key=str):
+            q = self.mod_quests.get(key)
+            if q is None:
+                self.mod_dirty.discard(key)
+                continue
+            E, _W = validate.validate_quest(q, self.index, self.project, None,
+                                            t)
+            if E:
+                ProblemWindow(self, t('val.window', id=q.id),
+                              [(q, m, x) for m, x in E], [])
+                ok = False
+                continue
+            path = q.extra['mod']['path']
+            self.root.configure(cursor='watch')
+            self.root.update_idletasks()
+            try:
+                res = mods.write_quest(path, q, self.index, master, game,
+                                       lambda m: None)
+            except Exception as e:
+                messagebox.showerror(t('mods.title'), t(
+                    'mods.writeerror', id=q.id, name=mods.mod_name(path),
+                    err=e), parent=self.root)
+                ok = False
+                continue
+            finally:
+                self.root.configure(cursor='')
+            info = q.extra.get('qtx')
+            if info is not None:
+                info['block'] = retail.block_text(q)
+                info['sig'] = retail.signature(q)
+            self.mod_dirty.discard(key)
+            msg = t('mods.saved', id=q.id, name=mods.mod_name(path))
+            if res.get('backup'):
+                msg += '  ' + t('mods.backup', file=os.path.basename(
+                    res['backup']))
+            self.set_info(msg, 'StatusOk.TLabel')
+        data._BLOCKS.clear()
+        data._TREES.clear()
+        self.load_modset()
+        self._update_status()
+        return ok
+
+    def restore_mod_backup(self, path, backup):
+        if export.game_running():
+            messagebox.showerror(t('mods.title'), t('export.running'),
+                                 parent=self.root)
+            return
+        if not messagebox.askyesno(t('mods.title'), t(
+                'mods.restore.q', name=mods.mod_name(path),
+                file=os.path.basename(backup)), parent=self.root):
+            return
+        try:
+            keep = mods.restore_backup(path, backup)
+        except OSError as e:
+            messagebox.showerror(t('mods.title'), str(e), parent=self.root)
+            return
+        for key in [k for k in self.mod_quests
+                    if k[0] == os.path.normcase(os.path.abspath(path))]:
+            self.mod_quests.pop(key, None)
+            self.mod_dirty.discard(key)
+        data._BLOCKS.clear()
+        data._TREES.clear()
+        self.load_modset(force=True)
+        self.set_info(t('mods.restored', name=mods.mod_name(path),
+                        file=os.path.basename(keep)), 'StatusOk.TLabel')
 
     def load_retail(self):
         """Pick a dialog of the game (or a mod) and open its quest."""
@@ -680,6 +1002,8 @@ class App:
 
     def _free_id(self):
         taken = {q.id for q in self.project.quests if q.id}
+        if self.modset:
+            taken |= self.modset.quest_ids()
         free = self.index.free_ids(taken) if self.index else [
             i for i in range(data.MIN_QUEST_ID, data.MAX_QUEST_ID + 1)
             if i not in taken]
@@ -899,6 +1223,13 @@ class App:
             for q in self.project.quests:
                 if q.id not in known and q is not self.quest:
                     out.append((q.id, f'Q_{q.id}  {q.title}'))
+        if self.modset:
+            known = {q for q, _ in out}
+            for info, qid, q in self.modset.quests():
+                if qid not in known:
+                    known.add(qid)
+                    out.append((qid, f"{theme.MOD_DOT}Q_{qid}  "
+                                     f"{q['title']}  ({info['name']})"))
         return out
 
     def select_task(self):
@@ -1031,7 +1362,10 @@ class App:
                                  parent=self.root)
             return
         name = export.archive_name(p)
-        errors, warnings = validate.validate_project(p, self.index, name, t)
+        errors, warnings = validate.validate_project(p, self.index, name, t,
+                                                     self.modset)
+        deps = [d for d in mods.dependencies(p, self.modset)
+                if d['status'] == 'ok'] if self.modset else []
         if errors:
             ProblemWindow(self, t('export.errors', n=len(errors)), errors,
                           warnings)
@@ -1058,6 +1392,11 @@ class App:
                                          t('export.target', name=name),
                                          parent=self.root):
                 return
+            if deps and not messagebox.askyesno(t('export.title'), t(
+                    'export.deps', n=len(deps), tiles=NL.join(
+                        f"  {d['tile']}  {d['inner']}  ({d['mod']})"
+                        for d in deps)), parent=self.root):
+                return
         if warnings:
             text = t('export.warnings', n=len(warnings)) + '\n\n' + '\n'.join(
                 f'Q_{q.id}: {m}' for q, m, _ in warnings[:12])
@@ -1070,9 +1409,10 @@ class App:
 
         def work():
             try:
+                entries = mods.dependency_entries(deps, logq.put)
                 result['res'] = export.export_mod(
                     p, game, data.base_dir(), self.index, logq.put,
-                    files_only=target)
+                    files_only=target, entries=entries)
             except Exception as e:          # shown in the log window
                 result['err'] = e
 
@@ -1115,6 +1455,9 @@ class App:
         E, W = validate.validate_quest(q, self.index, self.project,
                                        export.archive_name(self.project)
                                        if self.project else None, t)
+        if self.modset and self.project:
+            E2, W2 = validate.validate_mods(q, self.project, self.modset, t)
+            E, W = E + E2, W + W2
         self.last_validation = (E, W)
         if not E and not W:
             lbl.configure(text=t('status.validation.ok'),
@@ -1131,6 +1474,9 @@ class App:
         E, W = validate.validate_quest(q, self.index, self.project,
                                        export.archive_name(self.project)
                                        if self.project else None, t)
+        if self.modset and self.project:
+            E2, W2 = validate.validate_mods(q, self.project, self.modset, t)
+            E, W = E + E2, W + W2
         self._auto_validate()
         ProblemWindow(self, t('val.window', id=q.id),
                       [(q, m, x) for m, x in E], [(q, m, x) for m, x in W])
@@ -1320,7 +1666,10 @@ class App:
             return
         self.timeline.schedule()
         self.schedule_validation()
-        self.mark_dirty()
+        if self.is_mod_quest(self.quest):
+            self.mod_dirty.add(self.mod_key(self.quest))
+        else:
+            self.mark_dirty()
         self._update_status()
         if not from_inspector:
             self.inspector.refresh()
@@ -1414,6 +1763,11 @@ class App:
             qtext = f'Q_{self.quest.id}'
             if self.preview is not None and self.quest is self.preview:
                 qtext += '  ' + t('status.gameview')
+            elif self.is_mod_quest(self.quest):
+                qtext += '  ' + t('status.modquest',
+                                  mod=self.quest.extra['mod']['name'])
+                if self.mod_key(self.quest) in self.mod_dirty:
+                    qtext += ' *'
             elif self.quest.retail:
                 qtext += '  ' + t('status.gameedit')
         s['quest'].configure(text=qtext)
@@ -1430,7 +1784,8 @@ class App:
     def _update_title(self):
         name = (self.project.display_name() or t('project.untitled')
                 if self.project else '')
-        star = ' *' if self.project and self.project.dirty else ''
+        star = ' *' if (self.project and self.project.dirty) \
+            or self.mod_dirty else ''
         self.root.title(f'{name}{star} - {APP_NAME}' if name else APP_NAME)
 
     def set_info(self, text, style='Status.TLabel'):
@@ -1598,6 +1953,8 @@ class App:
     def _index_ready(self, index, from_cache, seconds):
         self.index = index
         self.refresh_quest_limit()
+        if not self.selftest:
+            self.load_modset()
         total = time.perf_counter() - self.t_start
         how = (t('status.index.cache', s=seconds) if from_cache
                else t('status.index.built', s=seconds))
@@ -1615,6 +1972,7 @@ class App:
                             f'index={seconds:.3f} cache={from_cache} '
                             f'quests={len(index.quests)} '
                             f'templates={len(data.builtin_templates())} '
+                            f'maptiles={len(mods.retail_markers(self.cfg.get("game_dir")))} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -1650,6 +2008,16 @@ class App:
     def _confirm_discard(self):
         """True when the current project may be replaced."""
         p = self.project
+        if self.mod_dirty:
+            ans = messagebox.askyesnocancel(
+                t('mods.title'), t('mods.unsaved', n=len(self.mod_dirty)),
+                parent=self.root)
+            if ans is None:
+                return False
+            if ans and not self.save_mod_quests():
+                return False
+            if not ans:
+                self.mod_dirty.clear()
         if not p or not p.dirty:
             return True
         ans = messagebox.askyesnocancel(
@@ -1666,6 +2034,9 @@ class App:
         self.project = project
         self.clipboard = None
         self.preview = None
+        self.mod_quests = {}
+        self.mod_dirty = set()
+        self.load_modset()
         self.open_quest(project.quests[0] if project.quests else None)
 
     def new_project(self, ask=True):
@@ -1701,8 +2072,13 @@ class App:
         self._set_project(project)
 
     def save_project(self):
+        if self.mod_dirty and not self.save_mod_quests():
+            return False
         if not self.project:
             return False
+        if not self.project.path and not self.project.dirty and \
+                not self.project.quests:
+            return True
         if not self.project.path:
             return self.save_project_as()
         return self._write_project(self.project.path)
@@ -2357,6 +2733,15 @@ class NewQuestDialog:
                     self.lst.insert('end', label)
                     if len(self.items) > 800:
                         break
+            ms = self.app.modset
+            for info, qid, q in (ms.quests() if ms else []):
+                label = (f"{theme.MOD_DOT}Q_{qid}  {q['title'] or '-'}  "
+                         f"({info['name']})")
+                if needle and needle not in label.lower():
+                    continue
+                self.items.append(('modcopy', (info['path'], qid)))
+                self.lst.insert('end', label)
+                self.lst.itemconfigure('end', foreground=theme.MOD)
         if mode == 'empty':
             self.lst.configure(state='disabled')
             self.note.configure(text=t('newq.empty.note'))

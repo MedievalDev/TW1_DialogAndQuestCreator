@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.0.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1202,13 +1202,58 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     - Dialog "Neue Quest": leer, Vorlage, Kopie (Projekt- und Spielquests);
       `model.copy_references` schreibt Selbstverweise um und listet fremde.
     - Warnung `warn.todo` fuer uebrig gebliebene TODO-Stellen.
+64. Mods als dritte Quelle (Version 3.0.0, Punkt 5b):
+    - `questforge2/mods.py`: liest `.wd` (Verzeichnis mit Flags, Name,
+      Klassen-Id, GUID; Daten nur fuer qtx, lan, lnd) und Ordner (wdio-Kopf
+      wird ausgepackt). Herkunft je Inhalt: Mod, Pfad, Datei, Tile. Cache je
+      Mod in `cache/mods/<hash>.json` (mtime/Groesse bzw. Hash der relevanten
+      Ordnerdateien plus Stempel der Basis-qtx). `tw1_lnd.py` als Kopie aus
+      QuestForge uebernommen (unveraendert).
+    - Karten des Spiels: `retail_markers` liest nur den Markerabschnitt jeder
+      `Levels\Map_*.lnd` (teilweises Entpacken, 160 Tiles in 0,25 s),
+      `Levels.wd` < `Update11-15.wd` < `Update16.wd`. Tile-Namen
+      `Map_E01` = `E1`, `Map_B08_1` = `B8_1`.
+    - Markernamen je Befehl aus SDK `PEnums.ech` (`MARKER_NAMES`); gemessen
+      16.09.2026: 287 von 287 Markerverweisen der Original-Quests und 216 von
+      216 NPC-Startmarkern liegen unter diesen Namen auf ihrem Tile.
+    - Projektdatei: `mods` [{path, enabled}] und `mod_tiles` {tile: mod},
+      nur geschrieben, wenn belegt. Leere `links` (seit 2.8.0 immer
+      geschrieben) werden wieder weggelassen: alte Projekte speichern
+      byte-gleich bis auf `tool_version` (Test).
+    - Mod-Quests: Oeffnen aus der Mod (Questblock + Baum aus den lan der Mod,
+      sonst Spiel), Bearbeiten ohne Projektkopie, Speichern ueber
+      `mods.write_quest`: `export.patch_qtx`, `build_lan` in die lan der Mod,
+      die den Baum oder Titel traegt (sonst `TwoWorldsQuests.lan`, sonst
+      Overlay `ZZ_QF_Mod_<Name>.lan`), Sicherung `<Mod>.bak-<Datum>` einmal
+      pro Tag, `pack_archive(backup=False)` prueft alle uebrigen Eintraege
+      inklusive exakter GUID, danach `metadata_problems` gegen die Archive des
+      Spiels (Port von `wd_metadaten.pruefen`, qtx/lan ausgenommen, neue
+      Abweichungen brechen ab). Wiederherstellen sichert den aktuellen Stand
+      vorher als `...-before-restore`.
+    - Abhaengigkeiten: `mods.dependencies` leitet aus den Markerverweisen der
+      Projektquests ab, welche Mod-Karten mit muessen (Status ok, missing =
+      rotes Tile, conflict = mehrere Mods). `pack_archive` nimmt dafuer
+      `tw1_wd.Entry` mit Metadaten an und stagt sie in wdio-Kopfform.
+      Echttest mit Kopien von Yamalin.wd und Dream Worlds CE 3.0: D8-Marker
+      aus Yamalin -> Karte im Export, Metadaten und Daten gleich, keine
+      Abweichung gegen die Spielarchive; F8_1 rot -> gesperrt und Fehler.
+      Befund: Dream Worlds CE 3.0 fehlen auf 9 Tiles Marker des Spiels (E2: 25).
+    - UI: Menue Mods, `modswin.py` (Mods verwalten, Abhaengigkeiten,
+      Speicherhinweis), Zeitleiste mit "Quellen" und Mod-Bereich, Picker mit
+      Kartenmarkern, blauen Punkten, roten Tiles, Sperre und Rueckfrage,
+      Mod-Quests im Kopierdialog und in den Questlisten. Hellblau `theme.MOD`
+      nur fuer Mods; die Gruppenfarbe `#8fa8d8` wurde dafuer ersetzt, Blau fuer
+      die Enklave (Marcos Wunsch 12.61) bleibt.
+    - Ungeprueft: Ladereihenfolge zweier Mods im Spiel.
 
 Offen:
 
 - Spieltest einer Tool-Quest mit ID ueber 399 bei Questgrenze 600 (12.57).
 - Spieltest der geaenderten Gegnerstufen (12.59).
-- Usability-Update Teil 2: Guide-Fenster (2.9.0), danach Mod-Quellen und
-  interaktive Karte; Vorlagen (Punkt 7) noch offen (12.62).
+- Usability-Update: interaktive Karte (Punkt 5c) offen; Guide, Vorlagen
+  (2.9.0) und Mod-Quellen (3.0.0) erledigt.
+- Ladereihenfolge zweier Mods im Spiel messen (12.64).
+- Spieltest: Quest einer Mod im Tool geaendert und gespeichert (12.64).
 - `quest_creator_gui.py` bleibt vorerst in `main` neben QuestForge 2
   (Marco 2026-09-14, nach den bestandenen Spieltests entschieden).
 - `[PRUEFEN]`-Punkte, Stand 2026-09-13 (alle brauchen Marcos Spieltest,
