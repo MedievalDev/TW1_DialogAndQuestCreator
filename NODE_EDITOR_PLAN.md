@@ -161,7 +161,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.5.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.5.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1104,6 +1104,21 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     Marco hat entschieden, ohne ihn zu releasen. Tests
     `test_questlimit.py` (Patch, Archiv-Rundlauf, apply/remove mit
     Ersatz-Registry, andere Mod mit 600, Validierung).
+58. Partei-Feld mit Namen (Version 2.5.1, nach einer Frage von Orion im
+    Discord: "which number is which faction?"). Die Nummern stehen im SDK in
+    `Scripts\Common\Enums.ech`: 18 Tiere (allgemeine Gegner), 19
+    Gruenhaeute, 20 Banditen, 21 Untote, 22 verseuchte Untote, 23 boese
+    Krieger, 24 Geister, 25 Menschen (neutrale NPCs), 26 bis 42 die
+    Stadtparteien (Cathalon, Qudinaar, Ashos, Komorin, Karga, Skelden,
+    Windmuehle, Covenant, Vier Steine, Clovelly, Aussenposten, Kehar,
+    Siedlung, Nekro-Dorf, Gorelin, Rovan, Tharbakin), 43 neutrale Banditen;
+    0 bis 17 sind Spieler und deren Gegner und kommen in Quests nicht vor.
+    Die Original-Quests nutzen 19 (77x), 21 (59x), 18 (19x), 20 (6x), 25
+    (2x), 22 und 23 (je 1x). Das Feld ist jetzt eine Auswahlliste
+    "Nummer + Name" (`model.PARTIES`, `party_label`, `parse_party`), bleibt
+    aber frei tippbar; darunter ein Hinweis, dass ab 24 neutrale und
+    Stadtparteien stehen, die von sich aus nicht angreifen (aus dem SDK
+    abgeleitet, nicht im Spiel gemessen).
 
 Offen:
 

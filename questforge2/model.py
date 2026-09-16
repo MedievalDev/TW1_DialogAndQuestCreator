@@ -138,6 +138,30 @@ ACTION_MAIN = [('REWARD', 'GLD'), ('REWARD', 'EXP'), ('REWARD', 'ITM'),
 ACTION_MORE = [k for k in ACTION_SPECS if k not in ACTION_MAIN]
 REWARD_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'HEAR')
 ACTION_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'ENABLE', 'HEAR', 'FAIL', 'FIGHT')
+# Party numbers from the SDK (Scripts\Common\Enums.ech). 0 to 17 are the
+# players and their enemies and never appear in quests; retail quests use
+# 18 to 23 (and once 25). 26 to 42 are the town factions, which are neutral
+# to the player, so enemies created in them do not attack on their own.
+PARTIES = (18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+           34, 35, 36, 37, 38, 39, 40, 41, 42, 43)
+PARTY_FIGHT = (18, 19, 20, 21, 22, 23)      # the hostile ones
+
+
+def party_label(num, t):
+    """'20  Bandits' for the picker; unknown numbers keep their number."""
+    key = f'party.{num}'
+    name = t(key)
+    return f'{num}  {name}' if name != key else str(num)
+
+
+def parse_party(text):
+    """Number out of '20  Bandits', a bare number or something else."""
+    head = str(text).strip().split()
+    try:
+        return int(head[0])
+    except (IndexError, ValueError):
+        return text
+
 AOQ_EVENTS = ('TAKE', 'SOLVE', 'CLOSE')
 # ParseEnemyType in PQuestLoader.ech (unknown names fall back to goblins)
 ENEMY_TYPES = (

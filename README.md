@@ -462,7 +462,10 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Quest-Panel.
 - **Eigenschaften** (rechts): Formular des gewählten Elements, ohne Auswahl
   die Quest selbst. ID-Felder haben einen Kachel-Picker, Dialogzeilen eine
-  Cue-Suche.
+  Cue-Suche. Das Feld Partei listet die Fraktionsnummern des SDK mit Namen
+  (18 Tiere, 19 Grünhäute, 20 Banditen, 21 Untote, 22 verseuchte Untote,
+  23 böse Krieger, 24 Geister, 25 Menschen, 26 bis 42 Stadtparteien,
+  43 neutrale Banditen); eigene Zahlen bleiben tippbar.
 - **Validieren** (F7, Statusleiste): Fehler blockieren den Export, Warnungen
   nicht; Doppelklick springt zur Stelle.
 - **Exportieren** (Strg+E): siehe 13.3. "Nur Dateien exportieren" schreibt

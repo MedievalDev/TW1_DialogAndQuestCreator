@@ -299,7 +299,9 @@ class Inspector(ttk.Frame):
             row.pack(fill='x')
 
             def setter(v, key=key, kind=kind):
-                if kind in ('int', 'party') or kind.startswith('marker:'):
+                if kind == 'party':
+                    v = model.parse_party(v)
+                elif kind == 'int' or kind.startswith('marker:'):
                     try:
                         v = int(v)
                     except (TypeError, ValueError):
@@ -315,6 +317,13 @@ class Inspector(ttk.Frame):
             if kind == 'enemy':
                 w = ttk.Combobox(row, textvariable=var, state='readonly',
                                  values=list(model.ENEMY_TYPES))
+            elif kind == 'party':
+                # numbers with their faction name; free text stays possible
+                w = ttk.Combobox(row, textvariable=var,
+                                 values=[model.party_label(p, t)
+                                         for p in model.PARTIES])
+                if str(cur).strip().isdigit():
+                    var.set(model.party_label(int(cur), t))
             elif kind == 'amount':
                 w = ttk.Combobox(row, textvariable=var,
                                  values=['SMALL', 'MEDIUM', 'HIGH'])
@@ -328,6 +337,8 @@ class Inspector(ttk.Frame):
             else:
                 w = ttk.Entry(row, textvariable=var)
             w.pack(side='left', fill='x', expand=True)
+            if kind == 'party':
+                self._label(t('insp.party.hint'), muted=True)
             w.bind('<FocusIn>', lambda ev, w=w: self._reset_undo(w))
             w.bind('<KeyRelease>', lambda ev, w=w, var=var, st=setter:
                    self._edit(w, lambda: st(var.get()), nid))

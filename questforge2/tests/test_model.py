@@ -84,5 +84,21 @@ class ModelRoundTrip(unittest.TestCase):
         self.assertEqual(q.node_count(), 0)
 
 
+class Parties(unittest.TestCase):
+    """Party numbers of the SDK in the picker (Discord question, 2.5.1)."""
+
+    def test_labels_and_parsing(self):
+        def t(key):
+            return {'party.20': 'Bandits', 'party.21': 'Undead'}.get(key, key)
+        self.assertEqual(model.party_label(20, t), '20  Bandits')
+        self.assertEqual(model.party_label(99, t), '99')     # unknown number
+        self.assertEqual(model.parse_party('20  Bandits'), 20)
+        self.assertEqual(model.parse_party(' 25 '), 25)
+        self.assertEqual(model.parse_party('(null)'), '(null)')
+        self.assertEqual(model.PARTIES[0], 18)
+        self.assertEqual(model.PARTIES[-1], 43)
+        self.assertTrue(set(model.PARTY_FIGHT) < set(model.PARTIES))
+
+
 if __name__ == '__main__':
     unittest.main()
