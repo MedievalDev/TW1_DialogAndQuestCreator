@@ -127,11 +127,33 @@ class Inspector(ttk.Frame):
             self.current = ('quest',)
         self.refresh()
 
+    def _line_present(self, rec):
+        return self._rec_line(rec) is rec['line']
+
+    @staticmethod
+    def _rec_line(rec):
+        """The line a recording belongs to: the same object, or after
+        undo/redo (which rebuild the lines) the line at the same place with
+        the same text. None when it is gone."""
+        node = rec['quest'].graph['nodes'].get(rec['nid'])
+        lines = (node or {}).get('lines') or []
+        for ln in lines:
+            if ln is rec['line']:
+                return ln
+        i = rec['index']
+        if 0 <= i < len(lines) and lines[i].get('text', '') == \
+                rec['line'].get('text', ''):
+            return lines[i]
+        return None
+
     def refresh(self):
         rec = getattr(self.app, 'voice_rec', None)
         if rec and (self.app.quest is not rec['quest']
-                    or self.current != ('node', rec['nid'])):
-            self._voice_stop()               # left the line: keep the take
+                    or self.current != ('node', rec['nid'])
+                    or not self._line_present(rec)):
+            # left the line: keep the take (no undo step, refresh may run
+            # inside undo/redo itself)
+            self._voice_stop(undo=False)
         self._clear()
         self._undo_for = None
         self.text_widget = None
@@ -1054,15 +1076,25 @@ class Inspector(ttk.Frame):
             pb.pack(side='right')
             theme.Tooltip(pb, t('voice.play'))
         elif line.get('voice'):
-            ttk.Label(self.body, text=t('voice.missing',
-                                        name=line['voice']),
+            row = ttk.Frame(self.body, style='Panel.TFrame')
+            row.pack(fill='x', pady=(2, 0))
+            ub = ttk.Button(row, text='×', width=2, command=lambda: (
+                self._edit(self, lambda: line.pop('voice', None), nid,
+                           redraw=False), self.refresh()))
+            ub.pack(side='right', anchor='n')
+            theme.Tooltip(ub, t('voice.unlink'))
+            ttk.Label(row, text=t('voice.missing', name=line['voice']),
                       foreground=theme.ERR, background=theme.PANEL,
-                      wraplength=260).pack(anchor='w')
+                      wraplength=230).pack(side='left', anchor='w')
 
     def _voice_start(self, nid, line, index):
         from . import recorder
         app = self.app
         if getattr(app, 'voice_rec', None):
+            return
+        sw = getattr(app, 'settings_test_running', None)
+        if sw and sw():
+            app.set_info(t('voice.busy'), 'StatusErr.TLabel')
             return
         if not app.project or not app.project.path:
             if not messagebox.askyesno(t('voice.title'), t('voice.save'),
@@ -1085,11 +1117,12 @@ class Inspector(ttk.Frame):
                                  parent=app.root)
             return
         app.voice_rec = {'rec': rc, 'key': (id(line), nid), 'line': line,
-                         'nid': nid, 'index': index, 'quest': app.quest}
+                         'nid': nid, 'index': index, 'quest': app.quest,
+                         'project': app.project}
         app.set_info(t('voice.hint'), 'Status.TLabel')
         self.refresh()
 
-    def _voice_stop(self):
+    def _voice_stop(self, undo=True):
         """End the running recording and attach it to its line. Does not
         rebuild the panel (callers do)."""
         from . import recorder
@@ -1107,15 +1140,37 @@ class Inspector(ttk.Frame):
         if len(pcm) < recorder.RATE // 5:       # under 0.1 s: nothing
             app.set_info(t('voice.short'), 'Status.TLabel')
             return
-        line, nid = r['line'], r['nid']
-        name = recorder.voice_name(r['quest'], nid, r['index'])
-        path = os.path.join(recorder.voice_dir(app.project), name)
-        recorder.write_wav(path, pcm)
-        app.push_undo('voice')
-        line['voice'] = name
-        app.changed(from_inspector=True)
+        nid, project = r['nid'], r['project']
+        line = self._rec_line(r)
+        if line is None:
+            app.set_info(t('voice.gone'), 'StatusErr.TLabel')
+            return
+        name = recorder.take_name(project, self._all_quests(project),
+                                  r['quest'], nid, r['index'], line)
+        path = os.path.join(recorder.voice_dir(project), name)
+        try:
+            recorder.write_wav(path, pcm)
+        except OSError as e:
+            messagebox.showerror(t('voice.title'), t('voice.error', err=e),
+                                 parent=app.root)
+            return
+        if app.project is not project:
+            return                       # project closed meanwhile
+        if undo and app.quest is r['quest']:
+            app.push_undo('voice')
+            line['voice'] = name
+            app.changed(from_inspector=True)
+        else:
+            line['voice'] = name
+            app.mark_dirty()
         app.set_info(t('voice.saved', s=len(pcm) / (recorder.RATE * 2),
                        path=path), 'StatusOk.TLabel')
+
+    def _all_quests(self, project):
+        qs = list(project.quests) if project else []
+        qs += [q for q in getattr(self.app, 'mod_quests', {}).values()
+               if q not in qs]
+        return qs
 
     def _voice_delete(self, nid, line, path):
         from . import recorder
@@ -1123,10 +1178,13 @@ class Inspector(ttk.Frame):
                                    parent=self.app.root):
             return
         recorder.stop_playing()
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+        # a copied node shares the file: keep it for the other line
+        if line.get('voice') not in recorder.voice_refs(
+                self._all_quests(self.app.project), skip=line):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
         self._edit(self, lambda: line.pop('voice', None), nid, redraw=False)
         self.refresh()
 

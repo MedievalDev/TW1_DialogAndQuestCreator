@@ -793,6 +793,10 @@ class App:
     def show_settings(self):
         SettingsWindow.show(self)
 
+    def settings_test_running(self):
+        w = SettingsWindow._open
+        return bool(w and w.rec is not None)
+
     def show_map(self, **kw):
         """Interactive map (update 5c), see mapwin.MapWindow.show."""
         from . import mapwin
@@ -2132,7 +2136,13 @@ class App:
     @staticmethod
     def _selftest_mics():
         from . import recorder
-        return recorder.input_devices()
+        try:
+            import winsound  # noqa: F401  (playback in the frozen exe)
+            import wave  # noqa: F401
+            sound = 'ok'
+        except ImportError as e:
+            sound = f'missing:{e.name}'
+        return f'{recorder.input_devices()}/sound={sound}'
 
     @staticmethod
     def _selftest_https():
@@ -2198,6 +2208,8 @@ class App:
         return True
 
     def _set_project(self, project):
+        if getattr(self, 'voice_rec', None):
+            self.inspector._voice_stop(undo=False)
         self.project = project
         self.clipboard = None
         self.preview = None
@@ -2267,6 +2279,8 @@ class App:
         return self._write_project(path)
 
     def _write_project(self, path):
+        from . import recorder
+        old_dir = recorder.voice_dir(self.project)
         try:
             self.project.save(path)
         except OSError as e:
@@ -2276,6 +2290,13 @@ class App:
             return False
         self.cfg.add_recent(path)
         self.cfg.save()
+        try:
+            recorder.copy_takes(old_dir, recorder.voice_dir(self.project),
+                                recorder.voice_refs(self.project.quests))
+        except OSError as e:
+            messagebox.showwarning(t('voice.title'),
+                                   t('voice.copy.error', err=e),
+                                   parent=self.root)
         self._update_status()
         return True
 
@@ -2293,6 +2314,8 @@ class App:
         if code == get_lang():
             self.lang_var.set(code)
             return
+        if getattr(self, 'voice_rec', None):
+            self.inspector._voice_stop(undo=False)
         self.cfg.set('lang', code)
         self.cfg.set('window', self.root.geometry())
         self.cfg.save()
@@ -2394,7 +2417,7 @@ class App:
 
     def quit(self):
         if getattr(self, 'voice_rec', None):
-            self.inspector._voice_stop()      # keep the running take
+            self.inspector._voice_stop(undo=False)   # keep the running take
         if not self._confirm_discard():
             return
         try:
@@ -3191,6 +3214,9 @@ class SettingsWindow:
         from . import recorder
         import tempfile
         if self.rec is not None:
+            return
+        if getattr(self.app, 'voice_rec', None):
+            self.test_lbl.configure(text=t('voice.busy'))
             return
         rc = recorder.Recorder(device=self._device())
         try:

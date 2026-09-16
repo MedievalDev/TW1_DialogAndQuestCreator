@@ -952,6 +952,10 @@ _DE = {
     'settings.game': 'Spielordner',
     'settings.change': 'Aendern ...',
     'voice.record.tip': 'Diese Zeile aufnehmen',
+    'voice.busy': 'Es laeuft schon eine Aufnahme.',
+    'voice.gone': 'Aufnahme verworfen: die Zeile gibt es nicht mehr.',
+    'voice.copy.error': 'Aufnahmen konnten nicht mitkopiert werden: {err}',
+    'voice.unlink': 'Verknuepfung entfernen',
 }
 
 _EN = {
@@ -1873,6 +1877,10 @@ _EN = {
     'settings.game': 'Game folder',
     'settings.change': 'Change ...',
     'voice.record.tip': 'Record this line',
+    'voice.busy': 'A recording is already running.',
+    'voice.gone': 'Recording discarded: the line no longer exists.',
+    'voice.copy.error': 'Could not copy the recordings along: {err}',
+    'voice.unlink': 'Remove link',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

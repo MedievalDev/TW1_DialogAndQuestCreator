@@ -278,6 +278,54 @@ def voice_name(quest, nid, index):
     return f'Q{quest.id}_{safe}_{index}.wav'
 
 
+def voice_refs(quests, skip=None):
+    """File names referenced by dialog lines (``skip``: one line object
+    left out)."""
+    out = set()
+    for q in quests:
+        for node in q.graph.get('nodes', {}).values():
+            for ln in node.get('lines') or []:
+                if ln is not skip and ln.get('voice'):
+                    out.add(ln['voice'])
+    return out
+
+
+def take_name(project, quests, quest, nid, index, line):
+    """File name for a new take of ``line``: its own file again when no
+    other line uses it, else ``Q<id>_<node>_<line>.wav`` or, when that one
+    is taken (lines moved, node copied) or already on disk, with ``_2``,
+    ``_3`` ... so no other take gets overwritten."""
+    others = voice_refs(quests, skip=line)
+    own = line.get('voice')
+    if own and own not in others:
+        return own
+    d = voice_dir(project)
+    base = voice_name(quest, nid, index)[:-4]
+    name, n = base + '.wav', 1
+    while name in others or (d and os.path.exists(os.path.join(d, name))):
+        n += 1
+        name = f'{base}_{n}.wav'
+    return name
+
+
+def copy_takes(old_dir, new_dir, names):
+    """Save as: bring the referenced takes along. Returns the count."""
+    import shutil
+    if not old_dir or not new_dir or os.path.normcase(
+            os.path.abspath(old_dir)) == os.path.normcase(
+            os.path.abspath(new_dir)):
+        return 0
+    n = 0
+    for name in sorted(names):
+        src = os.path.join(old_dir, name)
+        dst = os.path.join(new_dir, name)
+        if os.path.isfile(src) and not os.path.exists(dst):
+            os.makedirs(new_dir, exist_ok=True)
+            shutil.copy2(src, dst)
+            n += 1
+    return n
+
+
 def voice_path(project, line):
     d = voice_dir(project)
     if not d or not line.get('voice'):
