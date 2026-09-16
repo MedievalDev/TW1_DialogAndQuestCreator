@@ -306,7 +306,7 @@ class Timeline(ttk.Frame):
         for gi, g in enumerate(sections):
             label = self.group_name(g)
             c.create_text(x, 3, anchor='nw', fill=theme.group_color(g),
-                          font=theme.FONT_BOLD,
+                          font=theme.FONT_BOLD, tags=('glabel',),
                           text=t('tl.groupcount', name=label,
                                  n=len(by_group[g])))
             for e in by_group[g]:
@@ -344,6 +344,12 @@ class Timeline(ttk.Frame):
                                   top - min(14, abs(tx - sx) / 20 + 4), tx,
                                   top, smooth=True, fill=theme.GOLD_HI,
                                   width=1, arrow='last', arrowshape=(5, 6, 2))
+        # link arcs run above the cards: keep the group labels readable
+        for item in c.find_withtag('glabel'):
+            bx1, by1, bx2, by2 = c.bbox(item)
+            c.create_rectangle(bx1 - 3, by1, bx2 + 3, by2, fill=theme.CANVAS_BG,
+                               outline='')
+            c.tag_raise(item)
         c.configure(scrollregion=(0, 0, bx + 140, y + h + 6))
         n_mods = len([e for e in mod_pool
                       if sel_group is None or e['group'] == sel_group])
@@ -374,7 +380,7 @@ class Timeline(ttk.Frame):
         names = list(by_mod)
         for mi, name in enumerate(names):
             c.create_text(x, 3, anchor='nw', fill=theme.MOD,
-                          font=theme.FONT_BOLD,
+                          font=theme.FONT_BOLD, tags=('glabel',),
                           text=theme.MOD_DOT + t('tl.modcount', name=name,
                                                  n=len(by_mod[name])))
             for e in by_mod[name]:

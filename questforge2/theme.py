@@ -112,6 +112,15 @@ def apply_dark_theme(root):
                     borderwidth=1, focusthickness=1, focuscolor=LINE)
     style.map('TButton', background=[('pressed', SEL), ('active', '#282219')],
               foreground=[('disabled', '#5c564c')])
+    # the Menubutton of the timeline ("Sources"): clam paints it near white
+    # on hover, the text vanished (Marco 2026-09-16)
+    style.configure('TMenubutton', background=PANEL, foreground=INK,
+                    arrowcolor=MUT, padding=(10, 4), relief='flat',
+                    borderwidth=1)
+    style.map('TMenubutton',
+              background=[('pressed', SEL), ('active', '#282219')],
+              foreground=[('active', GOLD_HI), ('disabled', '#5c564c')],
+              arrowcolor=[('active', GOLD_HI)])
     style.configure('Accent.TButton', background=GOLD, foreground='#17130b')
     style.map('Accent.TButton',
               background=[('pressed', '#b88d3c'), ('active', GOLD_HI),
