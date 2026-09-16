@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.3.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.4.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1330,6 +1330,29 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       Debug-Runde 2 (Vorlage, Undo, Spielquest uebernehmen, Projekt
       speichern/laden byte-gleich, Export nur Dateien, Karte/Guide/Mods/
       Questgrenze/Gegnerstufen oeffnen und schliessen): keine Fehler.
+69. Update-Pruefung und Selbst-Update (Version 3.4.0; 3.3.2 davor: Hoehe
+    der Zeitleiste aus dem Bedarf der Karten statt fest 110 px):
+    - `questforge2/updater.py`: GitHub-API `releases/latest` im Thread beim
+      Start (1,5 s nach dem Fenster, nicht im Selbsttest, abschaltbar),
+      Versionsvergleich als Tupel, Asset `TW1QuestCreator.exe` mit `digest`
+      (sha256). `UpdateWindow` in app.py: Notes, Jetzt/Spaeter/Ueberspringen
+      (`update_skip` in der Konfig), Hilfe-Menue "Nach Updates suchen".
+    - Download nach `<exe>.new` (`.part` waehrend des Ladens), SHA-256 gegen
+      den Digest; ohne Digest oder bei Abweichung keine Installation.
+    - Tausch per Batch im Temp-Ordner. Gemessen 16.09.2026: Windows erlaubt
+      das Umbenennen der laufenden Exe; ein Batch, der nur auf die Datei
+      wartet, tauschte sofort und startete eine zweite Instanz. Jetzt wartet
+      er auf die Prozess-ID des Tools (bei PyInstaller-onefile der
+      Kindprozess, `os.getpid()` im Tool), mit vollen Pfaden zu
+      `tasklist.exe`/`find.exe` (im Git-PATH war `find` das Unix-find) und nur
+      `CREATE_NO_WINDOW` (mit `DETACHED_PROCESS` liefen tasklist/find nicht).
+      Echter Test mit der gebauten Exe: waehrend sie lief unveraendert, nach
+      dem Ende getauscht (Hash = Release-Digest), neue Version gestartet,
+      `.old` erhalten, Batch geloescht.
+    - Build: `http` und `email` standen in den Excludes der Spec, `urllib`
+      braucht sie; der erste Test-Build startete nicht. Excludes korrigiert,
+      `urllib` wird erst beim Pruefen importiert, der Selbsttest meldet
+      `https=ok`.
 
 Offen:
 

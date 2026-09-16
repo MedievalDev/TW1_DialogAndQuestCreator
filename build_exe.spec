@@ -22,7 +22,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=['numpy', 'PIL', 'matplotlib', 'pandas', 'scipy', 'IPython',
               'pydoc', 'unittest', 'test', 'lib2to3', 'sqlite3',
-              'xml', 'xmlrpc', 'http', 'email', 'multiprocessing',
+              'xmlrpc', 'multiprocessing',
               'questforge2.tests', 'quest_creator_gui', 'questforge',
               'mod_manager_gui', 'voice_index'],
     win_no_prefer_redirects=False,

@@ -474,6 +474,17 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Tabellen (Aufgaben, Aktionen, Marker-Sorten, Parteien, Gilden, AOQ,
   Animationen) werden aus denselben Code-Tabellen erzeugt wie die
   Auswahllisten, mit Quelle und Status "belegt" oder "ungeprüft".
+- **Updates:** Beim Start fragt das Tool (abschaltbar unter Hilfe) die GitHub-API
+  nach dem neuesten Release. Ist es neuer, zeigt ein Fenster die Release Notes:
+  Jetzt aktualisieren, Später, Diese Version überspringen. "Jetzt
+  aktualisieren" lädt die Exe neben die laufende (`.new`), prüft die
+  SHA-256-Prüfsumme, die GitHub zum Asset speichert (ohne Prüfsumme oder bei
+  Abweichung wird nichts installiert), schließt das Tool nach Rückfrage bei
+  ungespeicherten Änderungen, und ein kleiner Batch tauscht die Exe, sobald
+  der Prozess beendet ist, und startet die neue Version. Die alte Exe bleibt
+  bis zum nächsten Start als `.old`. Aus dem Quelltext gestartet öffnet der
+  Knopf nur die Release-Seite. Immer neueste Version:
+  https://github.com/MedievalDev/TW1_DialogAndQuestCreator/releases/latest
 - **Neue Quest:** Knopf im leeren Graph, in der Kopfleiste und im Quest-Menü;
   leer, aus einer mitgelieferten Vorlage (Bring-Quest,
   Töte-X, Sprich-mit-NPC, Questkette mit Tor) oder als Kopie einer

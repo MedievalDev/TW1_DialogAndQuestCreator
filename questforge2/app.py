@@ -15,6 +15,7 @@ import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
 from . import (APP_NAME, VERSION, data, enemylevel, export, model, mods,
+               updater,
                modswin, questlimit, retail, theme, validate)
 from .graph import GraphView
 from .guide import Coach, show_docs
@@ -349,6 +350,15 @@ class App:
         for key, url in LINKS:
             m.add_command(label=f'{t(key)}  ({url})',
                           command=lambda u=url: webbrowser.open(u))
+        m.add_separator()
+        m.add_command(label=t('update.menu'),
+                      command=lambda: self.check_updates(manual=True))
+        self.update_var = tk.BooleanVar(
+            value=bool(self.cfg.get('update_check', True)))
+        m.add_checkbutton(label=t('update.onstart'), variable=self.update_var,
+                          command=self._toggle_update_check)
+        m.add_command(label=t('update.page'),
+                      command=lambda: webbrowser.open(updater.LATEST_PAGE))
         m.add_separator()
         m.add_command(label=t('help.about'), command=self.show_about)
 
@@ -1927,7 +1937,43 @@ class App:
 
     # -- start-up -----------------------------------------------------------
 
+    def _toggle_update_check(self):
+        self.cfg.set('update_check', bool(self.update_var.get()))
+        self.cfg.save()
+
+    def check_updates(self, manual=False):
+        """Ask GitHub for the latest release (thread) and tell the user when
+        it is newer. On start silently, from the menu with an answer."""
+        results = []
+        updater.check_async(lambda info, err: results.append((info, err)))
+
+        def poll():
+            if not results:
+                self.root.after(200, poll)
+                return
+            info, err = results[0]
+            if err is not None or info is None:
+                if manual:
+                    messagebox.showwarning(t('update.title'), t(
+                        'update.error', err=err), parent=self.root)
+                return
+            if not updater.is_newer(info['tag']):
+                if manual:
+                    messagebox.showinfo(t('update.title'), t(
+                        'update.current', version=VERSION), parent=self.root)
+                return
+            if not manual and self.cfg.get('update_skip') == info['tag']:
+                return
+            self.set_info(t('update.status', version=info['version']),
+                          'StatusOk.TLabel')
+            UpdateWindow(self, info)
+        self.root.after(200, poll)
+
     def _startup(self):
+        updater.cleanup_old()
+        if not self.selftest and not self._carry and \
+                self.cfg.get('update_check', True):
+            self.root.after(1500, self.check_updates)
         if self._carry and self.index is not None:
             self._update_status()
             self._index_ready(self.index, True, 0.0)
@@ -2062,6 +2108,7 @@ class App:
                             f'templates={len(data.builtin_templates())} '
                             f'maptiles={len(mods.retail_markers(self.cfg.get("game_dir")))} '
                             f'minimaps={self._selftest_minimap()} '
+                            f'https={self._selftest_https()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2076,6 +2123,18 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    @staticmethod
+    def _selftest_https():
+        """The update check needs these in the frozen build (3.4.0: the
+        spec excluded http and email, the exe did not start)."""
+        try:
+            import http.client  # noqa: F401
+            import ssl  # noqa: F401
+            import urllib.request  # noqa: F401
+            return 'ok'
+        except ImportError as e:
+            return f'missing:{e.name}'
 
     def _selftest_minimap(self):
         """Decode one minimap tile in a temp folder (frozen build check)."""
@@ -2740,6 +2799,123 @@ class EnemyLevelWindow:
         except Exception as e:           # shown in the log
             self._put(t('limit.failed', e=e), 'err')
         self.refresh()
+
+
+class UpdateWindow:
+    """A newer release exists: notes, update now, later, skip."""
+
+    def __init__(self, app, info):
+        self.app = app
+        self.info = info
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('update.title'))
+        self.win.transient(app.root)
+        self.win.geometry('620x480')
+        theme.dark_titlebar(self.win)
+        self.win.bind('<Escape>', lambda e: self.win.destroy())
+        f = ttk.Frame(self.win, padding=16)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('update.head', version=info['version']),
+                  style='Brand.TLabel').pack(anchor='w')
+        ttk.Label(f, text=t('update.sub', current=VERSION,
+                            version=info['version']),
+                  style='Muted.TLabel', wraplength=580, justify='left'
+                  ).pack(anchor='w', pady=(2, 8))
+        txt = tk.Text(f, wrap='word', font=theme.FONT, height=12)
+        txt.pack(fill='both', expand=True)
+        txt.insert('1.0', info['notes'].split(NL + '---')[0].strip()
+                   or info['page'])
+        txt.configure(state='disabled')
+        self.status = ttk.Label(f, text='', style='Muted.TLabel',
+                                wraplength=580, justify='left')
+        self.status.pack(anchor='w', pady=(8, 0))
+        self.bar = ttk.Progressbar(f, maximum=100)
+        btns = ttk.Frame(f)
+        btns.pack(fill='x', side='bottom', pady=(10, 0))
+        ttk.Button(btns, text=t('update.later'), command=self.win.destroy
+                   ).pack(side='right')
+        ttk.Button(btns, text=t('update.skip'), command=self.skip
+                   ).pack(side='right', padx=6)
+        self.exe = updater.frozen_exe()
+        self.go = ttk.Button(btns, text=t('update.now') if self.exe
+                             else t('update.open'),
+                             style='Accent.TButton', command=self.start)
+        self.go.pack(side='right')
+        ttk.Button(btns, text=t('update.notes'),
+                   command=lambda: webbrowser.open(info['page'])
+                   ).pack(side='left')
+        if self.exe and not info.get('sha256'):
+            self.status.configure(text=t('update.nodigest'))
+
+    def skip(self):
+        self.app.cfg.set('update_skip', self.info['tag'])
+        self.app.cfg.save()
+        self.win.destroy()
+
+    def start(self):
+        if not self.exe:
+            webbrowser.open(self.info['page'])
+            self.win.destroy()
+            return
+        if not self.info.get('sha256') or not self.info.get('url'):
+            webbrowser.open(self.info['page'])
+            return
+        if not self.app._confirm_discard():
+            return
+        self.go.state(['disabled'])
+        self.bar.pack(fill='x', pady=(6, 0), before=self.status)
+        self.status.configure(text=t('update.loading'))
+        new = self.exe + '.new'
+        state = {}
+
+        def progress(done, total):
+            state['p'] = (done, total)
+
+        def work():
+            try:
+                updater.download(self.info, new, progress)
+                state['ok'] = True
+            except Exception as e:       # shown in the window
+                state['err'] = e
+        threading.Thread(target=work, daemon=True).start()
+
+        def poll():
+            try:
+                if not self.win.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            done, total = state.get('p', (0, 0))
+            if total:
+                self.bar.configure(value=100 * done / total)
+                self.status.configure(text=t(
+                    'update.progress', done=done // 1048576,
+                    total=max(1, total // 1048576)))
+            if 'err' in state:
+                self.go.state(['!disabled'])
+                self.status.configure(text=t('update.failed',
+                                             err=state['err']))
+                return
+            if not state.get('ok'):
+                self.win.after(150, poll)
+                return
+            self.status.configure(text=t('update.restart'))
+            try:
+                updater.start_swap(self.exe, new)
+            except OSError as e:
+                self.status.configure(text=t('update.failed', err=e))
+                self.go.state(['!disabled'])
+                return
+            self.win.after(600, self._close_app)
+        poll()
+
+    def _close_app(self):
+        app = self.app
+        try:
+            app.cfg.set('window', app.root.geometry())
+            app.cfg.save()
+        finally:
+            app.root.destroy()
 
 
 class NewQuestDialog:
