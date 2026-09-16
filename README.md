@@ -440,7 +440,9 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
 ### 13.2 Bedienung in Kürze
 
 - **Zeitleiste** (oben): alle Quests als Karten in Kettenreihenfolge, nach
-  Tagebuchgruppen getrennt. Klick öffnet eine Quest. Spielquests sind erst
+  Tagebuchgruppen getrennt. Jede Questreihe hat ihre eigene Farbe, über den
+  Karten liegt eine Reiterleiste mit allen Questreihen und ihrer Anzahl, und
+  die Gruppenüberschrift nennt die Zahl der Quests darin. Klick öffnet eine Quest. Spielquests sind erst
   eine Ansicht und werden bei der ersten Änderung nach Rückfrage Teil des
   Projekts. Rechtsklick: duplizieren als eigene Quest, nur diese Quest
   exportieren, als Text anzeigen.

@@ -605,6 +605,9 @@ _DE = {
     'tl.enemylevels': 'Gegnerstufen',
     'tip.limit': 'Wieviele Quest-IDs es gibt: 400 im Original, 600 mit der Grenz-Mod.',
     'tip.enemylevels': 'Stufen aller Tiere und Gegner der Welt einstellen.',
+    'tl.groupcount': '{name}  ({n} Quests)',
+    'tl.nogroup': 'Ohne Gruppe {g}',
+    'tl.alltab': 'Alle',
 }
 
 _EN = {
@@ -1179,6 +1182,9 @@ _EN = {
     'tl.enemylevels': 'Enemy levels',
     'tip.limit': 'How many quest ids exist: 400 in the original, 600 with the limit mod.',
     'tip.enemylevels': 'Set the levels of all animals and enemies.',
+    'tl.groupcount': '{name}  ({n} quests)',
+    'tl.nogroup': 'No group {g}',
+    'tl.alltab': 'All',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

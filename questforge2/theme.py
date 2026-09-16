@@ -30,6 +30,23 @@ ENTRY_COLOR = '#43b563'
 COMMENT_COLOR = '#4a453d'
 DIM = '#5c564c'
 SCROLL_THUMB = '#7a7061'     # scrollbar thumb, readable on BG
+# one colour per journal group so the quest lines are told apart
+CARD_COLORS = ('#d2a044', '#6ca0e0', '#7fbf7f', '#e06c60', '#c090e0',
+               '#5fc7c7', '#e0a050', '#a0b060', '#d4796b', '#8fa8d8',
+               '#c7a86b', '#9a8fe0')
+
+
+def mix(colour, other, f):
+    """Blend two #rrggbb colours, f = share of ``colour``."""
+    a = [int(colour[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(other[i:i + 2], 16) for i in (1, 3, 5)]
+    return '#%02x%02x%02x' % tuple(int(round(x * f + y * (1 - f)))
+                                   for x, y in zip(a, b))
+
+
+def group_color(group):
+    """Colour of a journal group: every quest line gets its own."""
+    return CARD_COLORS[int(group) % len(CARD_COLORS)]
 # One colour per conversation level (state band on the node header).
 STATE_COLORS = {'first': '#d2a044', 'known': '#b08850', 'running': '#6ca0e0',
                 'taken': '#5a88c0', 'solved': '#43b563', 'closed': '#9a938a',

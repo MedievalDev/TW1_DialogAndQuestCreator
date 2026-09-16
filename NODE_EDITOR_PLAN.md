@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.6.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.7.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1153,6 +1153,17 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       Wert.
     - Statusleiste wird vor den Panels gepackt, sonst schnitt sie ein
       kleines Fenster ab (bei Marco war sie nur im Vollbild zu sehen).
+61. Zeitleiste lesbarer (Version 2.7.0, Marco 2026-09-16):
+    - Jede Tagebuchgruppe hat eine eigene Farbe (`theme.group_color`, zwoelf
+      Farben reihum, `theme.mix` blendet sie fuer Fuellung und Reiter).
+      Karte: farbiger Balken links, farbiger Rahmen, leicht getoente
+      Fuellung; eigene und geaenderte Quests behalten den goldenen Rahmen.
+    - Die Gruppenueberschrift zeigt jetzt die Zahl der Quests statt der
+      Gruppennummer (die Klammer wurde als Anzahl gelesen).
+    - Neue Reiterleiste ueber den Karten: ein Reiter je Questreihe mit
+      Anzahl plus "Alle", in Kettenreihenfolge, unabhaengig vom gewaehlten
+      Filter, waagerecht scrollbar; Klick setzt den Gruppenfilter.
+    - Kleine Karten schneiden den Titel einzeilig ab statt umzubrechen.
 
 Offen:
 

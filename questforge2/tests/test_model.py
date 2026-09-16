@@ -84,6 +84,19 @@ class ModelRoundTrip(unittest.TestCase):
         self.assertEqual(q.node_count(), 0)
 
 
+class Colours(unittest.TestCase):
+    """One colour per journal group in the timeline (2.7.0)."""
+
+    def test_group_colour(self):
+        from questforge2 import theme
+        self.assertEqual(theme.group_color(3), theme.group_color(3))
+        self.assertNotEqual(theme.group_color(3), theme.group_color(4))
+        self.assertTrue(theme.group_color(999).startswith('#'))
+        self.assertEqual(theme.mix('#000000', '#ffffff', 0.5), '#808080')
+        self.assertEqual(theme.mix('#d2a044', '#000000', 1.0), '#d2a044')
+        self.assertEqual(theme.mix('#d2a044', '#000000', 0.0), '#000000')
+
+
 class Parties(unittest.TestCase):
     """Party numbers of the SDK in the picker (Discord question, 2.5.1)."""
 

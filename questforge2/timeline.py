@@ -14,6 +14,7 @@ from . import model, theme
 from .i18n import t
 
 SIZES = {'small': (150, 42), 'large': (200, 96)}
+TAB_H = 22
 GAP = 8
 SECTION_GAP = 26
 LABEL_H = 18
@@ -97,6 +98,13 @@ class Timeline(ttk.Frame):
         theme.Tooltip(self.limit_btn, t('tip.limit'))
         self.count = ttk.Label(bar, text='', style='PanelMuted.TLabel')
         self.count.pack(side='right', padx=6)
+        self.tabs = tk.Canvas(self, bg=theme.PANEL, highlightthickness=0,
+                              height=TAB_H)
+        self.tabs.pack(fill='x')
+        self.tabs.bind('<Button-1>', self._tab_click)
+        self.tabs.bind('<MouseWheel>', lambda e: self.tabs.xview_scroll(
+            -1 if e.delta > 0 else 1, 'units'))
+        self.tab_hits = []          # (x1, x2, group or None)
         self.canvas = tk.Canvas(self, bg=theme.CANVAS_BG, highlightthickness=0,
                                 height=SIZES['small'][1] + LABEL_H + 18)
         self.sb = ttk.Scrollbar(self, orient='horizontal',
@@ -192,17 +200,17 @@ class Timeline(ttk.Frame):
         own_only = self.own.get()
         order = chain_order(list(entries.values()), edges)
         pos = {qid: i for i, qid in enumerate(order)}
-        shown = []
+        pool = []                 # everything but the group filter: the tabs
         for qid in order:
             e = entries[qid]
             if own_only and e['kind'] == 'game':
                 continue
-            if sel_group is not None and e['group'] != sel_group:
-                continue
             if q and q not in (f"q_{qid} {qid} {e['title']} {e['giver']}"
                                .lower()):
                 continue
-            shown.append(e)
+            pool.append(e)
+        shown = [e for e in pool
+                 if sel_group is None or e['group'] == sel_group]
         # sections: groups ordered by their first quest in chain order
         first = {}
         for e in shown:
@@ -215,10 +223,11 @@ class Timeline(ttk.Frame):
         x, y = 8, LABEL_H + 4
         cur = self.app.quest.id if self.app.quest else None
         for gi, g in enumerate(sections):
-            label = idx.groups.get(str(g), '') if idx else ''
-            c.create_text(x, 3, anchor='nw', fill=theme.GOLD,
-                          font=theme.FONT_SMALL,
-                          text=f'{label}  ({g})' if label else f'({g})')
+            label = self.group_name(g)
+            c.create_text(x, 3, anchor='nw', fill=theme.group_color(g),
+                          font=theme.FONT_BOLD,
+                          text=t('tl.groupcount', name=label,
+                                 n=len(by_group[g])))
             for e in by_group[g]:
                 self._card(e, x, y, w, h, e['qid'] == cur)
                 self.cards[e['qid']] = (x, y, x + w, y + h)
@@ -227,6 +236,13 @@ class Timeline(ttk.Frame):
                 sx = x + SECTION_GAP / 2 - GAP / 2
                 c.create_line(sx, 2, sx, y + h + 2, fill=theme.LINE)
                 x += SECTION_GAP
+        tab_first, tab_counts = {}, {}
+        for e in pool:
+            tab_first.setdefault(e['group'], pos[e['qid']])
+            tab_counts[e['group']] = tab_counts.get(e['group'], 0) + 1
+        self._draw_tabs(tab_counts,
+                        sorted(tab_first, key=lambda g: tab_first[g]),
+                        len(pool))
         bx = x + 4
         c.create_rectangle(bx, y, bx + 120, y + h, outline=theme.GOLD,
                            dash=(4, 3), tags=('newcard',))
@@ -250,30 +266,92 @@ class Timeline(ttk.Frame):
         c = self.canvas
         tag = ('card', f'q:{e["qid"]}')
         kind = e['kind']
-        outline = {'own': theme.GOLD, 'edited': theme.GOLD}.get(kind, theme.LINE)
+        colour = theme.group_color(e['group'])
+        # own and changed quests keep their gold frame, the rest gets the
+        # colour of its quest line (Marco 2026-09-16)
+        outline = {'own': theme.GOLD, 'edited': theme.GOLD}.get(kind, colour)
         dash = (5, 3) if kind == 'edited' else ''
-        fill = theme.SEL if current else theme.FIELD
+        fill = (theme.mix(colour, theme.SEL, 0.35) if current
+                else theme.mix(colour, theme.FIELD, 0.12))
         c.create_rectangle(x, y, x + w, y + h, fill=fill, outline=outline,
                            width=2 if current or kind != 'game' else 1,
                            dash=dash, tags=tag)
+        c.create_rectangle(x, y, x + 5, y + h, fill=colour, outline='',
+                           tags=tag)
         font_b, font_s = theme.FONT_BOLD, theme.FONT_SMALL
         title = e['title'] or '-'
-        c.create_text(x + 6, y + 4, anchor='nw', text=f"Q_{e['qid']}",
-                      fill=theme.GOLD if kind != 'game' else theme.MUT,
-                      font=font_s, tags=tag)
+        c.create_text(x + 10, y + 4, anchor='nw', text=f"Q_{e['qid']}",
+                      fill=colour, font=font_s, tags=tag)
         if e['source'] not in ('retail', 'project'):
             c.create_text(x + w - 5, y + 4, anchor='ne', text=e['source'][:12],
                           fill=theme.MUT, font=font_s, tags=tag)
-        c.create_text(x + 6, y + 20, anchor='nw', width=w - 12,
-                      text=_clip(title, 26 if self.size == 'small' else 34),
-                      fill=theme.INK, font=font_b if self.size == 'large'
-                      else theme.FONT, tags=tag)
+        small = self.size == 'small'
+        # small cards are 42 px high: one line only, clipped, never wrapped
+        c.create_text(x + 10, y + 20, anchor='nw',
+                      width=0 if small else w - 16,
+                      text=_clip(title, 22 if small else 34),
+                      fill=theme.INK,
+                      font=theme.FONT if small else font_b, tags=tag)
         if self.size == 'large':
             rows = [e['giver'], e['fc'], t('tl.lines', n=e['lines'])]
             for i, r in enumerate(rows):
-                c.create_text(x + 6, y + 42 + i * 16, anchor='nw',
+                c.create_text(x + 10, y + 42 + i * 16, anchor='nw',
                               text=_clip(r, 34), fill=theme.MUT, font=font_s,
                               tags=tag)
+
+    def group_name(self, g):
+        idx = self.app.index
+        name = idx.groups.get(str(g), '') if idx else ''
+        return name or t('tl.nogroup', g=g)
+
+    def _draw_tabs(self, counts, sections, total):
+        """One tab per quest line (journal group) plus "all", left of the
+        cards and in the same order as the sections below."""
+        c = self.tabs
+        c.delete('all')
+        self.tab_hits = []
+        sel = self.selected_group()
+        x = 8
+        tabs = [(None, t('tl.alltab'), total)]
+        for g in sections:
+            tabs.append((g, self.group_name(g), counts.get(g, 0)))
+        for g, name, n in tabs:
+            text = f'{name}  {n}'
+            active = (g == sel)
+            gcol = theme.GOLD if g is None else theme.group_color(g)
+            colour = gcol if active else theme.mix(gcol, theme.MUT, 0.55)
+            item = c.create_text(x + 10, TAB_H / 2, anchor='w', text=text,
+                                 fill=colour,
+                                 font=theme.FONT_BOLD if active
+                                 else theme.FONT_SMALL)
+            x1, _y1, x2, _y2 = c.bbox(item)
+            if active:
+                c.create_line(x, TAB_H - 2, x2 + 10, TAB_H - 2,
+                              fill=gcol, width=2)
+            self.tab_hits.append((x, x2 + 10, g))
+            x = x2 + 22
+        c.configure(scrollregion=(0, 0, x, TAB_H))
+
+    def selected_group(self):
+        if self.group.get() == t('tl.allgroups'):
+            return None
+        try:
+            return int(self.group.get().split()[0])
+        except (ValueError, IndexError):
+            return None
+
+    def _tab_click(self, ev):
+        x = self.tabs.canvasx(ev.x)
+        for x1, x2, g in self.tab_hits:
+            if x1 <= x <= x2:
+                if g is None:
+                    self.group.set(t('tl.allgroups'))
+                else:
+                    idx = self.app.index
+                    name = idx.groups.get(str(g), '') if idx else ''
+                    self.group.set(f'{g}  {name}'.rstrip())
+                self.refresh()
+                return
 
     # -- interaction ---------------------------------------------------------------
 
