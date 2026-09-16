@@ -457,7 +457,86 @@ cells and every marker of that kind, read from the maps of the game
         'Quelle: SDK PQuestLoader.ech (Argumente), PEnums.ech (Namen), '
         'gegen die Karten gemessen (Kapitel Mods).',
         'Source: SDK PQuestLoader.ech (arguments), PEnums.ech (names), '
-        'measured against the maps (chapter Mods).')
+        'measured against the maps (chapter Mods).') + _l("""
+
+## Die Karte
+
+**Karte** oben in der Zeitleiste (oder Ansicht > Karte) oeffnet die Weltkarte,
+zusammengesetzt aus den Minimaps des Spiels. Das Fenster bleibt offen, waehrend
+du weiterarbeitest.
+
+- **Bedienung:** Mausrad zoomt (64 bis 1024 Pixel je Tile), Ziehen verschiebt,
+  Klick auf einen Punkt waehlt ihn in der Liste rechts, Klick in der Liste
+  springt auf der Karte hin. Unten steht, auf welchem Tile und welchen
+  Koordinaten der Mauszeiger ist.
+- **Filter:** Herkunft (Spiel, eigene, Mods, jede Mod einzeln), Ebene
+  (Oberflaeche oder Innenraeume `_1`), Marker-Typ, nur benutzte oder nur
+  unbenutzte Marker, Suche nach Name, Nummer oder Tile (Enter springt zum
+  ersten Treffer).
+- **Farben:** Spiel hell, eigene Quests gold, Mods hellblau, Orte als gruene
+  Quadrate.
+- **Aus einem Feld waehlen:** Der Knopf **Karte** neben einem Marker-Feld (und
+  im Marker-Picker) oeffnet die Karte gefiltert auf die Sorte, die das Feld
+  liest. Rechtsklick auf einen Marker > **In Quest verwenden** traegt Nummer
+  und Tile ein. Eine andere Sorte fragt nach, Marker aus Mods laufen durch
+  dieselbe Pruefung wie im Picker (rote Tiles gesperrt, Karte kommt in den
+  Build).
+- **Auf der Karte zeigen:** Rechtsklick auf einen Eintrag im Marker-Picker oder
+  in den Abhaengigkeiten; Rechtsklick auf eine Quest in der Zeitleiste zeigt
+  alle ihre Marker hervorgehoben.
+
+Die Marker-Typen kommen aus den Abschnitten von `PEnums.ech` (Quest-, Einheiten-,
+Stadt-, Wachen-, Arbeits- und sonstige Marker), `TwoWorldsEnemies16.ec`
+(`MARKER_ENEMY_*`, Fallen) und `TwoWorldsTeleports.ec`; Namen, die dort nicht
+stehen, landen unter "Sonstige".
+
+**Wie die Positionen entstehen:** Jede Karte hat laut Kopf 128 mal 128 Zellen,
+das SDK rechnet 256 Einheiten je Zelle (`TwoWorldsHeroControl16.ec`), ein Tile
+ist also 32768 Einheiten breit, die Minimap 512 Pixel. Die y-Achse zeigt auf der
+Minimap nach oben. Per Sichtpruefung bestaetigt: Tore von D8 in beiden
+Stadttoren, Truhen von F8 im Ringbau, Teleporter von E1 am Wegende, Marker in
+den Gaengen von B8_1, Wege laufen ueber die Kachelgrenzen. Im Spiel selbst ist
+das nicht nachgemessen. Orte (`LOCATION`) stehen in Zellen
+(`AddLocation(.., A2G(nX), ..)`).
+""", """
+
+## The map
+
+**Map** at the top of the timeline (or View > Map) opens the world map, put
+together from the minimaps of the game. The window stays open while you keep
+working.
+
+- **Controls:** the mouse wheel zooms (64 to 1024 pixels per tile), dragging
+  pans, a click on a point selects it in the list on the right, a click in the
+  list jumps there on the map. The bottom line shows the tile and coordinates
+  under the mouse.
+- **Filters:** origin (game, own, mods, every mod), layer (surface or
+  interiors `_1`), marker type, only used or only unused markers, search by
+  name, number or tile (Enter jumps to the first hit).
+- **Colours:** game light, own quests gold, mods light blue, locations as green
+  squares.
+- **Picking for a field:** the **Map** button next to a marker field (and in
+  the marker picker) opens the map filtered on the kind the field reads.
+  Right click a marker > **Use in quest** fills in number and tile. Another
+  kind asks first; markers from mods go through the same check as in the
+  picker (red tiles blocked, the map goes into the build).
+- **Show in map:** right click an entry in the marker picker or in the
+  dependencies; right click a quest in the timeline to see all its markers
+  highlighted.
+
+The marker types come from the sections of `PEnums.ech` (quest, unit, town,
+guard, worker and other markers), `TwoWorldsEnemies16.ec` (`MARKER_ENEMY_*`,
+traps) and `TwoWorldsTeleports.ec`; names not listed there go to "Other".
+
+**How positions are placed:** every map header says 128 by 128 cells, the SDK
+counts 256 units per cell (`TwoWorldsHeroControl16.ec`), so a tile is 32768
+units wide and its minimap 512 pixels. The y axis points up on the minimap.
+Confirmed by eye: gates of D8 in both city gates, chests of F8 in the ring
+structure, the teleporter of E1 at the end of its path, markers in the
+corridors of B8_1, roads running on across tile borders. It is not measured in
+the game itself. Locations (`LOCATION`) are given in cells
+(`AddLocation(.., A2G(nX), ..)`).
+""")
 
 
 def ch_mods():
@@ -727,7 +806,7 @@ HELP_CHAPTER = {
     'help.inspector': 'start', 'help.title': 'quests', 'help.id': 'quests',
     'help.task': 'tasks', 'help.action': 'actions', 'help.links': 'links',
     'help.preview': 'build', 'help.anim': 'reference',
-    'help.enemytpl': 'enemies',
+    'help.enemytpl': 'enemies', 'help.map': 'markers',
 }
 
 

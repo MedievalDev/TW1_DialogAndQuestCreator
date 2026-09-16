@@ -7,7 +7,7 @@ then the node is redrawn in the graph.
 import tkinter as tk
 from tkinter import ttk
 
-from . import data, model, theme
+from . import data, model, mods, theme
 from .i18n import t
 from .mappicker import MapPicker
 
@@ -547,6 +547,12 @@ class Inspector(ttk.Frame):
                            mkind=mkind, var=var, w=w, st=setter:
                            self._pick(values, key, mode, mkind, var, w, st,
                                       nid)).pack(side='left', padx=(4, 0))
+            if mkind:
+                mb = ttk.Button(row, text=t('map.button'), width=6,
+                                command=lambda mkind=mkind, w=w, st=setter:
+                                self._map_pick(values, mkind, w, st, nid))
+                mb.pack(side='left', padx=(4, 0))
+                theme.Tooltip(mb, t('tip.mapfield'))
             if kind in ('object', 'location') and cur and self.app.index:
                 idx = self.app.index
                 name = (idx.object_names.get(str(cur)) if kind == 'object'
@@ -574,6 +580,34 @@ class Inspector(ttk.Frame):
                 values['tile'] = res['tile'].upper()
         self._edit(widget, apply, nid)
         self.refresh()
+
+    def _map_pick(self, values, mkind, widget, setter, nid):
+        """Open the map filtered on the marker kind the field reads; the
+        marker chosen there ("use in quest") comes back into the field."""
+        from .mapwin import confirm_mod_marker
+        name = mods.MARKER_NAMES.get(mkind)
+        tile = (values.get('tile') or '').upper()
+        cur = None
+        for k in ('marker',):
+            try:
+                cur = int(values.get(k))
+            except (TypeError, ValueError):
+                cur = None
+        app = self.app
+
+        def use(point):
+            if not confirm_mod_marker(app, app.root, point):
+                return
+
+            def apply():
+                setter(point['id'])
+                if 'tile' in values:
+                    values['tile'] = point['tile'].upper()
+            self._edit(widget, apply, nid)
+            self.refresh()
+        app.show_map(kind=name, on_pick=use,
+                     focus=(name, tile, cur) if tile and cur is not None
+                     else None, tile=tile or None)
 
     def _task_form(self, nid, node):
         self.title.configure(text=t('node.task'))

@@ -376,6 +376,7 @@ class DependencyWindow:
         self.tree.bind('<<TreeviewSelect>>', lambda e: self._choice())
         self.tree.bind('<Motion>', self._hover)
         self.tree.bind('<Leave>', lambda e: self.tip.hide())
+        self.tree.bind('<Button-3>', self._menu)
         self.tip = theme.FloatTip(self.win)
         self.close_btn = ttk.Button(f, text=t('close'), command=self.close)
         self.close_btn.pack(side='bottom', anchor='e', pady=(8, 0))
@@ -415,6 +416,27 @@ class DependencyWindow:
             self.tree.insert('', 'end', values=('', t('deps.none'), '', '',
                                                 ''))
         self._choice()
+
+    def _menu(self, ev):
+        iid = self.tree.identify_row(ev.y)
+        if not iid.isdigit() or int(iid) >= len(self.deps):
+            return
+        self.tree.selection_set(iid)
+        d = self.deps[int(iid)]
+        q, kind, num = d['uses'][0]
+        menu = theme.Menu(self.win, tearoff=0)
+        menu.add_command(label=t('map.showin'), command=lambda: (
+            self.app.show_map(), self._show(d, kind, num)))
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+
+    def _show(self, d, kind, num):
+        from .mapwin import MapWindow
+        if MapWindow._open:
+            MapWindow._open.show_point(mods.MARKER_NAMES.get(kind), d['tile'],
+                                       num)
 
     def _dep(self):
         sel = self.tree.selection()

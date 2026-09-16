@@ -97,6 +97,10 @@ class Timeline(ttk.Frame):
         self.new_btn = ttk.Button(bar, text='+ ' + t('quest.new'),
                                   command=app.new_quest_dialog)
         self.new_btn.pack(side='right', padx=6, pady=2)
+        self.map_btn = ttk.Button(bar, text=t('tl.map'),
+                                  command=app.show_map)
+        self.map_btn.pack(side='right', padx=(0, 4), pady=2)
+        theme.Tooltip(self.map_btn, t('tip.map'))
         self.enemy_btn = ttk.Button(bar, text=t('tl.enemylevels'),
                                     command=app.show_enemy_levels)
         self.enemy_btn.pack(side='right', padx=(0, 4), pady=2)
@@ -559,6 +563,9 @@ class Timeline(ttk.Frame):
                          state='normal' if pq else 'disabled')
         menu.add_command(label=t('tl.text'),
                          command=lambda: app.show_preview(app.quest_for(qid)))
+        menu.add_command(label=t('tl.map.quest'),
+                         command=lambda: app.show_quest_on_map(
+                             app.quest_for(qid)))
         try:
             menu.tk_popup(ev.x_root, ev.y_root)
         finally:
@@ -577,6 +584,11 @@ class Timeline(ttk.Frame):
         menu.add_command(label=t('tl.mod.save'),
                          command=app.save_mod_quests,
                          state='normal' if e['dirty'] else 'disabled')
+        menu.add_command(label=t('tl.map.quest'),
+                         command=lambda: app.show_quest_on_map(
+                             app.mod_quests.get((os.path.normcase(
+                                 os.path.abspath(path)), qid))
+                             or app.build_mod_quest(path, qid)))
         menu.add_command(label=t('mods.manage'), command=app.show_mods)
         try:
             menu.tk_popup(ev.x_root, ev.y_root)

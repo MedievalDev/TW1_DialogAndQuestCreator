@@ -1,0 +1,720 @@
+"""Interactive map (update 5c): minimap tiles of the game, markers, locations
+and chests as points, filters, search, and "use in quest".
+
+Non-modal. Zoom with the mouse wheel (64 to 1024 px per tile), drag with
+the left mouse button, click selects in the list, right click offers "use in
+quest" when the map was opened from a marker field. The data and what is
+proven about positions are in ``mapdata.py``.
+"""
+
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+from . import mapdata, mods, theme
+from .i18n import t
+
+NL = chr(10)
+STEPS = (64, 128, 256, 512, 1024)
+LEVEL_OF = {64: 3, 128: 2, 256: 1, 512: 0, 1024: 0}
+RETAIL_DOT = '#e8e0cc'
+DEFAULT_GROUPS = ('quest_enemy', 'quest_object', 'quest_other', 'npc_start',
+                  'chest', 'gate', 'teleport', 'locations', 'containers')
+
+
+def confirm_mod_marker(app, parent, point):
+    """Before a quest outside a mod takes a marker only that mod has: refuse
+    red tiles, ask about the map going into the build, remember the mod
+    when several bring the tile. True = go on."""
+    info = point.get('mod')
+    if info is None or app.is_mod_quest(app.quest):
+        return True
+    tile = point['tile']
+    rec = info['tiles'].get(tile) or {}
+    if rec.get('missing'):
+        from .modswin import missing_text
+        messagebox.showwarning(t('map.title'), t('picker.blocked.why') + NL
+                               + NL + missing_text(rec['missing']),
+                               parent=parent)
+        return False
+    if not messagebox.askokcancel(t('map.title'), t(
+            'mod.dep.confirm', tile=tile, mod=info['name']), parent=parent):
+        return False
+    ms = app.modset
+    if app.project is not None and ms and len(ms.tile_providers(tile)) > 1 \
+            and app.project.mod_tiles.get(tile) != info['name']:
+        app.project.mod_tiles[tile] = info['name']
+        app.mods_changed(rescan=False)
+    return True
+
+
+class MapWindow:
+    _open = None
+
+    @classmethod
+    def show(cls, app, focus=None, kind=None, on_pick=None, quest=None,
+             tile=None):
+        """Open (or reuse) the map. ``focus``: (name, tile, id) to center
+        and blink; ``kind``: marker name to filter on; ``on_pick``:
+        callback(point) for "use in quest"; ``quest``: highlight its
+        markers; ``tile``: center on a tile."""
+        game = app.cfg.get('game_dir')
+        if not game:
+            messagebox.showinfo(t('map.title'), t('export.nogame'),
+                                parent=app.root)
+            return None
+        win = cls._open
+        if win is not None:
+            try:
+                win.win.deiconify()
+                win.win.lift()
+            except tk.TclError:
+                win = cls._open = None
+        if win is None:
+            win = cls._open = cls(app)
+            if win.store is None:
+                cls._open = None
+                return None
+        win.configure(focus, kind, on_pick, quest, tile)
+        return win
+
+    def __init__(self, app):
+        self.app = app
+        self.store = None
+        game = app.cfg.get('game_dir')
+        app.root.configure(cursor='watch')
+        app.root.update_idletasks()
+        try:
+            self.store = mapdata.TileStore(game, mapdata.tile_cache_dir(
+                app.project))
+            self.store.prepare(3)
+            self.store.prepare(2)
+        except Exception as e:           # no archives, unreadable dds
+            messagebox.showerror(t('map.title'), t('map.error', err=e),
+                                 parent=app.root)
+            self.store = None
+            return
+        finally:
+            app.root.configure(cursor='')
+        self.px = 64
+        self.images = {}
+        self.points = []
+        self.visible = []
+        self.focus_keys = set()
+        self.on_pick = None
+        self.kind = None
+        self.selected = None
+        self._blink_job = None
+        self._draw_job = None
+
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('map.title'))
+        self.win.geometry('1320x840')
+        self.win.minsize(900, 560)
+        theme.dark_titlebar(self.win)
+        self.win.protocol('WM_DELETE_WINDOW', self.close)
+        self.win.bind('<Escape>', lambda e: self.close())
+        self.tip = theme.FloatTip(self.win)
+
+        side = ttk.Frame(self.win, padding=(10, 8), width=250)
+        side.pack(side='left', fill='y')
+        right = ttk.Frame(self.win, padding=(0, 8, 10, 8), width=300)
+        right.pack(side='right', fill='y')
+        mid = ttk.Frame(self.win)
+        mid.pack(side='left', fill='both', expand=True)
+
+        # -- filters ------------------------------------------------------
+        ttk.Label(side, text=t('map.search')).pack(anchor='w')
+        self.q = tk.StringVar()
+        ent = ttk.Entry(side, textvariable=self.q)
+        ent.pack(fill='x', pady=(2, 8))
+        ent.bind('<Return>', lambda e: self.refilter(jump=True))
+        ent.bind('<KeyRelease>', lambda e: self._schedule_filter())
+        self.pick_lbl = ttk.Label(side, text='', foreground=theme.GOLD,
+                                  wraplength=230, justify='left')
+        self.pick_lbl.pack(anchor='w')
+        ttk.Label(side, text=t('map.origin'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(6, 2))
+        self.src = {k: tk.BooleanVar(value=True)
+                    for k in ('game', 'own', 'mods')}
+        for key in ('game', 'own', 'mods'):
+            ttk.Checkbutton(side, text=t('map.src.' + key),
+                            variable=self.src[key],
+                            command=self.refilter).pack(anchor='w')
+        self.mod_box = ttk.Frame(side)
+        self.mod_box.pack(anchor='w', fill='x', padx=(16, 0))
+        self.mod_vars = {}
+        ttk.Label(side, text=t('map.layer'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(8, 2))
+        self.layer = tk.StringVar(value='surface')
+        for key in ('surface', 'interior'):
+            ttk.Radiobutton(side, text=t('map.layer.' + key), value=key,
+                            variable=self.layer,
+                            command=self.redraw_all).pack(anchor='w')
+        ttk.Label(side, text=t('map.types'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(8, 2))
+        self.group_vars = {}
+        self.group_checks = {}
+        for key in mapdata.GROUP_KEYS + list(mapdata.EXTRA_LAYERS):
+            var = tk.BooleanVar(value=key in DEFAULT_GROUPS)
+            cb = ttk.Checkbutton(side, text=t('map.group.' + key),
+                                 variable=var, command=self.refilter)
+            cb.pack(anchor='w')
+            self.group_vars[key] = var
+            self.group_checks[key] = cb
+        ttk.Label(side, text=t('map.use'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(8, 2))
+        self.use = tk.StringVar(value='all')
+        for key in ('all', 'used', 'unused'):
+            ttk.Radiobutton(side, text=t('map.use.' + key), value=key,
+                            variable=self.use,
+                            command=self.refilter).pack(anchor='w')
+        self.labels = tk.BooleanVar(value=True)
+        ttk.Checkbutton(side, text=t('map.labels'), variable=self.labels,
+                        command=self.redraw_all).pack(anchor='w', pady=(8, 0))
+        ttk.Label(side, text=t('map.checked') if mapdata.POSITIONS_CHECKED
+                  else t('map.unchecked'), style='Muted.TLabel',
+                  wraplength=230, justify='left').pack(anchor='w',
+                                                       pady=(10, 0))
+
+        # -- canvas -------------------------------------------------------
+        self.c = tk.Canvas(mid, bg=theme.CANVAS_BG, highlightthickness=0)
+        self.c.pack(fill='both', expand=True)
+        self.info = ttk.Label(mid, text='', style='Muted.TLabel')
+        self.info.pack(fill='x', padx=6, pady=(2, 0))
+        self.c.bind('<ButtonPress-1>', self._press)
+        self.c.bind('<B1-Motion>', self._drag)
+        self.c.bind('<ButtonRelease-1>', self._release)
+        self.c.bind('<Button-3>', self._context)
+        self.c.bind('<MouseWheel>', self._wheel)
+        self.c.bind('<Motion>', self._hover)
+        self.c.bind('<Leave>', lambda e: self.tip.hide())
+        self.c.bind('<Configure>', lambda e: self._schedule_draw())
+
+        # -- list ---------------------------------------------------------
+        self.count = ttk.Label(right, text='', style='Muted.TLabel')
+        self.count.pack(anchor='w')
+        box = ttk.Frame(right)
+        box.pack(fill='both', expand=True, pady=(4, 0))
+        cols = ('name', 'id', 'tile', 'src')
+        self.tree = ttk.Treeview(box, columns=cols, show='headings',
+                                 selectmode='browse')
+        for col, w in zip(cols, (150, 40, 50, 70)):
+            self.tree.heading(col, text=t('map.col.' + col))
+            self.tree.column(col, width=w, anchor='w', stretch=col == 'name')
+        self.tree.tag_configure('mod', foreground=theme.MOD)
+        self.tree.tag_configure('own', foreground=theme.GOLD)
+        sb = ttk.Scrollbar(box, orient='vertical', command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+        self.tree.pack(side='left', fill='both', expand=True)
+        self.tree.bind('<<TreeviewSelect>>', self._list_select)
+        self.tree.bind('<Button-3>', self._list_context)
+        self.use_btn = ttk.Button(right, text=t('map.usebtn'),
+                                  style='Accent.TButton',
+                                  command=self._use_selected)
+        self._filter_job = None
+        self.reload()
+
+    # -- data -------------------------------------------------------------
+
+    def reload(self):
+        app = self.app
+        ms = app.modset
+        tiles = ms.retail_tiles if ms else mods.retail_markers(
+            app.cfg.get('game_dir'))
+        self.points = mapdata.collect(tiles, ms, app.index, app.project)
+        for w in self.mod_box.winfo_children():
+            w.destroy()
+        old = self.mod_vars
+        self.mod_vars = {}
+        for info in (ms.enabled() if ms else []):
+            var = old.get(info['name']) or tk.BooleanVar(value=True)
+            self.mod_vars[info['name']] = var
+            ttk.Checkbutton(self.mod_box, text=theme.MOD_DOT + info['name'],
+                            variable=var, command=self.refilter
+                            ).pack(anchor='w')
+        counts = {}
+        for p in self.points:
+            counts[p['group']] = counts.get(p['group'], 0) + 1
+        for key, cb in self.group_checks.items():
+            cb.configure(text=f"{t('map.group.' + key)}  ({counts.get(key, 0)})")
+        self.refilter()
+
+    def configure(self, focus=None, kind=None, on_pick=None, quest=None,
+                  tile=None):
+        self.on_pick = on_pick
+        self.kind = kind
+        if on_pick:
+            self.pick_lbl.configure(text=t('map.pickmode', kind=kind or '-'))
+            self.use_btn.pack(fill='x', pady=(6, 0))
+        else:
+            self.pick_lbl.configure(text='')
+            self.use_btn.pack_forget()
+        if kind:
+            grp = mapdata.group_of(kind)
+            for key, var in self.group_vars.items():
+                var.set(key == grp)
+            self.q.set(kind)
+        self.focus_keys = set()
+        if quest is not None:
+            try:
+                refs = mods.marker_refs(mods.quest_block(quest))
+            except Exception:
+                refs = []
+            self.focus_keys = {(mods.MARKER_NAMES.get(k), tl, n)
+                               for k, tl, n in refs}
+            for s in quest.speakers:
+                if s.get('tile') and s['tile'] != '(null)' and isinstance(
+                        s.get('id'), int):
+                    self.focus_keys.add((mods.NPC_MARKER, s['tile'].upper(),
+                                         s.get('marker') or s['id']))
+            for name, tl, _n in self.focus_keys:
+                grp = mapdata.group_of(name)
+                if grp in self.group_vars:
+                    self.group_vars[grp].set(True)
+            self.q.set('')
+        self.reload()
+        if focus:
+            self.show_point(*focus)
+        elif quest is not None and self.focus_keys:
+            self.fit_points([p for p in self.points if self._key(p)
+                             in self.focus_keys])
+        elif tile:
+            self.center_tile(tile)
+        else:
+            self.redraw_all()
+
+    @staticmethod
+    def _key(p):
+        return (p['name'], p['tile'], p['id'])
+
+    def _interior(self, tile):
+        s = mapdata.split_tile(tile)
+        return bool(s and s[2])
+
+    def _schedule_filter(self):
+        if self._filter_job:
+            self.win.after_cancel(self._filter_job)
+        self._filter_job = self.win.after(250, self.refilter)
+
+    def refilter(self, jump=False):
+        self._filter_job = None
+        q = self.q.get().strip().lower()
+        interior = self.layer.get() == 'interior'
+        use = self.use.get()
+        groups = {k for k, v in self.group_vars.items() if v.get()}
+        src = {k: v.get() for k, v in self.src.items()}
+        mods_off = {k for k, v in self.mod_vars.items() if not v.get()}
+        shown = []
+        for p in self.points:
+            if p['group'] not in groups:
+                continue
+            if self._interior(p['tile']) != interior:
+                continue
+            if p['mod'] is not None:
+                if not src['mods'] or p['mod']['name'] in mods_off:
+                    continue
+            elif p['own']:
+                if not src['own']:
+                    continue
+            elif not src['game']:
+                continue
+            if use == 'used' and not p['used']:
+                continue
+            if use == 'unused' and p['used']:
+                continue
+            if q and q not in (f"{p['name']} {p.get('label', '')} "
+                               f"{p['id']} {p['tile']}".lower()):
+                continue
+            shown.append(p)
+        self.visible = shown
+        self.tree.delete(*self.tree.get_children())
+        for i, p in enumerate(shown[:3000]):
+            tag = 'mod' if p['mod'] else ('own' if p['own'] else '')
+            src = p['mod']['name'] if p['mod'] else (
+                t('map.src.own') if p['own'] else t('map.src.game'))
+            name = p.get('label') or p['name']
+            self.tree.insert('', 'end', iid=str(i), values=(
+                (theme.MOD_DOT if p['mod'] else '') + name,
+                '' if p['id'] is None else p['id'], p['tile'], src),
+                tags=(tag,))
+        self.count.configure(text=t('map.count', n=len(shown),
+                                    all=len(self.points)))
+        self._draw_points()
+        if jump and q and shown:
+            self.select_index(0, center=True)
+
+    # -- drawing ----------------------------------------------------------
+
+    def redraw_all(self):
+        self.c.delete('tile')
+        self.refilter()
+        self._draw_tiles()
+
+    def _schedule_draw(self):
+        if self._draw_job:
+            self.win.after_cancel(self._draw_job)
+        self._draw_job = self.win.after(30, self._draw_tiles)
+
+    def _image(self, tile, px):
+        key = (tile, px)
+        img = self.images.get(key)
+        if img is not None:
+            return img
+        level = LEVEL_OF[px]
+        path = self.store.png(tile, level)
+        if not path:
+            return None
+        img = tk.PhotoImage(file=path)
+        if px == 1024:
+            img = img.zoom(2, 2)
+        self.images[key] = img
+        return img
+
+    def _draw_tiles(self):
+        self._draw_job = None
+        c = self.c
+        px = self.px
+        c.configure(scrollregion=(0, 0, len(mapdata.COLS) * px,
+                                  mapdata.ROWS * px))
+        for key in [k for k in self.images if k[1] != px]:
+            del self.images[key]
+        x0, y0 = c.canvasx(0), c.canvasy(0)
+        x1, y1 = x0 + c.winfo_width(), y0 + c.winfo_height()
+        interior = self.layer.get() == 'interior'
+        c.delete('tile')
+        for ci, col in enumerate(mapdata.COLS):
+            for row in range(1, mapdata.ROWS + 1):
+                tx, ty = ci * px, (row - 1) * px
+                if tx + px < x0 or tx > x1 or ty + px < y0 or ty > y1:
+                    continue
+                tile = f'{col}{row}'
+                img = self._image(tile, px)
+                if img is not None:
+                    c.create_image(tx, ty, image=img, anchor='nw',
+                                   tags=('tile',))
+                if interior:
+                    inner = f'{tile}_1'
+                    if self.store.has(inner, LEVEL_OF[px]):
+                        c.create_image(tx, ty, image=self._image(inner, px),
+                                       anchor='nw', tags=('tile',))
+                    else:
+                        c.create_rectangle(tx, ty, tx + px, ty + px,
+                                           fill='#000000', stipple='gray75',
+                                           outline='', tags=('tile',))
+                c.create_rectangle(tx, ty, tx + px, ty + px,
+                                   outline=theme.mix(theme.LINE, '#000000',
+                                                     0.8),
+                                   tags=('tile',))
+                if self.labels.get():
+                    c.create_text(tx + 6, ty + 4, anchor='nw', text=tile,
+                                  fill=theme.GOLD_HI, font=theme.FONT_BOLD,
+                                  tags=('tile',))
+        c.tag_lower('tile')
+        # keep memory bounded when panning at high zoom
+        if len(self.images) > 48:
+            shown = {c.itemcget(i, 'image') for i in c.find_withtag('tile')
+                     if c.type(i) == 'image'}
+            for key in [k for k, img in self.images.items()
+                        if str(img) not in shown]:
+                del self.images[key]
+
+    def _draw_points(self):
+        c = self.c
+        c.delete('pt')
+        px = self.px
+        r = 2 if px <= 64 else (3 if px <= 256 else 4)
+        dim = bool(self.focus_keys)
+        for i, p in enumerate(self.visible):
+            pos = mapdata.world_to_map(p['tile'], p['x'], p['y'], px)
+            if pos is None:
+                continue
+            x, y = pos
+            if p['mod'] is not None:
+                colour = theme.MOD
+            elif p['own']:
+                colour = theme.GOLD
+            elif p['group'] in ('locations', 'containers'):
+                colour = theme.OK
+            else:
+                colour = RETAIL_DOT
+            rr = r
+            if dim:
+                if self._key(p) in self.focus_keys:
+                    rr = r + 3
+                    colour = theme.GOLD_HI if p['mod'] is None else theme.MOD
+                else:
+                    colour = theme.mix(colour, '#000000', 0.35)
+            if p['group'] == 'locations':
+                c.create_rectangle(x - rr, y - rr, x + rr, y + rr,
+                                   outline=colour, width=2,
+                                   tags=('pt', f'p:{i}'))
+            else:
+                c.create_oval(x - rr, y - rr, x + rr, y + rr, fill=colour,
+                              outline='#000000', tags=('pt', f'p:{i}'))
+        self._draw_selection()
+
+    def _draw_selection(self):
+        c = self.c
+        c.delete('sel')
+        p = self.selected
+        if p is None:
+            return
+        pos = mapdata.world_to_map(p['tile'], p['x'], p['y'], self.px)
+        if pos is None:
+            return
+        x, y = pos
+        c.create_oval(x - 9, y - 9, x + 9, y + 9, outline=theme.GOLD_HI,
+                      width=2, tags=('sel',))
+
+    # -- navigation -------------------------------------------------------
+
+    def _press(self, ev):
+        self._moved = False
+        self._start = (ev.x, ev.y)
+        self.c.scan_mark(ev.x, ev.y)
+
+    def _drag(self, ev):
+        if abs(ev.x - self._start[0]) + abs(ev.y - self._start[1]) > 3:
+            self._moved = True
+        self.c.scan_dragto(ev.x, ev.y, gain=1)
+        self._schedule_draw()
+
+    def _release(self, ev):
+        if getattr(self, '_moved', False):
+            return
+        i = self._point_at(ev)
+        if i is not None:
+            self.select_index(i, center=False)
+
+    def _wheel(self, ev):
+        step = STEPS.index(self.px) + (1 if ev.delta > 0 else -1)
+        if not 0 <= step < len(STEPS):
+            return
+        self.zoom_to(STEPS[step], ev.x, ev.y)
+
+    def zoom_to(self, px, sx=None, sy=None):
+        c = self.c
+        if sx is None:
+            sx, sy = c.winfo_width() / 2, c.winfo_height() / 2
+        mx = (c.canvasx(sx)) / self.px
+        my = (c.canvasy(sy)) / self.px
+        self.px = px
+        c.configure(scrollregion=(0, 0, len(mapdata.COLS) * px,
+                                  mapdata.ROWS * px))
+        self._scroll_to(mx * px - sx, my * px - sy)
+        self._draw_tiles()
+        self._draw_points()
+
+    def _scroll_to(self, left, top):
+        c = self.c
+        w, h = len(mapdata.COLS) * self.px, mapdata.ROWS * self.px
+        c.xview_moveto(max(0.0, left) / w)
+        c.yview_moveto(max(0.0, top) / h)
+
+    def center_on(self, mx, my):
+        c = self.c
+        self._scroll_to(mx - c.winfo_width() / 2, my - c.winfo_height() / 2)
+        self._draw_tiles()
+
+    def center_tile(self, tile):
+        s = mapdata.split_tile(tile)
+        if s is None:
+            return
+        if self.px < 256:
+            self.px = 256
+        if s[2]:
+            self.layer.set('interior')
+        self.redraw_all()
+        self.win.update_idletasks()
+        self.center_on((s[0] + 0.5) * self.px, (s[1] - 0.5) * self.px)
+        self._draw_points()
+
+    def fit_points(self, pts):
+        if not pts:
+            self.redraw_all()
+            return
+        xs, ys = [], []
+        for p in pts:
+            x, y = mapdata.world_to_map(p['tile'], p['x'], p['y'], 1)
+            xs.append(x)
+            ys.append(y)
+        self.win.update_idletasks()
+        span = max(max(xs) - min(xs), max(ys) - min(ys), 0.3)
+        view = min(self.c.winfo_width(), self.c.winfo_height()) or 600
+        px = STEPS[0]
+        for s in STEPS:
+            if span * s <= view * 0.8:
+                px = s
+        self.px = px
+        if any(self._interior(p['tile']) for p in pts):
+            self.layer.set('interior')
+        self.redraw_all()
+        self.center_on((min(xs) + max(xs)) / 2 * px,
+                       (min(ys) + max(ys)) / 2 * px)
+        self._draw_points()
+
+    def show_point(self, name, tile, ident):
+        """Center, zoom and blink one marker (``Show in map``)."""
+        grp = mapdata.group_of(name) if name else None
+        if grp in self.group_vars:
+            self.group_vars[grp].set(True)
+        s = mapdata.split_tile(tile)
+        if s is not None:
+            self.layer.set('interior' if s[2] else 'surface')
+        self.q.set('')
+        self.refilter()
+        for i, p in enumerate(self.visible):
+            if p['name'] == name and p['tile'] == tile and (
+                    ident is None or p['id'] == ident):
+                self.px = max(self.px, 512)
+                self.redraw_all()
+                self.select_index(i, center=True)
+                self.blink(p)
+                return True
+        self.center_tile(tile)
+        self.info.configure(text=t('map.notfound', name=name, id=ident,
+                                   tile=tile))
+        return False
+
+    def blink(self, p, n=6):
+        if self._blink_job:
+            self.win.after_cancel(self._blink_job)
+        pos = mapdata.world_to_map(p['tile'], p['x'], p['y'], self.px)
+        if pos is None:
+            return
+        x, y = pos
+
+        def step(k):
+            self.c.delete('blink')
+            if k <= 0:
+                self._blink_job = None
+                return
+            if k % 2:
+                self.c.create_oval(x - 16, y - 16, x + 16, y + 16,
+                                   outline=theme.ERR, width=3,
+                                   tags=('blink',))
+            self._blink_job = self.win.after(220, lambda: step(k - 1))
+        step(n)
+
+    # -- selection and hover ----------------------------------------------
+
+    def _point_at(self, ev):
+        x, y = self.c.canvasx(ev.x), self.c.canvasy(ev.y)
+        for item in reversed(self.c.find_overlapping(x - 4, y - 4, x + 4,
+                                                     y + 4)):
+            for tg in self.c.gettags(item):
+                if tg.startswith('p:'):
+                    return int(tg[2:])
+        return None
+
+    def describe(self, p):
+        lines = [p.get('label') or p['name']]
+        if p.get('label'):
+            lines.append(p['name'])
+        lines.append(t('map.tip.group', group=t('map.group.' + p['group'])))
+        if p['id'] is not None:
+            lines.append(t('map.tip.id', id=p['id']))
+        lines.append(t('map.tip.pos', tile=p['tile'], x=p['x'], y=p['y']))
+        if p['mod'] is not None:
+            rec = p['mod']['tiles'].get(p['tile']) or {}
+            lines.append(t('mod.origin', mod=p['mod']['name']) + ' - '
+                         + t('mod.origin.file', file=rec.get('inner')
+                             or p['mod'].get('qtx') or '-'))
+        else:
+            lines.append(t('map.tip.game'))
+        lines.append(t('map.tip.used') if p['used'] else t('map.tip.unused'))
+        return NL.join(lines)
+
+    def _hover(self, ev):
+        i = self._point_at(ev)
+        mx, my = self.c.canvasx(ev.x), self.c.canvasy(ev.y)
+        where = mapdata.map_to_world(mx, my, self.px)
+        self.info.configure(text=t('map.cursor', tile=where[0], x=where[1],
+                                   y=where[2]) if where else '')
+        if i is None or i >= len(self.visible):
+            self.tip.hide()
+            return
+        self.tip.show(self.describe(self.visible[i]), ev.x_root, ev.y_root)
+
+    def select_index(self, i, center=False):
+        if not 0 <= i < len(self.visible):
+            return
+        self.selected = p = self.visible[i]
+        iid = str(i)
+        self._sel_iid = iid
+        if self.tree.exists(iid):
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+        if center:
+            pos = mapdata.world_to_map(p['tile'], p['x'], p['y'], self.px)
+            self.center_on(*pos)
+            self._draw_points()
+        else:
+            self._draw_selection()
+        self.info.configure(text=self.describe(p).replace(NL, '   '))
+
+    def _list_select(self, ev=None):
+        sel = self.tree.selection()
+        if sel and sel[0] != getattr(self, '_sel_iid', None):
+            i = int(sel[0])
+            if self.px < 256:
+                self.px = 256
+                self._draw_tiles()
+            self.select_index(i, center=True)
+
+    # -- use in quest ------------------------------------------------------
+
+    def _use(self, p):
+        if not self.on_pick or p is None:
+            return
+        if p['group'] in ('locations',):
+            return
+        if self.kind and p['name'] != self.kind:
+            if not messagebox.askyesno(t('map.title'), t(
+                    'map.wrongkind', name=p['name'], kind=self.kind),
+                    icon='warning', parent=self.win):
+                return
+        cb = self.on_pick
+        self.on_pick = None
+        self.pick_lbl.configure(text='')
+        self.use_btn.pack_forget()
+        cb(p)
+
+    def _use_selected(self):
+        self._use(self.selected)
+
+    def _context(self, ev):
+        i = self._point_at(ev)
+        if i is None:
+            return
+        self.select_index(i)
+        self._menu(ev, self.visible[i])
+
+    def _list_context(self, ev):
+        iid = self.tree.identify_row(ev.y)
+        if not iid:
+            return
+        self.tree.selection_set(iid)
+        self._menu(ev, self.visible[int(iid)])
+
+    def _menu(self, ev, p):
+        menu = theme.Menu(self.win, tearoff=0)
+        can = self.on_pick is not None and p['group'] != 'locations'
+        menu.add_command(label=t('map.usebtn'),
+                         command=lambda: self._use(p),
+                         state='normal' if can else 'disabled')
+        menu.add_command(label=t('map.center'),
+                         command=lambda: (self.select_index(
+                             self.visible.index(p), center=True),
+                             self.blink(p)))
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+
+    def close(self):
+        MapWindow._open = None
+        self.tip.hide()
+        self.images.clear()
+        self.win.destroy()

@@ -514,6 +514,28 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
     Tool nimmt die Reihenfolge der Mod-Liste.
   - Freie Questnummern zählen die Quests der Mods mit; gleiche Nummern
     meldet die Prüfung.
+- **Karte (Kopfleiste "Karte", Ansicht > Karte):** Weltkarte aus den Minimaps
+  des Spiels (`Levels\MipMaps\Map_E01@0..3.dds`, DXT1, im Tool ohne
+  Zusatzbibliothek entpackt und als PNG neben der Projektdatei in
+  `<Projekt>_map/` zwischengespeichert). Nicht-modal, Mausrad zoomt (64 bis
+  1024 Pixel je Tile), Ziehen verschiebt, Tile-Namen einblendbar, Ebene
+  Oberfläche oder Innenräume `_1`. Punkte: alle Marker der Karten des Spiels
+  und der Mods, Orte (`LOCATION`), Truhen der Mods (`CONTAINER`). Filter nach
+  Herkunft, Marker-Typ (Gruppen aus SDK `PEnums.ech`,
+  `TwoWorldsEnemies16.ec`, `TwoWorldsTeleports.ec`), benutzt/unbenutzt und
+  Suche. Farben: Spiel hell, eigene gold, Mods hellblau. Hover zeigt Name,
+  Typ, Nummer, Tile, Koordinaten, Herkunft.
+  - **Anbindung:** Knopf "Karte" neben jedem Marker-Feld und im Marker-Picker
+    (gefiltert auf die gelesene Sorte, Rechtsklick > In Quest verwenden
+    trägt Nummer und Tile ein, falsche Sorte fragt nach, Mod-Marker laufen
+    durch dieselbe Prüfung wie im Picker). "Auf der Karte zeigen" im Picker
+    und in den Abhängigkeiten; Rechtsklick auf eine Quest zeigt ihre Marker
+    hervorgehoben.
+  - **Umrechnung:** 128 × 128 Zellen je Karte (Kartenkopf), 256 Einheiten je
+    Zelle (SDK `nX/=256`), also 64 Einheiten je Minimap-Pixel; y zeigt auf
+    der Minimap nach oben, Zeilen laufen nach unten. Per Sichtprüfung
+    bestätigt (Tore D8, Truhen F8, Teleporter E1, Gänge B8_1, nahtlose
+    Kachelgrenzen), im Spiel nicht nachgemessen; die Karte sagt das so.
 - **Hilfe im Formular:** Neben Panel-Titeln und erklärungsbedürftigen Feldern
   steht ein `?`. Überfahren zeigt eine kurze Erklärung, Klick öffnet die
   Dokumentation. Eingabefelder zeigen ein Beispiel, ungültige Eingaben werden

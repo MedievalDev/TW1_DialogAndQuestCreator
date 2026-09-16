@@ -219,6 +219,9 @@ class App:
 
     def _fill_view(self, m):
         g = self.graph
+        m.add_command(label=t('view.map'), command=self.show_map,
+                      state=self._state(bool(self.cfg.get('game_dir'))))
+        m.add_separator()
         m.add_command(label=t('view.zoomin'), accelerator=self._acc('Ctrl++'),
                       command=g.zoom_in)
         m.add_command(label=t('view.zoomout'), accelerator=self._acc('Ctrl+-'),
@@ -636,6 +639,12 @@ class App:
         self.schedule_validation(50)
         if modswin.ModsWindow._open:
             modswin.ModsWindow._open.refresh()
+        from . import mapwin
+        if mapwin.MapWindow._open:
+            try:
+                mapwin.MapWindow._open.reload()
+            except tk.TclError:
+                mapwin.MapWindow._open = None
         if modswin.DependencyWindow._open:
             modswin.DependencyWindow._open.refresh()
 
@@ -701,6 +710,15 @@ class App:
             return
         for p in found:
             self.add_mod(p)
+
+    def show_map(self, **kw):
+        """Interactive map (update 5c), see mapwin.MapWindow.show."""
+        from . import mapwin
+        return mapwin.MapWindow.show(self, **kw)
+
+    def show_quest_on_map(self, quest):
+        if quest is not None:
+            self.show_map(quest=quest)
 
     def show_mods(self):
         if self.project:
@@ -1973,6 +1991,7 @@ class App:
                             f'quests={len(index.quests)} '
                             f'templates={len(data.builtin_templates())} '
                             f'maptiles={len(mods.retail_markers(self.cfg.get("game_dir")))} '
+                            f'minimaps={self._selftest_minimap()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -1987,6 +2006,15 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    def _selftest_minimap(self):
+        """Decode one minimap tile in a temp folder (frozen build check)."""
+        import tempfile
+        from . import mapdata
+        with tempfile.TemporaryDirectory() as tmp:
+            store = mapdata.TileStore(self.cfg.get('game_dir'), tmp)
+            path = store.png('E1', 3)
+            return f'{len(store.entries)}/{os.path.getsize(path)}b'
 
     def _selftest_export(self, spec):
         """QF2_SELFTEST_EXPORT=<project>|<empty game dir>: validate and export

@@ -139,6 +139,7 @@ class MapPicker:
         self.lst.bind('<Return>', lambda e: self._ok())
         self.lst.bind('<Motion>', self._list_hover)
         self.lst.bind('<Leave>', lambda e: self.tip.hide())
+        self.lst.bind('<Button-3>', self._list_menu)
         self.note = ttk.Label(right, text='', style='Muted.TLabel',
                               wraplength=520)
         self.note.pack(anchor='w')
@@ -158,6 +159,9 @@ class MapPicker:
             self.note.configure(text=t('picker.notile'))
         b = ttk.Frame(right)
         b.pack(anchor='e', pady=(8, 0))
+        if mode in ('marker', 'npc', 'location') and app.cfg.get('game_dir'):
+            ttk.Button(b, text=t('map.button'), command=self._map
+                       ).pack(side='left', padx=(0, 12))
         ttk.Button(b, text=t('ok'), style='Accent.TButton',
                    command=self._ok).pack(side='left', padx=(0, 6))
         ttk.Button(b, text=t('cancel'), command=self.win.destroy
@@ -391,6 +395,75 @@ class MapPicker:
             self.lst.selection_set(0)
         if self.mode == 'location':
             self.note.configure(text=t('hint.location.type10'))
+
+    # -- map (update 5c) ----------------------------------------------------
+
+    def _point_of(self, i):
+        """(marker name, tile, id) of a list row for "show in map"."""
+        value, tl, meta = self.rows_data[i]
+        if self.mode == 'marker':
+            return self.mkname, tl, value
+        if self.mode == 'npc':
+            n = self.idx.npc(value) if isinstance(value, int) else None
+            if n and n.get('marker') is not None:
+                return mods.NPC_MARKER, n.get('tile'), n['marker']
+            if meta and meta.get('mod'):
+                rec = meta['mod']['npcs'].get(str(value)) or {}
+                return mods.NPC_MARKER, rec.get('tile'), rec.get('marker')
+            return None
+        if self.mode == 'location':
+            return value, tl, None
+        return None
+
+    def _list_menu(self, ev):
+        i = self.lst.nearest(ev.y)
+        if not 0 <= i < len(self.rows_data):
+            return
+        self.lst.selection_clear(0, 'end')
+        self.lst.selection_set(i)
+        pt = self._point_of(i)
+        menu = theme.Menu(self.win, tearoff=0)
+        menu.add_command(label=t('map.showin'),
+                         command=lambda: self._show_in_map(pt),
+                         state='normal' if pt and pt[1] else 'disabled')
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+
+    def _show_in_map(self, pt):
+        self.win.grab_release()
+        win = self.app.show_map()
+        if win and pt:
+            name, tile, ident = pt
+            win.show_point(name, (tile or '').upper(), ident)
+
+    def _map(self):
+        """Open the map with this picker's filter; "use in quest" there
+        picks the marker here."""
+        self.win.grab_release()
+        kind = self.mkname if self.mode == 'marker' else (
+            mods.NPC_MARKER if self.mode == 'npc' else None)
+        self.app.show_map(kind=kind, tile=self.tile,
+                          on_pick=self._from_map if self.mode == 'marker'
+                          else None)
+
+    def _from_map(self, point):
+        try:
+            if not self.win.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        self._set_tile(point['tile'])
+        for i, (value, tl, _meta) in enumerate(self.rows_data):
+            if value == point['id'] and tl == point['tile']:
+                self.lst.selection_clear(0, 'end')
+                self.lst.selection_set(i)
+                self._ok()
+                return
+        self.result = {'value': point['id'], 'tile': point['tile']}
+        self.tip.hide()
+        self.win.destroy()
 
     def _ok(self):
         if self.mode == 'marker' and self.own.get().strip():

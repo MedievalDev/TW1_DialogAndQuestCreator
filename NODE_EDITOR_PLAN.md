@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.0.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.1.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1245,13 +1245,47 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       nur fuer Mods; die Gruppenfarbe `#8fa8d8` wurde dafuer ersetzt, Blau fuer
       die Enklave (Marcos Wunsch 12.61) bleibt.
     - Ungeprueft: Ladereihenfolge zweier Mods im Spiel.
+65. Interaktive Karte (Version 3.1.0, Punkt 5c):
+    - `questforge2/mapdata.py`: Minimap-Tiles `Levels\MipMaps\Map_<Tile>@0..3.dds`
+      (DXT1, 512/256/128/64 px; 108 Oberflaechen-Tiles A1..I12 vollstaendig,
+      52 Innenraeume). Eigener DXT1-Decoder (gegen Pillow verglichen: 0 von
+      196.608 Bytes weichen um mehr als 1 ab) und PNG-Schreiber, damit keine
+      Bildbibliothek ins Paket muss. Cache `<Projekt>_map/` (ungespeichertes
+      Projekt: `cache/maptiles`), Stempel aus Archivposition der DDS.
+    - Umrechnung: Kartenkopf 128 x 128 Zellen (20 Byte nach dem Namen, alle
+      Map_*.lnd), SDK `TwoWorldsHeroControl16.ec` `nX/=256`, also Tile =
+      32768 Einheiten, 64 Einheiten je Pixel bei 512 px. y waechst auf der
+      Minimap nach oben (Zeilen nach unten). Sichtpruefung 16.09.2026 mit
+      Overlays: D8 Tore in beiden Stadttoren und Wachrouten auf Strassen (ohne
+      Spiegelung alles ausserhalb der Mauern), F8 Truhen im Ringbau, E1
+      Teleporter am Wegende, B8_1/D8_1 Marker in den Gaengen, Wege laufen ueber
+      Kachelgrenzen weiter. Im Spiel nicht nachgemessen; `POSITIONS_CHECKED`
+      und der Hinweis im Fenster sagen "per Sichtpruefung".
+    - LOCATION x/y sind Zellen (`PLocations.ech` `AddLocation(.., A2G(nX)`).
+    - Marker-Gruppen aus den Abschnitten von `PEnums.ech`,
+      `TwoWorldsEnemies16.ec` (`MARKER_ENEMY_*`, `MARKER_TRAP*`),
+      `TwoWorldsTeleports.ec`; im Spiel vorkommende Namen ohne SDK-Eintrag
+      (`MARKER_CAMP_*`, `MARKER_DANCE`, `MARKER_DUMMY`) unter "Sonstige".
+      10.342 Punkte aus den Karten des Spiels plus 116 Orte.
+    - `questforge2/mapwin.py`: nicht-modales Fenster, Zoomstufen 64..1024,
+      Ziehen, Gitter und Tile-Namen, Ebene Oberflaeche/Innenraeume, Filter
+      (Herkunft je Mod, Typ, benutzt/unbenutzt, Suche mit Sprung), Liste
+      synchron zur Karte, Hover-Tooltip, Blinken, "In Quest verwenden" mit
+      Sortenpruefung und `confirm_mod_marker` (rote Tiles, Build-Hinweis).
+      Anbindung: Kopfleiste, Ansicht-Menue, Karte-Knopf an Marker-Feldern und
+      im Picker, "Auf der Karte zeigen" im Picker und in den Abhaengigkeiten,
+      "Marker dieser Quest" im Zeitleisten-Kontextmenue.
+    - Tests `tests/test_map.py`: DXT1-Block, PNG, Umrechnung hin und zurueck,
+      Gruppen, Punkte aus Spiel und Mod.
 
 Offen:
 
 - Spieltest einer Tool-Quest mit ID ueber 399 bei Questgrenze 600 (12.57).
 - Spieltest der geaenderten Gegnerstufen (12.59).
-- Usability-Update: interaktive Karte (Punkt 5c) offen; Guide, Vorlagen
-  (2.9.0) und Mod-Quellen (3.0.0) erledigt.
+- Usability-Update abgeschlossen: Guide und Vorlagen (2.9.0), Mod-Quellen
+  (3.0.0), interaktive Karte (3.1.0).
+- Kartenpositionen im Spiel nachmessen (Held an einen Marker teleportieren
+  und Position vergleichen), bisher nur Sichtpruefung (12.65).
 - Ladereihenfolge zweier Mods im Spiel messen (12.64).
 - Spieltest: Quest einer Mod im Tool geaendert und gespeichert (12.64).
 - `quest_creator_gui.py` bleibt vorerst in `main` neben QuestForge 2
