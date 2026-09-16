@@ -121,6 +121,20 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None):
                 E.append((t('val.journal.' + key), None))
         if quest.giver is None:
             E.append((t('val.giver'), None))
+        from .mpmerge import MAX_NPC_ID
+        if own and isinstance(quest.giver, int) and quest.giver > MAX_NPC_ID:
+            E.append((t('val.npc.limit', id=quest.giver, max=MAX_NPC_ID),
+                      None))
+        for s in quest.speakers:
+            if own and s.get('new') and isinstance(s.get('id'), int) \
+                    and s['id'] > MAX_NPC_ID:
+                E.append((t('val.npc.limit', id=s['id'], max=MAX_NPC_ID),
+                          None))
+        for item in quest.extra.get('markers_todo') or []:
+            if isinstance(item, dict) and not item.get('done'):
+                W.append((t('warn.marker.todo', name=item.get('name'),
+                            num=item.get('num'), tile=item.get('tile')),
+                          None))
         if index and str(quest.group) not in index.groups:
             W.append((t('warn.group', g=quest.group), None))
     for text in [quest.title] + list(quest.journal.values()):

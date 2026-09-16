@@ -545,6 +545,19 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   gültige Zeilen übernehmen die Felder sofort, ungültige werden erklärt
   (falscher Befehl, falsche Anzahl Werte, unbekannter Zeitpunkt) und ändern
   nichts.
+- **Multiplayer-Quest übernehmen (Quest-Menü, "+ Neue Quest", Rechtsklick
+  auf eine MP-Karte):** Q_700–Q_819 gehören dem Multiplayer-Skript
+  (`PQuestsMulti.ec`, zählt ab 699); das Einzelspieler-Skript verwirft
+  Questnummern ab 400 und NPC-Nummern ab 698 beim Laden (`PQuests.ec`
+  `eQuestsNum 400`, `eQuestUnitsNum 698`), und die MP-Zeilen haben keine
+  Kacheln. Der Assistent in drei Schritten: MP-Quest wählen; freie
+  Questnummer, freie NPC-Nummer (ab 507), Name, Kachel, Tagebuchgruppe,
+  je Markerzeile Kachel und Nummer (Nummern bleiben, wenn die Kachel sie
+  nicht hat, sonst nächste freie); Marker-Checkliste. Das Tool setzt keine
+  Marker: die Liste (Name, Nummer, Kachel) steht danach im Quest-Panel mit
+  Haken, offene Punkte meldet die Prüfung. Der Geber wird ein neuer NPC mit
+  Partei 25; Dialogzeilen ohne Sprecher (MP-Bäume haben keinen Lector)
+  gehören ihm. Zeitleiste: MP-Quests tragen "MP".
 - **Dialog-Vorlage:** Quest > Dialog aus Vorlage einfügen > "Standard-
   Questgeber" setzt Angebot mit Annehmen/Ablehnen, Antwort während die Quest
   läuft, Dank beim Erfüllen und einen Satz danach in die offene Quest. Es

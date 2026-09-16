@@ -535,6 +535,10 @@ def npc_block(spk, index):
     p[4] = (spk.get('tile') or '(null)').upper()
     p[5] = str(spk.get('angle', 0))
     p[6] = str(spk['lector']) if spk.get('lector') is not None else '(null)'
+    if spk.get('party') is not None:
+        p[7] = str(spk['party'])
+    if spk.get('guild') is not None:
+        p[8] = str(spk['guild'])
     return ' '.join(p) + '\n  OBJECTS True\nEND\n'
 
 

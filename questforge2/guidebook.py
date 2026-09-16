@@ -173,6 +173,23 @@ Kein Heldenlevel, sondern ein Zaehler. Jedes `AOQ PROMOTE` auf die Quest zaehlt
 eins hoch, bei Erreichen wird sie freigeschaltet. Stufe 2 heisst: zwei
 Vorquests muessen sie freischalten.
 
+## Multiplayer-Quests uebernehmen
+Q_700 bis Q_819 stehen zwar in derselben Questdatei, gehoeren aber dem
+Multiplayer-Skript (`PQuestsMulti.ec`, zaehlt ab 699). Das Einzelspieler-Skript
+verwirft Questnummern ab 400 **und NPC-Nummern ab 698** beim Laden; Q_700 mit
+NPC_700 kann im Einzelspieler nie erscheinen. Dazu fehlen den MP-Zeilen die
+Kacheln (`(null)`), ihre Marker erzeugt das MP-Skript zur Laufzeit.
+
+Quest > **Multiplayer-Quest uebernehmen** fuehrt durch: MP-Quest waehlen, freie
+Questnummer und freie NPC-Nummer (ab 507, unter 698), Kachel fuer den Geber und
+jede Zeile, Markernummern (bleiben, wenn die Kachel sie noch nicht hat). Am
+Ende steht die **Marker-Checkliste**: welche Marker mit welchem Namen, welcher
+Nummer und auf welcher Kachel du im Two Worlds Editor setzen musst, zum
+Beispiel `MARKER_QUEST_START 507 auf E1` fuer den Geber. Das Tool setzt keine
+Marker. Die Liste steht danach im Quest-Panel mit Haken; offene Punkte meldet
+die Pruefung als Warnung. Der Geber bekommt Partei 25 (Menschen), die
+MP-Bloecke haben keine.
+
 ## Zustaende
 Freigeschaltet (ENABLE), Angebot gehoert (HEAR), angenommen (TAKE), erfuellt
 (SOLVE), abgeschlossen (CLOSE), gescheitert (FAIL). Das Tagebuch zeigt den Text
@@ -204,6 +221,23 @@ A quest has exactly one `FC`. The original has not a single one with two.
 Not a hero level but a counter. Every `AOQ PROMOTE` on the quest counts it up
 by one; once reached, the quest is enabled. Level 2 means two quests have to
 enable it.
+
+## Taking over multiplayer quests
+Q_700 to Q_819 sit in the same quest file but belong to the multiplayer
+script (`PQuestsMulti.ec`, counting from 699). The single player script drops
+quest ids from 400 **and NPC ids from 698** while loading; Q_700 with NPC_700
+can never appear in single player. The MP lines also lack tiles (`(null)`),
+their markers are made by the MP script at run time.
+
+Quest > **Take over multiplayer quest** walks you through: pick the MP quest,
+a free quest id and a free NPC id (from 507, below 698), a tile for the giver
+and for every line, marker numbers (kept when the tile does not have them
+yet). At the end stands the **marker checklist**: which markers, with which
+name, number and tile, you have to place in the Two Worlds editor, for
+example `MARKER_QUEST_START 507 on E1` for the giver. The tool places no
+markers. The list then lives in the quest panel with check boxes; open items
+are reported as warnings. The giver gets party 25 (humans), the MP blocks
+have none.
 
 ## States
 Enabled (ENABLE), offer heard (HEAR), taken (TAKE), solved (SOLVE), closed
@@ -847,6 +881,7 @@ HELP_CHAPTER = {
     'help.task': 'tasks', 'help.action': 'actions', 'help.links': 'links',
     'help.preview': 'build', 'help.anim': 'reference',
     'help.enemytpl': 'enemies', 'help.map': 'markers',
+    'help.mpmerge': 'quests',
 }
 
 

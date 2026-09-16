@@ -260,6 +260,9 @@ class App:
         m.add_command(label=t('quest.loadretail'), command=self.load_retail,
                       state=self._state(self.project is not None
                                         and self.cfg.get('game_dir')))
+        m.add_command(label=t('quest.mpmerge'), command=self.merge_mp_quest,
+                      state=self._state(self.project is not None
+                                        and self.cfg.get('game_dir')))
         if self.project and len(self.project.quests) > 1:
             sub = theme.Menu(m, tearoff=0)
             for qq in self.project.quests:
@@ -556,6 +559,8 @@ class App:
             self.copy_quest_as_new(what)
         elif how == 'modcopy':
             self.copy_mod_quest_as_new(*what)
+        elif how == 'mp':
+            self.merge_mp_quest(what)
 
     def new_from_template_data(self, tpl):
         qid = self._free_id()
@@ -597,6 +602,11 @@ class App:
             msg += '  ' + t('dialogtpl.skipped', states=', '.join(
                 t('state.' + s) for s in skipped))
         self.set_info(msg, 'StatusOk.TLabel')
+
+    def merge_mp_quest(self, qid=None):
+        """Wizard: multiplayer quest into the single player (mpmerge.py)."""
+        from .mpmerge import MpMergeWindow
+        MpMergeWindow.show(self, qid)
 
     def copy_quest_as_new(self, qid_or_quest):
         src = (qid_or_quest if isinstance(qid_or_quest, Quest)
@@ -2718,7 +2728,7 @@ class NewQuestDialog:
         f.pack(fill='both', expand=True)
         ttk.Label(f, text=t('newq.head'), style='Brand.TLabel').pack(anchor='w')
         self.how = tk.StringVar(value='empty')
-        for key in ('empty', 'template', 'copy'):
+        for key in ('empty', 'template', 'copy', 'mp'):
             ttk.Radiobutton(f, text=t('newq.' + key), value=key,
                             variable=self.how, command=self._switch
                             ).pack(anchor='w', pady=(8 if key == 'empty' else 2, 0))
@@ -2802,6 +2812,20 @@ class NewQuestDialog:
                 self.items.append(('modcopy', (info['path'], qid)))
                 self.lst.insert('end', label)
                 self.lst.itemconfigure('end', foreground=theme.MOD)
+        elif mode == 'mp':
+            from .mpmerge import is_mp_quest
+            idx = self.app.index
+            for k in sorted(idx.quests, key=int) if idx else []:
+                qid = int(k)
+                if not is_mp_quest(qid):
+                    continue
+                info = idx.quests[k]
+                label = (f"Q_{qid}  {info.get('title') or '-'}   "
+                         f"{' '.join(info.get('fc') or [])}")
+                if needle and needle not in label.lower():
+                    continue
+                self.items.append(('mp', qid))
+                self.lst.insert('end', label)
         if mode == 'empty':
             self.lst.configure(state='disabled')
             self.note.configure(text=t('newq.empty.note'))

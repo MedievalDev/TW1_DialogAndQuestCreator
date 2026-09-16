@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.2.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.3.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1291,6 +1291,32 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     - Vorlagen: jede Quest-Vorlage validiert, baut ihren Block und packt in ein
       Archiv (Test); die Dialog-Vorlage baut einen Baum. Im Spiel noch nicht
       gespielt, siehe Offen.
+67. Multiplayer-Quests uebernehmen (Version 3.3.0, Community-Frage von Orion
+    am 16.09.2026, Marcos Vorgabe: Marker setzt der Nutzer im Editor, das Tool
+    liefert nur die Liste):
+    - Gemessen im SDK: `PQuests.ec` `eFirstQuest 0`, `eQuestsNum 400`,
+      `eFirstQuestUnit 0`, `eQuestUnitsNum 698`; `PQuestsMulti.ec`
+      `eFirstQuest 699`, `eQuestsNum 300`, `eFirstQuestUnit 699`.
+      `ParseQuestNumber`/`ParseGiverNumber` verwerfen alles ausserhalb: Q_700
+      und NPC_700 werden im Einzelspieler nie geladen. 120 MP-Quests
+      (Q_700..Q_819, 131 MP-NPCs ab 700) stehen in derselben qtx, Bloecke mit
+      `(null)`-Kacheln, `ParseMissionNumber("(null)")` = eNoMission im
+      Einzelspieler-Build. Retail-NPCs des Einzelspielers enden bei NPC_506;
+      MP-Baeume (60) haben Lector -1.
+    - `questforge2/mpmerge.py`: `marker_refs` (Zeilen mit Marker+Kachel aus
+      den Specs), `plan` (Checkliste: Geber `MARKER_QUEST_START <npc>` zuerst;
+      Nummern bleiben, wenn die Retail-Kachel sie nicht hat, sonst naechste
+      freie, geteilte Nummern bleiben geteilt), `apply` (make_own, Geber als
+      neuer Sprecher mit Kachel, Marker = NPC-Nummer, Partei 25, Platzhalter-
+      Sprecher "Lector -1" wird der Geber, Level 0 -> 1, `extra['mp_source']`
+      und `extra['markers_todo']`). `MpMergeWindow` in drei Schritten.
+    - Quest-Panel: Checkliste mit Haken (im Projekt gespeichert), Knopf
+      "Kachel auf der Karte zeigen". Pruefung: Warnung je offenem Marker,
+      Fehler bei NPC-Nummern ueber 697 (`val.npc.limit`). `export.npc_block`
+      nimmt `party`/`guild` vom Sprecher. Zeitleiste: Badge "MP", Hinweis,
+      Kontextmenue. Dialog "Neue Quest": vierte Option.
+    - Echttest mit Q_700: Q_385, NPC_508, Kachel E1, zwei Marker in der Liste,
+      Block und NPC-Zeile korrekt; im Spiel nicht getestet (Offen).
 
 Offen:
 
@@ -1298,6 +1324,8 @@ Offen:
 - Spieltest der geaenderten Gegnerstufen (12.59).
 - Usability-Update abgeschlossen: Guide und Vorlagen (2.9.0), Mod-Quellen
   (3.0.0), interaktive Karte (3.1.0).
+- Spieltest einer uebernommenen Multiplayer-Quest (12.67): Marker im Editor
+  setzen, Karte als Mod einbinden, Quest annehmen und loesen.
 - Spieltest der mitgelieferten Vorlagen (vier Quests, vier Gegnergruppen,
   Dialog-Vorlage): je eine Quest exportieren, im neuen Spiel annehmen und
   abschliessen (Abnahme Punkt 9 "laeuft im Spiel").

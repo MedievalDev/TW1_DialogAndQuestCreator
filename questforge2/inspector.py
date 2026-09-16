@@ -381,6 +381,9 @@ class Inspector(ttk.Frame):
                         labels=[f'Q_{i}' for i in free])
             ttk.Label(self.body, text=t('insp.id.hint'),
                       style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
+        todo = q.extra.get('markers_todo') or []
+        if todo:
+            self._marker_checklist(q, todo)
         self._label(t('insp.title'), help_key='help.title')
         self._entry(q.title, lambda v: setattr(q, 'title', v))
         self._label(t('insp.group'))
@@ -673,6 +676,30 @@ class Inspector(ttk.Frame):
                 values['tile'] = res['tile'].upper()
         self._edit(widget, apply, nid)
         self.refresh()
+
+    def _marker_checklist(self, q, todo):
+        """Markers the user has to place in the Two Worlds editor (quest
+        taken over from the multiplayer, mpmerge.py). Ticks are saved in
+        the project."""
+        open_n = sum(1 for x in todo if not x.get('done'))
+        self._label(t('insp.markers.todo', n=open_n), help_key='help.mpmerge')
+        ttk.Label(self.body, text=t('insp.markers.hint'),
+                  style='PanelMuted.TLabel', wraplength=260, justify='left'
+                  ).pack(anchor='w')
+        for item in todo:
+            text = t('mp.item', name=item.get('name'), num=item.get('num'),
+                     tile=item.get('tile'))
+            cb = self._check(text, item.get('done'),
+                             lambda v, it=item: it.__setitem__('done', v))
+            theme.Tooltip(cb, item.get('why') or '')
+        ttk.Button(self.body, text=t('insp.markers.map'), command=lambda:
+                   self.app.show_map(tile=(todo[0].get('tile') or None))
+                   ).pack(anchor='w', pady=(4, 0))
+        if q.extra.get('mp_source'):
+            ttk.Label(self.body, text=t('insp.mp.source',
+                                        id=q.extra['mp_source']),
+                      style='PanelMuted.TLabel', wraplength=260,
+                      justify='left').pack(anchor='w', pady=(4, 0))
 
     def _map_pick(self, values, mkind, widget, setter, nid):
         """Open the map filtered on the marker kind the field reads; the

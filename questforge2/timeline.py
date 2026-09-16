@@ -404,6 +404,9 @@ class Timeline(ttk.Frame):
             badge = t('tl.mod.' + e['state']) + (' *' if e['dirty'] else '')
             c.create_text(x + w - 5, y + 4, anchor='ne', text=badge,
                           fill=theme.MOD, font=font_s, tags=tag)
+        elif kind == 'game' and e['qid'] >= 700:
+            c.create_text(x + w - 5, y + 4, anchor='ne', text=t('tl.mp'),
+                          fill=theme.MUT, font=font_s, tags=tag)
         elif e['source'] not in ('retail', 'project'):
             c.create_text(x + w - 5, y + 4, anchor='ne', text=e['source'][:12],
                           fill=theme.MUT, font=font_s, tags=tag)
@@ -536,7 +539,10 @@ class Timeline(ttk.Frame):
             src = {'retail': t('tl.src.game'), 'project': t('tl.src.project')
                    }.get(e['source'], e['source'])
             self.app.set_hint(f"Q_{qid}  {e['title']}  |  {e['giver']}  |  "
-                              f"{e['fc']}  |  {src}")
+                              f"{e['fc']}  |  {src}"
+                              + (f"  |  {t('tl.mp.hint')}"
+                                 if e['kind'] == 'game' and qid >= 700
+                                 else ''))
         else:
             self.app.set_hint('')
 
@@ -561,6 +567,9 @@ class Timeline(ttk.Frame):
         menu.add_command(label=t('tl.exportone'),
                          command=lambda: app.export_ui(quests=[pq]),
                          state='normal' if pq else 'disabled')
+        if e['kind'] == 'game' and qid >= 700:
+            menu.add_command(label=t('quest.mpmerge'),
+                             command=lambda: app.merge_mp_quest(qid))
         menu.add_command(label=t('tl.text'),
                          command=lambda: app.show_preview(app.quest_for(qid)))
         menu.add_command(label=t('tl.map.quest'),
