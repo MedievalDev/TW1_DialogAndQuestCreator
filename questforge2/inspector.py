@@ -301,6 +301,8 @@ class Inspector(ttk.Frame):
             def setter(v, key=key, kind=kind):
                 if kind == 'party':
                     v = model.parse_party(v)
+                elif kind == 'guild':
+                    v = model.parse_guild(v)
                 elif kind == 'int' or kind.startswith('marker:'):
                     try:
                         v = int(v)
@@ -324,6 +326,11 @@ class Inspector(ttk.Frame):
                                          for p in model.PARTIES])
                 if str(cur).strip().isdigit():
                     var.set(model.party_label(int(cur), t))
+            elif kind == 'guild':
+                w = ttk.Combobox(row, textvariable=var,
+                                 values=['(null)'] + [model.guild_label(g, t)
+                                                      for g in model.GUILDS])
+                var.set(model.guild_label(cur, t))
             elif kind == 'amount':
                 w = ttk.Combobox(row, textvariable=var,
                                  values=['SMALL', 'MEDIUM', 'HIGH'])

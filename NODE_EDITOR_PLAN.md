@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 2.6.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 2.6.1 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1136,6 +1136,23 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     Skriptfassungen mit je frischer GUID als `Mods\EnemyLevels.wd`, nach
     Registry-Sicherung und mit Rueckleseprobe. Tests `test_enemylevel.py`.
     Offen: Spieltest im Spiel (Stufen neuer Gegner).
+60. Bedienung nach Marcos Rueckmeldung (Version 2.6.1):
+    - "+ Neue Aktion" zieht jetzt sichtbar: ein Etikett haengt am Mauszeiger,
+      der Ziel-Node bekommt einen goldenen gestrichelten Rahmen
+      (`graph.highlight_drop`), die Statusleiste sagt "Hier ablegen" oder
+      "Auf eine Dialog-Node ziehen". Aufgabe, Aktion und Bedingung haben
+      Hilfetexte beim Ueberfahren.
+    - Zahlenfelder mit fester Bedeutung bekommen Namen: nach der Partei
+      (12.58) jetzt auch die Gilde (200 keine, 201 Magier, 202 Krieger,
+      203 Haendler, 204 Diebe, 205 Nekromanten, 207 Karga, 208 Skelden;
+      206 ist im SDK unbenutzt). Uebrige Zahlenfelder (Anzahl, Stufe,
+      Radius, Marker, Animation 0 bis 17) haben keine bekannten Namen und
+      bleiben Zahlen.
+    - Questgrenze und Gegnerstufen sind zusaetzlich Knoepfe in der Kopfleiste
+      der Zeitleiste; die Beschriftung der Questgrenze zeigt den wirksamen
+      Wert.
+    - Statusleiste wird vor den Panels gepackt, sonst schnitt sie ein
+      kleines Fenster ab (bei Marco war sie nur im Vollbild zu sehen).
 
 Offen:
 

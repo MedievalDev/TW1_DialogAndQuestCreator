@@ -164,6 +164,12 @@ class ActionBox(ttk.Frame):
             w.bind('<Button-1>', lambda e: self._cond_menu(e.x_root, e.y_root))
         ttk.Label(self.rows, text=t('palette.hint'), style='PanelMuted.TLabel',
                   wraplength=210).pack(anchor='w', pady=(8, 0))
+        for widget, key in ((self.task, 'tip.task'),
+                            (self.action, 'tip.action'),
+                            (self.cond, 'tip.condition')):
+            theme.Tooltip(widget, t(key))
+            for child in widget.winfo_children():
+                theme.Tooltip(child, t(key))
 
     def _row(self, text, color, glyph):
         f = ttk.Frame(self.rows, style='Panel.TFrame', cursor='hand2')
@@ -174,28 +180,71 @@ class ActionBox(ttk.Frame):
         return f
 
     def _press(self, ev):
-        self._drag = {'x': ev.x_root, 'y': ev.y_root, 'active': False}
+        self._drag = {'x': ev.x_root, 'y': ev.y_root, 'active': False,
+                      'ghost': None}
+
+    def _ghost(self, text, x, y):
+        """Little label that follows the cursor while dragging."""
+        d = self._drag
+        if d.get('ghost') is None:
+            win = tk.Toplevel(self)
+            win.wm_overrideredirect(True)
+            win.attributes('-topmost', True)
+            try:
+                win.attributes('-alpha', 0.92)
+            except tk.TclError:
+                pass
+            tk.Label(win, text=text, bg=theme.SEL, fg=theme.GOLD_HI,
+                     font=theme.FONT_BOLD, bd=1, relief='solid',
+                     padx=8, pady=3).pack()
+            d['ghost'] = win
+        d['ghost'].geometry(f'+{x + 14}+{y + 12}')
+
+    def _drop_target(self, x_root, y_root):
+        """Dialog node under the cursor, also when an action sits there."""
+        if not self.app.quest:
+            return None
+        nid, _ = self.app.graph.node_at(x_root, y_root)
+        node = self.app.quest.graph['nodes'].get(nid) if nid else None
+        if node and node.get('type') in ('action', 'condition'):
+            nid = node.get('attached_to')
+            node = self.app.quest.graph['nodes'].get(nid)
+        if node and node.get('type') in ('npc', 'player'):
+            return nid
+        return None
 
     def _motion(self, ev):
         d = self._drag
-        if d and not d['active'] and (abs(ev.x_root - d['x']) > 4
-                                      or abs(ev.y_root - d['y']) > 4):
+        if not d:
+            return
+        if not d['active'] and (abs(ev.x_root - d['x']) > 4
+                                or abs(ev.y_root - d['y']) > 4):
             d['active'] = True
             self.app.root.configure(cursor='hand2')
+        if not d['active']:
+            return
+        nid = self._drop_target(ev.x_root, ev.y_root)
+        self.app.graph.highlight_drop(nid)
+        self._ghost(('\u26a1 ' + t('palette.action.drop')) if nid
+                    else ('\u26a1 ' + t('palette.action.nodrop')),
+                    ev.x_root, ev.y_root)
+        self.app.set_hint(t('palette.action.drop') if nid
+                          else t('palette.action.nodrop'))
 
     def _release(self, ev):
         d = self._drag
         self._drag = None
-        if not d or not d['active']:
+        if not d:
+            return
+        if d.get('ghost') is not None:
+            d['ghost'].destroy()
+        self.app.graph.highlight_drop(None)
+        if not d['active']:
             return
         self.app.root.configure(cursor='')
-        nid, _ = self.app.graph.node_at(ev.x_root, ev.y_root)
-        node = self.app.quest.graph['nodes'].get(nid) if (
-            self.app.quest and nid) else None
-        if node and node.get('type') == 'action':
-            nid = node.get('attached_to')
-            node = self.app.quest.graph['nodes'].get(nid)
-        if node and node.get('type') in ('npc', 'player'):
+        self.app.set_hint('')
+        nid = self._drop_target(ev.x_root, ev.y_root)
+        if nid:
             self._verb_menu(ev.x_root, ev.y_root, nid)
 
     def _verb_menu(self, x, y, parent):

@@ -99,6 +99,18 @@ class Parties(unittest.TestCase):
         self.assertEqual(model.PARTIES[-1], 43)
         self.assertTrue(set(model.PARTY_FIGHT) < set(model.PARTIES))
 
+    def test_guilds(self):
+        def t(key):
+            return {'guild.202': 'Warriors'}.get(key, key)
+        self.assertEqual(model.guild_label('202', t), '202  Warriors')
+        self.assertEqual(model.guild_label('(null)', t), '(null)')
+        self.assertEqual(model.guild_label('', t), '(null)')
+        self.assertEqual(model.guild_label('999', t), '999')
+        self.assertEqual(model.parse_guild('204  Thieves'), '204')
+        self.assertEqual(model.parse_guild('(null)'), '(null)')
+        self.assertIn(201, model.GUILDS)
+        self.assertNotIn(206, model.GUILDS)       # unused in the SDK
+
 
 if __name__ == '__main__':
     unittest.main()

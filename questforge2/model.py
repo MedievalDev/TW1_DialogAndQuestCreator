@@ -145,6 +145,28 @@ ACTION_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'ENABLE', 'HEAR', 'FAIL', 'FIGHT')
 PARTIES = (18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
            34, 35, 36, 37, 38, 39, 40, 41, 42, 43)
 PARTY_FIGHT = (18, 19, 20, 21, 22, 23)      # the hostile ones
+# guild numbers, same source: 200 is "no guild", 206 is unused
+GUILDS = (200, 201, 202, 203, 204, 205, 207, 208)
+
+
+def guild_label(value, t):
+    """'202  Warriors' for the picker; '(null)' and unknown values stay."""
+    text = str(value).strip()
+    if not text or text == '(null)':
+        return text or '(null)'
+    if not text.split()[0].isdigit():
+        return text
+    num = int(text.split()[0])
+    name = t(f'guild.{num}')
+    return f'{num}  {name}' if name != f'guild.{num}' else str(num)
+
+
+def parse_guild(text):
+    """Number out of '202  Warriors'; '(null)' and free text stay."""
+    head = str(text).strip().split()
+    if head and head[0].isdigit():
+        return head[0]
+    return str(text).strip()
 
 
 def party_label(num, t):

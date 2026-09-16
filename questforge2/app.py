@@ -1268,6 +1268,10 @@ class App:
     def _build_statusbar(self):
         bar = ttk.Frame(self.root, style='Status.TFrame')
         bar.pack(fill='x', side='bottom')
+        # the status bar must claim its height before the panes get the rest,
+        # otherwise a small window cuts it off (Marco 2026-09-16)
+        self.vpane.pack_forget()
+        self.vpane.pack(fill='both', expand=True)
         self.status = {}
         for i, key in enumerate(('project', 'game', 'limit', 'quest',
                                  'nodes', 'validation')):
@@ -1300,6 +1304,11 @@ class App:
             s['project'].configure(text=t('status.noproject'))
         s['game'].configure(text=self.cfg.get('game_dir')
                             or t('status.nogame'))
+        try:
+            self.timeline.limit_btn.configure(
+                text=t('tl.limit', n=self.quest_limit))
+        except (AttributeError, tk.TclError):
+            pass
         s['limit'].configure(
             text=t('status.limit', n=self.quest_limit),
             style=('StatusOk.TLabel' if self.quest_limit > data.RETAIL_LIMIT

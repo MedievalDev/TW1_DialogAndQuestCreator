@@ -460,6 +460,12 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Zeitpunkt folgt aus der Ebene), Bedingungen hängen unter dem Einstieg
   Angebot (Vorgängerquest, Level, Gilde). Aktionen ohne Dialog stehen im
   Quest-Panel.
+- **Ziehen und Ablegen:** "+ Neue Aktion" hängt beim Ziehen an der Maus, der
+  Ziel-Node bekommt einen goldenen Rahmen, und die Statusleiste sagt, ob dort
+  abgelegt werden kann. Die drei Einträge im Kasten haben Hilfetexte beim
+  Überfahren.
+- **Kopfleiste:** Neben "+ Neue Quest" liegen die Knöpfe "Questgrenze" mit der
+  wirksamen Grenze und "Gegnerstufen".
 - **Eigenschaften** (rechts): Formular des gewählten Elements, ohne Auswahl
   die Quest selbst. ID-Felder haben einen Kachel-Picker, Dialogzeilen eine
   Cue-Suche. Das Feld Partei listet die Fraktionsnummern des SDK mit Namen

@@ -87,6 +87,14 @@ class Timeline(ttk.Frame):
         self.new_btn = ttk.Button(bar, text='+ ' + t('quest.new'),
                                   command=app.new_quest)
         self.new_btn.pack(side='right', padx=6, pady=2)
+        self.enemy_btn = ttk.Button(bar, text=t('tl.enemylevels'),
+                                    command=app.show_enemy_levels)
+        self.enemy_btn.pack(side='right', padx=(0, 4), pady=2)
+        theme.Tooltip(self.enemy_btn, t('tip.enemylevels'))
+        self.limit_btn = ttk.Button(bar, text=t('tl.limit', n=400),
+                                    command=app.show_quest_limit)
+        self.limit_btn.pack(side='right', padx=(0, 4), pady=2)
+        theme.Tooltip(self.limit_btn, t('tip.limit'))
         self.count = ttk.Label(bar, text='', style='PanelMuted.TLabel')
         self.count.pack(side='right', padx=6)
         self.canvas = tk.Canvas(self, bg=theme.CANVAS_BG, highlightthickness=0,

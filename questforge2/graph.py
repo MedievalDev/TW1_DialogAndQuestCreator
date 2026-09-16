@@ -340,6 +340,23 @@ class GraphView(tk.Canvas):
         return self._hit(ev)['nid'], self.c2w(self.canvasx(x),
                                                self.canvasy(y))
 
+    def highlight_drop(self, nid):
+        """Gold frame around the node a palette item would drop onto."""
+        if getattr(self, '_drop_hint', None) == nid:
+            return
+        self._drop_hint = nid
+        self.delete('drophint')
+        node = self.graph['nodes'].get(nid) if (self.graph and nid) else None
+        if not node:
+            return
+        w, h = model.node_size(node)
+        x1, y1 = self.w2c(node['x'], node['y'])
+        x2, y2 = self.w2c(node['x'] + w, node['y'] + h)
+        m = 4 * self.zoom
+        self.create_rectangle(x1 - m, y1 - m, x2 + m, y2 + m,
+                              outline=theme.GOLD, width=2.5, dash=(6, 4),
+                              tags='drophint')
+
     def redraw_node(self, nid):
         """Public: node data changed (text, colour, size, lines)."""
         if not self.graph or nid not in self.graph['nodes']:
