@@ -1006,6 +1006,12 @@ _DE = {
     'lib.missing': '(Datei fehlt)',
     'lib.count': '{n} Aufnahmen, {unused} unbenutzt',
     'lib.unsaved': 'Projekt noch nicht gespeichert',
+    'map.zoom.out': 'Kleiner (Strg + Mausrad)',
+    'map.zoom.in': 'Groesser (Strg + Mausrad)',
+    'map.zoom.fit': 'Ganze Karte',
+    'map.zoom.fit.tip': 'Die ganze Karte ins Fenster',
+    'map.zoom.now': '{px} Pixel je Tile',
+    'map.zoom.tip': 'Mausrad zoomt, Umschalt + Rad scrollt seitwaerts',
 }
 
 _EN = {
@@ -1981,6 +1987,12 @@ _EN = {
     'lib.missing': '(file missing)',
     'lib.count': '{n} recordings, {unused} unused',
     'lib.unsaved': 'Project not saved yet',
+    'map.zoom.out': 'Smaller (Ctrl + wheel)',
+    'map.zoom.in': 'Larger (Ctrl + wheel)',
+    'map.zoom.fit': 'Whole map',
+    'map.zoom.fit.tip': 'Fit the whole map into the window',
+    'map.zoom.now': '{px} pixels per tile',
+    'map.zoom.tip': 'The wheel zooms, shift + wheel scrolls sideways',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

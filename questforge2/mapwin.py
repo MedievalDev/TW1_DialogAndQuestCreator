@@ -1,9 +1,11 @@
 """Interactive map (update 5c): minimap tiles of the game, markers, locations
 and chests as points, filters, search, and "use in quest".
 
-Non-modal. Zoom with the mouse wheel (48 to 2048 px per tile in 22 steps),
-drag with the left mouse button, click selects in the list, right click
-offers "use in quest" when the map was opened from a marker field. The data and what is
+Non-modal. The wheel zooms around the mouse (48 to 2048 px per tile in 22
+steps), shift and the wheel scroll sideways, the buttons under the map zoom
+and fit the whole map, the left mouse button drags, a click selects in the
+list, the right button offers "use in quest" when the map was opened from a
+marker field. The data and what is
 proven about positions are in ``mapdata.py``.
 """
 
@@ -15,11 +17,10 @@ from .i18n import t
 
 NL = chr(10)
 # Zoom steps in pixels per tile. The minimaps come as 64, 128, 256 and 512
-# pixel levels and Tk scales images only by whole numbers, so every step is
-# a level scaled by z/s with s in 1, 2, 4 (Tk subsamples before it zooms).
-# That gives factors of 1.14 to 1.25 between steps instead of 2.
-STEPS = (48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512,
-         640, 768, 896, 1024, 1280, 1536, 1792, 2048)
+# pixel levels and Tk scales images only by whole numbers. These steps grow
+# by a third or a half instead of doubling, and every one of them is built
+# from a level with a small scaling, so a step never takes long.
+STEPS = (48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048)
 LEVEL_PX = (512, 256, 128, 64)
 
 
@@ -31,10 +32,10 @@ def scale_of(px):
     time, so only levels at or below the wanted size are used and the blown
     up picture stays inside a budget - a far view of 108 tiles then works
     from the small levels and stays fast."""
-    budget = min(max(1024, px * 4), 3072)
+    budget = 2048
     for level, base in enumerate(LEVEL_PX):
-        if base > px and base != LEVEL_PX[-1]:
-            continue                        # only 48 px needs to shrink
+        if base > px and base != LEVEL_PX[-1] and px < 384:
+            continue        # far view: small levels, they are quick
         for s in (1, 2, 4, 8):
             z, rest = divmod(px * s, base)
             if rest or not 1 <= z <= 8 or base * z > budget:
@@ -134,6 +135,7 @@ class MapWindow:
         self.selected = None
         self._blink_job = None
         self._draw_job = None
+        self.zoom_lbl = None
 
         self.win = tk.Toplevel(app.root)
         self.win.title(t('map.title'))
@@ -142,6 +144,8 @@ class MapWindow:
         theme.dark_titlebar(self.win)
         self.win.protocol('WM_DELETE_WINDOW', self.close)
         self.win.bind('<Escape>', lambda e: self.close())
+        self.win.bind('<Control-plus>', lambda e: self.zoom_step(1))
+        self.win.bind('<Control-minus>', lambda e: self.zoom_step(-1))
         self.tip = theme.FloatTip(self.win)
 
         side = ttk.Frame(self.win, padding=(10, 8), width=250)
@@ -221,6 +225,20 @@ class MapWindow:
         # -- canvas -------------------------------------------------------
         self.c = tk.Canvas(mid, bg=theme.CANVAS_BG, highlightthickness=0)
         self.c.pack(fill='both', expand=True)
+        bar = ttk.Frame(mid)
+        bar.pack(fill='x', padx=6, pady=(2, 0))
+        for text, cmd, key in (
+                ('\u2212', lambda: self.zoom_step(-1), 'map.zoom.out'),
+                ('+', lambda: self.zoom_step(1), 'map.zoom.in'),
+                (t('map.zoom.fit'), self.zoom_fit, 'map.zoom.fit.tip')):
+            b = ttk.Button(bar, text=text, width=3 if len(text) < 3 else 12,
+                           command=cmd)
+            b.pack(side='left', padx=(0, 4))
+            theme.Tooltip(b, t(key))
+        self.zoom_lbl = ttk.Label(bar, text='', style='Muted.TLabel')
+        self.zoom_lbl.pack(side='left', padx=(6, 0))
+        ttk.Label(bar, text=t('map.zoom.tip'), style='Muted.TLabel'
+                  ).pack(side='right')
         self.info = ttk.Label(mid, text='', style='Muted.TLabel')
         self.info.pack(fill='x', padx=6, pady=(2, 0))
         self.c.bind('<ButtonPress-1>', self._press)
@@ -228,6 +246,8 @@ class MapWindow:
         self.c.bind('<ButtonRelease-1>', self._release)
         self.c.bind('<Button-3>', self._context)
         self.c.bind('<MouseWheel>', self._wheel)
+        self.c.bind('<Shift-MouseWheel>',
+                    lambda e: self._wheel(e, sideways=True))
         self.c.bind('<Motion>', self._hover)
         self.c.bind('<Leave>', lambda e: self.tip.hide())
         self.c.bind('<Configure>', lambda e: self._schedule_draw())
@@ -579,12 +599,29 @@ class MapWindow:
         if i is not None:
             self.select_index(i, center=False)
 
-    def _wheel(self, ev):
+    def _wheel(self, ev, sideways=False):
+        """Wheel zooms around the mouse, shift scrolls sideways."""
+        if sideways:
+            self.c.xview_scroll(-1 if ev.delta > 0 else 1, 'units')
+            self._schedule_draw()
+            return 'break'
+        self.zoom_step(1 if ev.delta > 0 else -1, ev.x, ev.y)
+        return 'break'
+
+    def zoom_step(self, direction, sx=None, sy=None):
         near = min(range(len(STEPS)), key=lambda i: abs(STEPS[i] - self.px))
-        step = near + (1 if ev.delta > 0 else -1)
+        step = near + direction
         if not 0 <= step < len(STEPS):
             return
-        self.zoom_to(STEPS[step], ev.x, ev.y, smooth=True)
+        self.zoom_to(STEPS[step], sx, sy, smooth=True)
+
+    def zoom_fit(self):
+        """Whole map into the window."""
+        c = self.c
+        fit = min(c.winfo_width() / len(mapdata.COLS),
+                  c.winfo_height() / mapdata.ROWS)
+        px = max([s for s in STEPS if s <= fit] or [STEPS[0]])
+        self.zoom_to(px)
 
     def zoom_to(self, px, sx=None, sy=None, smooth=False):
         c = self.c
@@ -595,6 +632,8 @@ class MapWindow:
         self.px = px
         self._set_region()
         self._scroll_to(mx * px - sx, my * px - sy)
+        if self.zoom_lbl is not None:
+            self.zoom_lbl.configure(text=t('map.zoom.now', px=px))
         if smooth:
             # one redraw for a whole turn of the wheel
             self._schedule_draw()
