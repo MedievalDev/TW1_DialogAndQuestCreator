@@ -1,9 +1,9 @@
 """Interactive map (update 5c): minimap tiles of the game, markers, locations
 and chests as points, filters, search, and "use in quest".
 
-Non-modal. Zoom with the mouse wheel (64 to 1024 px per tile), drag with
-the left mouse button, click selects in the list, right click offers "use in
-quest" when the map was opened from a marker field. The data and what is
+Non-modal. Zoom with the mouse wheel (48 to 2048 px per tile in 22 steps),
+drag with the left mouse button, click selects in the list, right click
+offers "use in quest" when the map was opened from a marker field. The data and what is
 proven about positions are in ``mapdata.py``.
 """
 
@@ -14,8 +14,35 @@ from . import mapdata, mods, theme
 from .i18n import t
 
 NL = chr(10)
-STEPS = (64, 128, 256, 512, 1024)
-LEVEL_OF = {64: 3, 128: 2, 256: 1, 512: 0, 1024: 0}
+# Zoom steps in pixels per tile. The minimaps come as 64, 128, 256 and 512
+# pixel levels and Tk scales images only by whole numbers, so every step is
+# a level scaled by z/s with s in 1, 2, 4 (Tk subsamples before it zooms).
+# That gives factors of 1.14 to 1.25 between steps instead of 2.
+STEPS = (48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512,
+         640, 768, 896, 1024, 1280, 1536, 1792, 2048)
+LEVEL_PX = (512, 256, 128, 64)
+
+
+def scale_of(px):
+    """(level, zoom, subsample) for one tile size.
+
+    The picture is zoomed first and subsampled afterwards (see _image), so
+    the detail of the level survives. Blowing up a level costs memory and
+    time, so only levels at or below the wanted size are used and the blown
+    up picture stays inside a budget - a far view of 108 tiles then works
+    from the small levels and stays fast."""
+    budget = min(max(1024, px * 4), 3072)
+    for level, base in enumerate(LEVEL_PX):
+        if base > px and base != LEVEL_PX[-1]:
+            continue                        # only 48 px needs to shrink
+        for s in (1, 2, 4, 8):
+            z, rest = divmod(px * s, base)
+            if rest or not 1 <= z <= 8 or base * z > budget:
+                continue
+            return level, z, s
+    return len(LEVEL_PX) - 1, 1, 1
+
+
 # tile name size per zoom step (px per tile): small plates when zoomed out
 TILE_FONT = {64: ('Segoe UI', 7, 'bold'), 128: ('Segoe UI', 9, 'bold')}
 DEFAULT_GROUPS = ('quest_enemy', 'quest_object', 'quest_point', 'quest_walk',
@@ -369,20 +396,32 @@ class MapWindow:
     def _schedule_draw(self):
         if self._draw_job:
             self.win.after_cancel(self._draw_job)
-        self._draw_job = self.win.after(30, self._draw_tiles)
+        self._draw_job = self.win.after(30, self._redraw_view)
+
+    def _redraw_view(self):
+        self._draw_tiles()
+        self._draw_points()
 
     def _image(self, tile, px):
         key = (tile, px)
         img = self.images.get(key)
         if img is not None:
             return img
-        level = LEVEL_OF[px]
+        level, z, s = scale_of(px)
         path = self.store.png(tile, level)
+        while path is None and level < len(LEVEL_PX) - 1:
+            level += 1                     # tile missing on that level
+            path = self.store.png(tile, level)
+            z, s = px * s // LEVEL_PX[level] or 1, s
         if not path:
             return None
         img = tk.PhotoImage(file=path)
-        if px == 1024:
-            img = img.zoom(2, 2)
+        if z != 1:
+            img = img.zoom(z, z)
+        if s != 1:
+            out = tk.PhotoImage(width=px, height=px)
+            out.tk.call(out, 'copy', img, '-subsample', s, s)
+            img = out
         self.images[key] = img
         return img
 
@@ -410,7 +449,7 @@ class MapWindow:
                                    tags=('tile',))
                 if interior:
                     inner = f'{tile}_1'
-                    if self.store.has(inner, LEVEL_OF[px]):
+                    if self.store.has(inner, scale_of(px)[0]):
                         c.create_image(tx, ty, image=self._image(inner, px),
                                        anchor='nw', tags=('tile',))
                     else:
@@ -436,8 +475,9 @@ class MapWindow:
                         outline=theme.GOLD, tags=('tile',))
                     c.tag_lower(plate, txt)
         c.tag_lower('tile')
-        # keep memory bounded when panning at high zoom
-        if len(self.images) > 48:
+        # keep memory bounded when panning at high zoom (a tile costs
+        # px * px * 4 bytes in Tk, so 512 px and up are pruned hard)
+        if len(self.images) > (8 if px >= 512 else 48):
             shown = {c.itemcget(i, 'image') for i in c.find_withtag('tile')
                      if c.type(i) == 'image'}
             for key in [k for k, img in self.images.items()
@@ -514,12 +554,13 @@ class MapWindow:
             self.select_index(i, center=False)
 
     def _wheel(self, ev):
-        step = STEPS.index(self.px) + (1 if ev.delta > 0 else -1)
+        near = min(range(len(STEPS)), key=lambda i: abs(STEPS[i] - self.px))
+        step = near + (1 if ev.delta > 0 else -1)
         if not 0 <= step < len(STEPS):
             return
-        self.zoom_to(STEPS[step], ev.x, ev.y)
+        self.zoom_to(STEPS[step], ev.x, ev.y, smooth=True)
 
-    def zoom_to(self, px, sx=None, sy=None):
+    def zoom_to(self, px, sx=None, sy=None, smooth=False):
         c = self.c
         if sx is None:
             sx, sy = c.winfo_width() / 2, c.winfo_height() / 2
@@ -529,8 +570,12 @@ class MapWindow:
         c.configure(scrollregion=(0, 0, len(mapdata.COLS) * px,
                                   mapdata.ROWS * px))
         self._scroll_to(mx * px - sx, my * px - sy)
-        self._draw_tiles()
-        self._draw_points()
+        if smooth:
+            # one redraw for a whole turn of the wheel
+            self._schedule_draw()
+        else:
+            self._draw_tiles()
+            self._draw_points()
 
     def _scroll_to(self, left, top):
         c = self.c
