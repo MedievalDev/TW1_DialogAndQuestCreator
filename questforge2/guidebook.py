@@ -645,12 +645,11 @@ cells and every marker of that kind, read from the maps of the game
 zusammengesetzt aus den Minimaps des Spiels. Das Fenster bleibt offen, waehrend
 du weiterarbeitest.
 
-- **Bedienung:** Mausrad zoomt um den Mauszeiger, in 12 Stufen von 48 bis
-  2048 Pixel je Tile (je Raste ein Drittel oder die Haelfte groesser).
-  Umschalt und Rad scrollt seitwaerts. Unter der Karte stehen die Knoepfe
-  minus, plus und **Ganze Karte** samt aktueller Stufe. Ab 384 Pixel kommen
-  alle Stufen aus derselben, schaerfsten Kachel, damit sich das Bild beim
-  Zoomen nicht veraendert. Die Karte sitzt immer mittig: passt sie ganz ins
+- **Bedienung:** Mausrad zoomt stufenlos um den Mauszeiger, je Raste ein
+  Achtel (40 bis 2048 Pixel je Tile), wie in einem Bildbetrachter. Umschalt
+  und Rad scrollt seitwaerts. Unter der Karte stehen die Knoepfe minus, plus
+  und **Ganze Karte** samt aktueller Groesse. Die Kacheln werden geglaettet
+  skaliert, beim Verkleinern mit einem feineren Filter. Die Karte sitzt immer mittig: passt sie ganz ins
   Fenster, bleibt sie in der Mitte, sonst laesst sie sich bis an ihren Rand
   schieben. Ziehen verschiebt,
   Klick auf einen Punkt waehlt ihn in der Liste rechts, Klick in der Liste
@@ -696,11 +695,11 @@ das nicht nachgemessen. Orte (`LOCATION`) stehen in Zellen
 together from the minimaps of the game. The window stays open while you keep
 working.
 
-- **Controls:** the mouse wheel zooms around the mouse, in 12 steps from 48
-  to 2048 pixels per tile (a third or a half per notch). Shift and the wheel
-  scroll sideways. Below the map there are minus, plus and **Whole map**
-  with the current step. From 384 pixels up every step comes from the same,
-  sharpest tile, so the picture does not change while zooming. The map
+- **Controls:** the mouse wheel zooms around the mouse without steps, an
+  eighth per notch (40 to 2048 pixels per tile), like an image viewer. Shift
+  and the wheel scroll sideways. Below the map there are minus, plus and
+  **Whole map** with the current size. Tiles are scaled smoothly, with a
+  finer filter while shrinking. The map
   always sits in the middle: while it fits into the window it stays centred,
   otherwise it pans up to its edge. Dragging
   pans, a click on a point selects it in the list on the right, a click in the

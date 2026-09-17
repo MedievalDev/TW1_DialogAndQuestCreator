@@ -20,7 +20,8 @@ a = Analysis(
     hiddenimports=['tw1_lan', 'tw1_qtx', 'tw1_wd', 'wdio', 'winreg'],
     hookspath=[],
     runtime_hooks=[],
-    excludes=['numpy', 'PIL', 'matplotlib', 'pandas', 'scipy', 'IPython',
+    # PIL scales the map tiles smoothly (mapwin.scaled_image)
+    excludes=['numpy', 'matplotlib', 'pandas', 'scipy', 'IPython',
               'pydoc', 'unittest', 'test', 'lib2to3', 'sqlite3',
               'xmlrpc', 'multiprocessing',
               'questforge2.tests', 'quest_creator_gui', 'questforge',

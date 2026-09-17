@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.6.4 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.7.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1464,6 +1464,15 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       statt des Zeigers, damit nichts seitlich springt. Gemessen: schwarzer
       Anteil direkt nach der Raste 0,5 % (vorher 98 %), sechs schnelle
       Rasten = eine Neuzeichnung in 193 ms.
+    - 3.7.0 (Marco: "warum kann das nicht so rein zoomen wie in paint"):
+      Tk skaliert Bilder nur ganzzahlig, deshalb waren Stufen noetig. Jetzt
+      skaliert Pillow die Kacheln (`mapwin.SMOOTH`, im Spec nicht mehr
+      ausgeschlossen, Exe 12,7 -> 18,3 MB): stufenlos 40..2048 px, je Raste
+      ein Achtel, Quelle ist die kleinste Minimap-Stufe, die noch mindestens
+      so gross ist (`source_level`), Verkleinern mit LANCZOS, Vergroessern
+      bilinear; ohne Pillow bleibt die alte Stufenleiter. Gemessen:
+      schlimmster Neuaufbau 162 ms (vorher 246), Fernsicht 59..118 ms,
+      je Raste rund 50 ms, schwarzer Anteil 0,3 %.
 
 Offen:
 

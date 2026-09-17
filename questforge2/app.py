@@ -2137,6 +2137,7 @@ class App:
                             f'https={self._selftest_https()} '
                             f'mics={self._selftest_mics()} '
                             f'voicebank={self._selftest_voicebank()} '
+                            f'mapzoom={self._selftest_mapzoom()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2151,6 +2152,15 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    @staticmethod
+    def _selftest_mapzoom():
+        from . import mapwin
+        if not mapwin.SMOOTH:
+            return 'steps'
+        from PIL import Image
+        im = Image.new('RGB', (64, 64)).resize((90, 90), Image.BILINEAR)
+        return f'smooth/{im.size[0]}'
 
     def _selftest_voicebank(self):
         from . import voicebank

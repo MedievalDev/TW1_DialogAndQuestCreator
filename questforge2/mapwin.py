@@ -1,12 +1,12 @@
 """Interactive map (update 5c): minimap tiles of the game, markers, locations
 and chests as points, filters, search, and "use in quest".
 
-Non-modal. The wheel zooms around the mouse (48 to 2048 px per tile in 22
-steps), shift and the wheel scroll sideways, the buttons under the map zoom
-and fit the whole map, the left mouse button drags, a click selects in the
-list, the right button offers "use in quest" when the map was opened from a
-marker field. The data and what is
-proven about positions are in ``mapdata.py``.
+Non-modal. The wheel zooms around the mouse, smoothly and without steps
+(40 to 2048 px per tile, an eighth per notch, scaled with Pillow), shift and
+the wheel scroll sideways, the buttons under the map zoom and fit the whole
+map, the left mouse button drags, a click selects in the list, the right
+button offers "use in quest" when the map was opened from a marker field.
+The data and what is proven about positions are in ``mapdata.py``.
 """
 
 import tkinter as tk
@@ -16,11 +16,19 @@ from . import mapdata, mods, theme
 from .i18n import t
 
 NL = chr(10)
-# Zoom steps in pixels per tile. The minimaps come as 64, 128, 256 and 512
-# pixel levels and Tk scales images only by whole numbers. These steps grow
-# by a third or a half instead of doubling, and every one of them is built
-# from a level with a small scaling, so a step never takes long.
+# Pixels per tile. With Pillow every size is possible (smooth scaling like
+# an image viewer, a wheel notch changes the size by an eighth); without it
+# Tk can only scale by whole numbers, then these steps are used.
+MIN_PX, MAX_PX = 40, 2048
+WHEEL_FACTOR = 1.125
+BUTTON_FACTOR = 1.5
 STEPS = (48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048)
+try:
+    from PIL import Image, ImageTk
+    SMOOTH = True
+except ImportError:                         # falls back to whole numbers
+    Image = ImageTk = None
+    SMOOTH = False
 LEVEL_PX = (512, 256, 128, 64)
 
 
@@ -44,8 +52,23 @@ def scale_of(px):
     return len(LEVEL_PX) - 1, 1, 1
 
 
-# tile name size per zoom step (px per tile): small plates when zoomed out
-TILE_FONT = {64: ('Segoe UI', 7, 'bold'), 128: ('Segoe UI', 9, 'bold')}
+def tile_font(px):
+    """Tile name size: small plates when zoomed out."""
+    if px <= 80:
+        return ('Segoe UI', 7, 'bold')
+    return ('Segoe UI', 9, 'bold') if px <= 160 else ('Segoe UI', 11, 'bold')
+
+
+def source_level(px):
+    """Index of the minimap level to scale from: the smallest one that is
+    still at least as large as the wanted size, so shrinking keeps the
+    detail and growing starts from the sharpest picture there is."""
+    for i in range(len(LEVEL_PX) - 1, -1, -1):
+        if LEVEL_PX[i] >= px:
+            return i
+    return 0
+
+
 DEFAULT_GROUPS = ('quest_enemy', 'quest_object', 'quest_point', 'quest_walk',
                   'quest_teleport', 'quest_clear', 'quest_kill', 'npc_start',
                   'chest', 'gate', 'teleport', 'locations', 'containers')
@@ -127,6 +150,7 @@ class MapWindow:
             app.root.configure(cursor='')
         self.px = 64
         self.images = {}
+        self._sources = {}
         self.points = []
         self.visible = []
         self.focus_keys = set()
@@ -433,10 +457,38 @@ class MapWindow:
         c = self.c
         self._scroll_to(c.canvasx(0), c.canvasy(0))
 
+    def _source(self, tile, level):
+        """Decoded minimap of one level (PIL), cached."""
+        src = self._sources.get((tile, level))
+        if src is None:
+            path = self.store.png(tile, level)
+            if not path:
+                return None
+            src = Image.open(path).convert('RGB')
+            src.load()
+            self._sources[(tile, level)] = src
+        return src
+
     def _image(self, tile, px):
         key = (tile, px)
         img = self.images.get(key)
         if img is not None:
+            return img
+        if SMOOTH:
+            level = source_level(px)
+            src = None
+            while src is None and level < len(LEVEL_PX):
+                src = self._source(tile, level)
+                level += 1
+            if src is None:
+                return None
+            if src.size != (px, px):
+                # shrinking looks better with a proper filter, growing is
+                # cheap and bilinear is enough
+                src = src.resize((px, px), Image.LANCZOS
+                                 if px < src.size[0] else Image.BILINEAR)
+            img = ImageTk.PhotoImage(src)
+            self.images[key] = img
             return img
         level, z, s = scale_of(px)
         path = self.store.png(tile, level)
@@ -509,11 +561,11 @@ class MapWindow:
                                    tags=(new,))
                 if self.labels.get():
                     # light parchment map: white text on a dark plate
-                    small = px <= 64
+                    small = px <= 80
                     txt = c.create_text(
                         tx + (4 if small else 8), ty + (3 if small else 5),
                         anchor='nw', text=tile, fill='#ffffff',
-                        font=TILE_FONT.get(px, ('Segoe UI', 11, 'bold')),
+                        font=tile_font(px),
                         tags=(new,))
                     bx0, by0, bx1, by1 = c.bbox(txt)
                     pad = 2 if small else 4
@@ -528,6 +580,8 @@ class MapWindow:
         c.tag_lower('tile')
         # keep memory bounded when panning at high zoom (a tile costs
         # px * px * 4 bytes in Tk, so 512 px and up are pruned hard)
+        if len(self._sources) > 160:
+            self._sources.clear()
         if len(self.images) > (8 if px >= 512 else 48):
             shown = {c.itemcget(i, 'image') for i in c.find_withtag('tile')
                      if c.type(i) == 'image'}
@@ -611,22 +665,38 @@ class MapWindow:
             self.c.xview_scroll(-1 if ev.delta > 0 else 1, 'units')
             self._schedule_draw()
             return 'break'
-        self.zoom_step(1 if ev.delta > 0 else -1, ev.x, ev.y)
+        self.zoom_step(1 if ev.delta > 0 else -1, ev.x, ev.y,
+                       factor=WHEEL_FACTOR)
         return 'break'
 
-    def zoom_step(self, direction, sx=None, sy=None):
-        near = min(range(len(STEPS)), key=lambda i: abs(STEPS[i] - self.px))
-        step = near + direction
-        if not 0 <= step < len(STEPS):
-            return
-        self.zoom_to(STEPS[step], sx, sy, smooth=True)
+    def zoom_step(self, direction, sx=None, sy=None, factor=None):
+        """One notch: a free factor with Pillow, else the next step."""
+        if SMOOTH:
+            f = factor or BUTTON_FACTOR
+            px = self.px * (f if direction > 0 else 1 / f)
+            px = int(max(MIN_PX, min(MAX_PX, round(px))))
+            if px == self.px:
+                px += direction
+            if not MIN_PX <= px <= MAX_PX:
+                return
+        else:
+            near = min(range(len(STEPS)),
+                       key=lambda i: abs(STEPS[i] - self.px))
+            step = near + direction
+            if not 0 <= step < len(STEPS):
+                return
+            px = STEPS[step]
+        self.zoom_to(px, sx, sy, smooth=True)
 
     def zoom_fit(self):
         """Whole map into the window."""
         c = self.c
         fit = min(c.winfo_width() / len(mapdata.COLS),
                   c.winfo_height() / mapdata.ROWS)
-        px = max([s for s in STEPS if s <= fit] or [STEPS[0]])
+        if SMOOTH:
+            px = int(max(MIN_PX, min(MAX_PX, fit)))
+        else:
+            px = max([s for s in STEPS if s <= fit] or [STEPS[0]])
         self.zoom_to(px)
 
     def zoom_to(self, px, sx=None, sy=None, smooth=False):
@@ -868,6 +938,7 @@ class MapWindow:
 
     def close(self):
         MapWindow._open = None
+        self._sources.clear()
         self.tip.hide()
         self.images.clear()
         self.win.destroy()
