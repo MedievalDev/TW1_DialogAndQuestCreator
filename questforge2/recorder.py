@@ -323,6 +323,11 @@ def copy_takes(old_dir, new_dir, names):
             os.makedirs(new_dir, exist_ok=True)
             shutil.copy2(src, dst)
             n += 1
+            orig = original_path(src)
+            if os.path.isfile(orig):
+                os.makedirs(os.path.dirname(original_path(dst)),
+                            exist_ok=True)
+                shutil.copy2(orig, original_path(dst))
     return n
 
 
@@ -331,3 +336,133 @@ def voice_path(project, line):
     if not d or not line.get('voice'):
         return None
     return os.path.join(d, line['voice'])
+
+
+# -- editing and the library (3.6.0) ------------------------------------------
+
+ORIG_DIR = '_original'           # untrimmed takes, inside <project>_voice
+SILENCE = 0.04                   # share of the loudest window counted as speech
+PAD = 0.08                       # seconds kept before and after the speech
+
+
+def read_wav(path):
+    """(pcm bytes 16-bit mono, rate). Other formats raise ValueError."""
+    with wave.open(path, 'rb') as w:
+        if w.getsampwidth() != 2 or w.getnchannels() != 1:
+            raise ValueError(f'{os.path.basename(path)}: not 16-bit mono')
+        return w.readframes(w.getnframes()), w.getframerate()
+
+
+def samples(pcm):
+    a = array.array('h')
+    a.frombytes(pcm[:len(pcm) - len(pcm) % 2])
+    return a
+
+
+def peaks(pcm, n):
+    """``n`` values 0..1, the loudest sample of each slice (waveform)."""
+    a = samples(pcm)
+    if not a or n <= 0:
+        return [0.0] * max(n, 0)
+    step = len(a) / n
+    out = []
+    for i in range(n):
+        s = a[int(i * step):max(int((i + 1) * step), int(i * step) + 1)]
+        out.append(max(abs(min(s)), abs(max(s))) / 32768.0 if s else 0.0)
+    return out
+
+
+def detect_trim(pcm, rate, silence=SILENCE, pad=PAD):
+    """(start, end) in seconds around the speech: 10 ms windows, a window
+    counts as speech above ``silence`` times the loudest window; ``pad``
+    seconds stay on both sides. The whole take when nothing is found."""
+    a = samples(pcm)
+    total = len(a) / float(rate) if rate else 0.0
+    win = max(1, rate // 100)
+    levels = []
+    for i in range(0, len(a), win):
+        s = a[i:i + win]
+        levels.append(max(abs(min(s)), abs(max(s))) if s else 0)
+    top = max(levels) if levels else 0
+    if top == 0:
+        return 0.0, total
+    loud = [i for i, v in enumerate(levels) if v >= top * silence]
+    start = max(0.0, loud[0] * win / rate - pad)
+    end = min(total, (loud[-1] + 1) * win / rate + pad)
+    return round(start, 3), round(end, 3)
+
+
+def cut(pcm, rate, start, end):
+    """The part between ``start`` and ``end`` seconds."""
+    i = max(0, int(start * rate)) * 2
+    j = min(len(pcm), int(end * rate) * 2)
+    return pcm[i:max(i, j)]
+
+
+def original_path(path):
+    d, name = os.path.split(path)
+    return os.path.join(d, ORIG_DIR, name)
+
+
+def trim_file(path, start, end):
+    """Cut the take in place. The first cut keeps the untrimmed take in
+    ``_original`` so it can be restored. Returns the new length."""
+    pcm, rate = read_wav(path)
+    part = cut(pcm, rate, start, end)
+    if len(part) < rate // 10 * 2:
+        raise ValueError('less than 0.1 s left')
+    backup = original_path(path)
+    if not os.path.exists(backup):
+        os.makedirs(os.path.dirname(backup), exist_ok=True)
+        with open(path, 'rb') as src, open(backup, 'wb') as dst:
+            dst.write(src.read())
+    write_wav(path, part, rate)
+    return len(part) / (2.0 * rate)
+
+
+def drop_original(path):
+    try:
+        os.remove(original_path(path))
+    except OSError:
+        pass
+
+
+def restore_original(path):
+    backup = original_path(path)
+    if not os.path.isfile(backup):
+        return False
+    os.replace(backup, path)
+    return True
+
+
+def library(project, quests):
+    """Every take of the project: [{'name', 'path', 'exists', 'seconds',
+    'mtime', 'trimmed', 'uses': [(quest, nid, index, text)]}], files on disk
+    and names referenced by lines (missing files included), sorted by name."""
+    d = voice_dir(project)
+    items = {}
+    if d and os.path.isdir(d):
+        for name in os.listdir(d):
+            p = os.path.join(d, name)
+            if name.lower().endswith('.wav') and os.path.isfile(p):
+                items[name] = {'name': name, 'path': p, 'exists': True,
+                               'uses': []}
+    for q in quests:
+        for nid, node in q.graph.get('nodes', {}).items():
+            for i, ln in enumerate(node.get('lines') or []):
+                name = ln.get('voice')
+                if not name:
+                    continue
+                it = items.setdefault(name, {
+                    'name': name, 'path': os.path.join(d, name) if d else None,
+                    'exists': False, 'uses': []})
+                it['uses'].append((q, nid, i, ln.get('text', '')))
+    for it in items.values():
+        if it['exists']:
+            it['seconds'] = duration(it['path'])
+            it['mtime'] = os.path.getmtime(it['path'])
+            it['trimmed'] = os.path.isfile(original_path(it['path']))
+        else:
+            it['seconds'] = it['mtime'] = None
+            it['trimmed'] = False
+    return [items[k] for k in sorted(items, key=str.lower)]

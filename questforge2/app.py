@@ -73,8 +73,9 @@ class App:
             pass
         self.root.protocol('WM_DELETE_WINDOW', self.quit)
 
-        self.vars = {k: tk.BooleanVar(value=v)
-                     for k, v in self.cfg.get('panels').items()}
+        panels = dict(data.Config.DEFAULTS['panels'])
+        panels.update(self.cfg.get('panels') or {})
+        self.vars = {k: tk.BooleanVar(value=v) for k, v in panels.items()}
         self.lang_var = tk.StringVar(value=get_lang())
         self.grid_var = tk.BooleanVar(value=True)
         self.edge_var = tk.StringVar(value='curve')
@@ -235,7 +236,8 @@ class App:
         for key, var in (('view.timeline', 'timeline'),
                          ('view.palette', 'palette'),
                          ('view.inspector', 'inspector'),
-                         ('view.coach', 'coach')):
+                         ('view.coach', 'coach'),
+                         ('view.voices', 'voices')):
             m.add_checkbutton(label=t(key), variable=self.vars[var],
                               command=self._apply_panels)
         m.add_separator()
@@ -401,6 +403,8 @@ class App:
         self.side = ttk.PanedWindow(self.hpane, orient='vertical')
         self.inspector = Inspector(self.side, self)
         self.coach = Coach(self.side, self)
+        from .voicewin import LibraryPanel
+        self.library = LibraryPanel(self.side, self)
         self.side.add(self.inspector, weight=3)
         self.side.add(self.coach, weight=1)
 
@@ -420,14 +424,18 @@ class App:
         if v['palette'].get():
             self.hpane.add(self.palette, weight=0)
         self.hpane.add(self.center, weight=1)
-        show_side = v['inspector'].get() or v['coach'].get()
+        show_side = (v['inspector'].get() or v['coach'].get()
+                     or v['voices'].get())
         if show_side:
             self.hpane.add(self.side, weight=0)
-            for w in (self.inspector, self.coach):
+            for w in (self.inspector, self.library, self.coach):
                 if str(w) in self.side.panes():
                     self.side.forget(w)
             if v['inspector'].get():
                 self.side.add(self.inspector, weight=3)
+            if v['voices'].get():
+                self.side.add(self.library, weight=2)
+                self.library.refresh()
             if v['coach'].get():
                 self.side.add(self.coach, weight=1)
         if initial:
@@ -1764,12 +1772,22 @@ class App:
         if self.quest:
             self.undo.push(self.quest.snapshot(), label)
 
+    def show_voice_library(self):
+        self.vars['voices'].set(True)
+        self._apply_panels()
+
+    def voice_library_changed(self):
+        lib = getattr(self, 'library', None)
+        if lib is not None and self.vars['voices'].get():
+            lib.schedule()
+
     def changed(self, from_inspector=False):
         """Model changed: dirty flag, status, panels."""
         if not self._confirm_game_edit():
             return
         self.timeline.schedule()
         self.schedule_validation()
+        self.voice_library_changed()
         if self.is_mod_quest(self.quest):
             self.mod_dirty.add(self.mod_key(self.quest))
         else:
@@ -2118,6 +2136,7 @@ class App:
                             f'minimaps={self._selftest_minimap()} '
                             f'https={self._selftest_https()} '
                             f'mics={self._selftest_mics()} '
+                            f'voicebank={self._selftest_voicebank()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2132,6 +2151,17 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    def _selftest_voicebank(self):
+        from . import voicebank
+        try:
+            hits = voicebank.search(self.index.cues, 'Danke') if self.index \
+                else []
+            ov = voicebank.OriginalVoices(self.cfg.get('game_dir'))
+            n = len(ov.wav_bytes(hits[0][1])) if hits else 0
+            return f'{len(hits)}hits/{n}b'
+        except Exception as e:              # reported, not raised
+            return f'error:{e}'
 
     @staticmethod
     def _selftest_mics():
@@ -2217,6 +2247,7 @@ class App:
         self.mod_dirty = set()
         self.load_modset()
         self.open_quest(project.quests[0] if project.quests else None)
+        self.voice_library_changed()
 
     def new_project(self, ask=True):
         if ask and not self._confirm_discard():

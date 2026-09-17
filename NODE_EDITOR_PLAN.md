@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.5.2 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.6.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1405,6 +1405,32 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
       7/9/11 pt.
     - GIF-Anleitung (EN/DE) "Marker-Karte oeffnen": Aktion an Node ziehen,
       Aktion markieren, Karte beim Marker-Feld, Marker waehlen, uebernehmen.
+72. Voiceline-Finder, Aufnahme-Bibliothek, Kuerzen (Version 3.6.0, Marco
+    2026-09-17: "vorhandene suchen standart suche vom helden ... man gibt ein
+    was man sagen moechte und alle gleichen oder aehnlichen werden
+    vorgeschlagen", "record bibliothek ... in welcher quest ... was ihre
+    line ist", "jede record audio kuerzen vorne und hinten"):
+    - `questforge2/voicebank.py`: `search` ueber den Cue-Index (7764 Cues,
+      Held Lector 1 mit 1820). Wert = 0,4 Wortabdeckung (Praefix ab 4
+      Zeichen, Apostroph trennt) + 0,35 SequenceMatcher + 0,25 (1 - Anteil
+      zusaetzlicher Woerter) + Phrasenbonus; gemessen 70 ms Held, 0,6 s alle.
+      Probe: "Ich werde es versuchen" -> "Ich werd's versuchen." zuerst.
+      `speakers` (Namen aus NPC-Bloecken, sonst Nummer).
+    - Anhoeren: Sounds.xsb -> Wave-Index -> UnitTalk.xwb-Eintrag (ADPCM) in
+      RIFF mit MS-ADPCM-Formatblock, Windows spielt es ohne Codec; gemessen
+      3 ms je Zeile. Parser aus QuestForge/tw1_xact.py uebernommen (Kopie,
+      TwStuff unveraendert).
+    - `voicewin.py`: VoiceFinder (ersetzt CueDialog), LibraryPanel (drittes
+      Pane rechts, Ansicht > Aufnahme-Bibliothek, `panels.voices`),
+      TrimWindow (Wellenform, Griffe, Stille erkennen, `_original`-Sicherung,
+      wiederherstellen).
+    - `recorder.py`: read_wav, peaks, detect_trim, cut, trim_file,
+      restore_original, drop_original, library; Speichern unter kopiert die
+      Sicherungen mit; neue Aufnahme und Loeschen verwerfen die Sicherung.
+    - Pruefung: 115 Tests, GUI-Skripte gui_360 (18 Faelle DE/EN) und
+      dbg_360b (16 Randfaelle: alte Konfig, ohne Tonbank, Stereo, zu kurz,
+      fehlende Datei, Aufnahme waehrend Kuerzen), Regression dbg_rec/dbg_rec2.
+    - Selbsttest der Exe: `voicebank=<Treffer>hits/<Bytes>b`.
 
 Offen:
 

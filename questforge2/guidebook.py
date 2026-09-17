@@ -442,6 +442,44 @@ unter Datei > **Einstellungen**.
   Sprachbank (`Sounds.xsb`, `UnitTalk.xwb`) gebaut und als Cue an die Zeile
   gehaengt werden. Das macht der Quest Creator nicht.
 
+## Aufnahmen verwalten und kuerzen
+
+Neben einer Aufnahme stehen **Abspielen** (Dreieck), **Kuerzen** (Schere),
+**Bibliothek** (drei Striche) und loeschen (x).
+
+- **Kuerzen:** Das Fenster zeigt die Wellenform. Die blauen Griffe an Anfang
+  und Ende ziehen, grau faellt weg. **Stille erkennen** setzt beide Griffe
+  an die Sprache (10-ms-Abschnitte, leiser als 4 % des lautesten gilt als
+  Stille, 0,08 s bleiben stehen). **Auswahl abspielen** hoert vorher rein.
+  Beim ersten Kuerzen bleibt die ungekuerzte Aufnahme in `_voice/_original`;
+  **Original wiederherstellen** holt sie zurueck. Eine neue Aufnahme fuer
+  dieselbe Zeile verwirft diese Sicherung.
+- **Aufnahme-Bibliothek** (Ansicht > Aufnahme-Bibliothek): alle Aufnahmen
+  des Projekts mit Laenge, Quest und Zeilentext, gekuerzte mit Schere.
+  Suche nach Datei, Quest oder Text. Knoepfe: abspielen (Leertaste), zur
+  Zeile springen (Doppelklick), kuerzen, loeschen. Loeschen geht nur fuer
+  Dateien, die keine Zeile benutzt (grau). Rot = die Zeile verweist auf eine
+  Datei, die fehlt.
+
+## Voiceline-Finder: vorhandene Sprachzeilen nutzen
+
+Der Knopf **Suchen...** in der Voice-Cue-Zeile oeffnet den Finder. Oben steht
+der Text der Zeile; tippe, was gesagt werden soll. Gleiche und aehnliche
+Zeilen, die im Spiel schon gesprochen sind, stehen oben, mit Trefferwert.
+
+- **Sprecher:** Standard ist der Held (1820 gesprochene Zeilen). In der
+  Liste stehen alle Originalsprecher mit Zeilenzahl, oder alle zusammen.
+- **Trefferwert:** Anteil deiner Woerter in der Zeile, Zeichenaehnlichkeit
+  des ganzen Satzes und Abzug fuer Woerter, die die Aufnahme zusaetzlich
+  sagt. Der Cue spielt immer die ganze Aufnahme, deshalb stehen kurze,
+  passende Zeilen vor langen, die den Satz nur enthalten.
+- **Anhoeren** (Leertaste) spielt die Originalaufnahme direkt aus der
+  Tonbank des Spiels (`XACT/win/UnitTalk.xwb`).
+- **Uebernehmen** (Doppelklick) setzt den Cue der Zeile, dann spricht der
+  Originalsprecher. Der Wortlaut wird mit uebernommen (abschaltbar), weil
+  der Untertitel zur Aufnahme passen muss. Strg+Z nimmt beides zurueck.
+- Die Texte kommen aus deiner Installation, also in ihrer Sprache.
+
 ## Dialog-Vorlage
 
 Quest > **Dialog aus Vorlage einfuegen** > "Standard-Questgeber" setzt ein
@@ -481,6 +519,42 @@ Microphone and test recording are under File > **Settings**.
 - **This does not put the recording into the game yet:** it has to be built
   into the voice bank (`Sounds.xsb`, `UnitTalk.xwb`) and hung on the line as
   a cue. The Quest Creator does not do that.
+
+## Managing and trimming recordings
+
+Next to a take there are **Play** (triangle), **Trim** (scissors),
+**Library** (three lines) and delete (x).
+
+- **Trim:** the window shows the waveform. Drag the blue handles at start
+  and end, grey is cut away. **Detect silence** puts both handles around the
+  speech (10 ms slices, quieter than 4 % of the loudest counts as silence,
+  0.08 s stay). **Play selection** lets you listen first. The first trim
+  keeps the untrimmed take in `_voice/_original`; **Restore original** brings
+  it back. A new take for the same line drops that backup.
+- **Recording library** (View > Recording library): every take of the
+  project with length, quest and line text, trimmed ones with scissors.
+  Search by file, quest or text. Buttons: play (space), go to the line
+  (double click), trim, delete. Delete only works for files no line uses
+  (grey). Red = the line points to a file that is missing.
+
+## Voice line finder: reuse existing voice lines
+
+**Search...** in the voice cue row opens the finder. The line's text is
+filled in; type what should be said. Identical and similar lines that are
+already spoken in the game come first, with a match value.
+
+- **Speaker:** the hero by default (1820 spoken lines). The list has every
+  original speaker with the number of lines, or all of them together.
+- **Match:** share of your words in the line, character similarity of the
+  whole sentence and a deduction for words the recording says on top. A cue
+  always plays the whole recording, so short fitting lines come before long
+  ones that merely contain the sentence.
+- **Listen** (space) plays the original recording straight from the game's
+  sound bank (`XACT/win/UnitTalk.xwb`).
+- **Take** (double click) sets the line's cue, then the original actor
+  speaks it. The wording is taken along (can be switched off) because the
+  subtitle has to match the recording. Ctrl+Z undoes both.
+- The texts come from your installation, so in its language.
 
 ## Dialog template
 

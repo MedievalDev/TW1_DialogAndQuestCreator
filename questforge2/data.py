@@ -100,7 +100,7 @@ class Config:
         'game_dir': None, 'lang': None, 'recent_projects': [],
         'guide_seen': False,
         'panels': {'timeline': True, 'palette': True, 'inspector': True,
-                   'coach': True},
+                   'coach': True, 'voices': False},
         'window': None,
         'update_check': True, 'update_skip': None, 'voice_device': None,
     }

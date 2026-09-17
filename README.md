@@ -578,6 +578,15 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   im Ordner `<Projekt>_voice`, verknüpft als `voice` an der Zeile. Aufnahme
   über winmm ohne Zusatzbibliothek. Ins Spiel kommt sie erst über den Bau
   der Sprachbank (Sounds.xsb/UnitTalk.xwb), den das Tool nicht macht.
+- **Voiceline-Finder** (Suchen... beim Voice-Cue): tippen, was gesagt werden
+  soll; gleiche und ähnliche Originalzeilen mit Trefferwert, Standard der
+  Held, filterbar nach jedem Originalsprecher. Anhören direkt aus
+  `UnitTalk.xwb` (MS-ADPCM als WAV verpackt, keine Zusatzbibliothek),
+  Übernehmen setzt Cue und Wortlaut.
+- **Aufnahme-Bibliothek und Kürzen:** Ansicht > Aufnahme-Bibliothek listet
+  alle Aufnahmen mit Quest und Zeile (abspielen, hinspringen, kürzen,
+  unbenutzte löschen). Der Kürzen-Editor zeigt die Wellenform mit zwei
+  Griffen, erkennt Stille und hebt das Original in `_voice\_original` auf.
 - **Dialog-Vorlage:** Quest > Dialog aus Vorlage einfügen > "Standard-
   Questgeber" setzt Angebot mit Annehmen/Ablehnen, Antwort während die Quest
   läuft, Dank beim Erfüllen und einen Satz danach in die offene Quest. Es

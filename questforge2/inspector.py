@@ -1071,7 +1071,15 @@ class Inspector(ttk.Frame):
                                                                path))
             db.pack(side='right', padx=(2, 0))
             theme.Tooltip(db, t('voice.delete'))
-            pb = ttk.Button(row, text='\u25b6', width=3,
+            lb = ttk.Button(row, text='\u2261', width=2,
+                            command=self.app.show_voice_library)
+            lb.pack(side='right', padx=(2, 0))
+            theme.Tooltip(lb, t('lib.open'))
+            tb = ttk.Button(row, text='\u2702', width=2,
+                            command=lambda: self._voice_trim(path))
+            tb.pack(side='right', padx=(2, 0))
+            theme.Tooltip(tb, t('lib.trim'))
+            pb = ttk.Button(row, text='\u25b6', width=2,
                             command=lambda: recorder.play(path))
             pb.pack(side='right')
             theme.Tooltip(pb, t('voice.play'))
@@ -1150,6 +1158,7 @@ class Inspector(ttk.Frame):
         path = os.path.join(recorder.voice_dir(project), name)
         try:
             recorder.write_wav(path, pcm)
+            recorder.drop_original(path)     # backup of an older take
         except OSError as e:
             messagebox.showerror(t('voice.title'), t('voice.error', err=e),
                                  parent=app.root)
@@ -1172,6 +1181,17 @@ class Inspector(ttk.Frame):
                if q not in qs]
         return qs
 
+    def _voice_trim(self, path):
+        from .voicewin import TrimWindow
+        if getattr(self.app, 'voice_rec', None):
+            self.app.set_info(t('voice.busy'), 'StatusErr.TLabel')
+            return
+        try:
+            TrimWindow(self.app, path, on_done=lambda: (
+                self.refresh(), self.app.voice_library_changed()))
+        except (OSError, ValueError, EOFError) as e:
+            messagebox.showerror(t('trim.head'), str(e), parent=self.app.root)
+
     def _voice_delete(self, nid, line, path):
         from . import recorder
         if not messagebox.askyesno(t('voice.title'), t('voice.delete.q'),
@@ -1185,21 +1205,29 @@ class Inspector(ttk.Frame):
                 os.remove(path)
             except OSError:
                 pass
+            recorder.drop_original(path)
         self._edit(self, lambda: line.pop('voice', None), nid, redraw=False)
         self.refresh()
+        self.app.voice_library_changed()
 
     def _search_cue(self, nid, line, node):
+        """Voice line finder (3.6.0): similar original lines, hero first."""
         if not self.app.index:
             return
-        lector = 1
-        if node['type'] == 'npc':
-            spk = self.app.quest.speaker(node.get('speaker'))
-            lector = spk.get('lector') if spk else None
-        dlg = CueDialog(self.app, lector, line.get('cue') or '')
+        from .voicewin import VoiceFinder
+        dlg = VoiceFinder(self.app, line.get('text', ''),
+                          line.get('cue') or '')
         self.app.root.wait_window(dlg.win)
-        if dlg.result is not None:
-            self._edit(dlg, lambda: line.__setitem__('cue', dlg.result), nid)
-            self.refresh()
+        if dlg.result is None:
+            return
+        cue, text = dlg.result
+
+        def apply():
+            line['cue'] = cue
+            if text is not None:
+                line['text'] = text
+        self._edit(dlg, apply, nid)
+        self.refresh()
 
 
 class _Alias(dict):
@@ -1231,90 +1259,3 @@ def _int(s):
 
 def _norm(s):
     return ' '.join((s or '').split()).lower()
-
-
-class CueDialog:
-    """Search the cue index (plan 5.2): filter by the speaker's lector and
-    by text, preview the recorded line."""
-
-    def __init__(self, app, lector, current):
-        self.app = app
-        self.result = None
-        idx = app.index
-        self.win = tk.Toplevel(app.root)
-        self.win.title(t('cue.title'))
-        self.win.transient(app.root)
-        self.win.geometry('640x520')
-        theme.dark_titlebar(self.win)
-        f = ttk.Frame(self.win, padding=10)
-        f.pack(fill='both', expand=True)
-        top = ttk.Frame(f)
-        top.pack(fill='x')
-        ttk.Label(top, text=t('cue.filter')).pack(side='left')
-        self.q = tk.StringVar()
-        ent = ttk.Entry(top, textvariable=self.q)
-        ent.pack(side='left', fill='x', expand=True, padx=6)
-        ent.bind('<KeyRelease>', lambda e: self._filter())
-        self.only = tk.BooleanVar(value=lector is not None)
-        chk = ttk.Checkbutton(top, text=t('cue.lector.speaker', n=lector
-                                          if lector is not None else '-'),
-                              variable=self.only, command=self._filter)
-        chk.pack(side='left')
-        if lector is None:
-            chk.state(['disabled'])
-        box = ttk.Frame(f)
-        box.pack(fill='both', expand=True, pady=6)
-        self.lst = tk.Listbox(box, font=theme.FONT, activestyle='none')
-        sb = ttk.Scrollbar(box, orient='vertical', command=self.lst.yview)
-        self.lst.configure(yscrollcommand=sb.set)
-        self.lst.pack(side='left', fill='both', expand=True)
-        sb.pack(side='right', fill='y')
-        self.lst.bind('<<ListboxSelect>>', lambda e: self._preview())
-        self.lst.bind('<Double-Button-1>', lambda e: self._ok())
-        self.preview = ttk.Label(f, text='', wraplength=600, style='Muted.TLabel')
-        self.preview.pack(anchor='w')
-        self.count = ttk.Label(f, text='', style='Muted.TLabel')
-        self.count.pack(anchor='w')
-        b = ttk.Frame(f)
-        b.pack(anchor='e', pady=(8, 0))
-        ttk.Button(b, text=t('ok'), style='Accent.TButton',
-                   command=self._ok).pack(side='left', padx=(0, 6))
-        ttk.Button(b, text=t('cancel'), command=self.win.destroy).pack(side='left')
-        self.win.bind('<Escape>', lambda e: self.win.destroy())
-        self.lector = lector
-        # (cue, lector, text) sorted by cue
-        self.all = sorted((c, v[0], v[1]) for c, v in idx.cues.items())
-        self.shown = []
-        self._filter()
-        ent.focus_set()
-        self.win.grab_set()
-
-    def _filter(self):
-        q = self.q.get().strip().lower()
-        only = self.only.get() and self.lector is not None
-        self.lst.delete(0, 'end')
-        self.shown = []
-        for cue, lec, text in self.all:
-            if only and lec != self.lector:
-                continue
-            if q and q not in text.lower() and q not in cue.lower():
-                continue
-            self.shown.append((cue, lec, text))
-            self.lst.insert('end', f'{cue}  [{lec}]  {text[:90]}')
-            if len(self.shown) >= 500:
-                break
-        self.count.configure(text=t('cue.count', n=len(self.shown)))
-        if self.shown:
-            self.lst.selection_set(0)
-            self._preview()
-
-    def _preview(self):
-        sel = self.lst.curselection()
-        if sel:
-            self.preview.configure(text=self.shown[sel[0]][2])
-
-    def _ok(self):
-        sel = self.lst.curselection()
-        if sel:
-            self.result = self.shown[sel[0]][0]
-            self.win.destroy()
