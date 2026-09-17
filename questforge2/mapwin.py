@@ -481,7 +481,9 @@ class MapWindow:
         x0, y0 = c.canvasx(0), c.canvasy(0)
         x1, y1 = x0 + c.winfo_width(), y0 + c.winfo_height()
         interior = self.layer.get() == 'interior'
-        c.delete('tile')
+        # the old tiles stay until the new ones are there, otherwise the
+        # canvas is black for a moment on every zoom step
+        new = 'tile_new'
         for ci, col in enumerate(mapdata.COLS):
             for row in range(1, mapdata.ROWS + 1):
                 tx, ty = ci * px, (row - 1) * px
@@ -491,20 +493,20 @@ class MapWindow:
                 img = self._image(tile, px)
                 if img is not None:
                     c.create_image(tx, ty, image=img, anchor='nw',
-                                   tags=('tile',))
+                                   tags=(new,))
                 if interior:
                     inner = f'{tile}_1'
                     if self.store.has(inner, scale_of(px)[0]):
                         c.create_image(tx, ty, image=self._image(inner, px),
-                                       anchor='nw', tags=('tile',))
+                                       anchor='nw', tags=(new,))
                     else:
                         c.create_rectangle(tx, ty, tx + px, ty + px,
                                            fill='#000000', stipple='gray75',
-                                           outline='', tags=('tile',))
+                                           outline='', tags=(new,))
                 c.create_rectangle(tx, ty, tx + px, ty + px,
                                    outline=theme.mix(theme.LINE, '#000000',
                                                      0.8),
-                                   tags=('tile',))
+                                   tags=(new,))
                 if self.labels.get():
                     # light parchment map: white text on a dark plate
                     small = px <= 64
@@ -512,13 +514,17 @@ class MapWindow:
                         tx + (4 if small else 8), ty + (3 if small else 5),
                         anchor='nw', text=tile, fill='#ffffff',
                         font=TILE_FONT.get(px, ('Segoe UI', 11, 'bold')),
-                        tags=('tile',))
+                        tags=(new,))
                     bx0, by0, bx1, by1 = c.bbox(txt)
                     pad = 2 if small else 4
                     plate = c.create_rectangle(
                         bx0 - pad, by0 - 1, bx1 + pad, by1 + 1, fill=theme.BG,
-                        outline=theme.GOLD, tags=('tile',))
+                        outline=theme.GOLD, tags=(new,))
                     c.tag_lower(plate, txt)
+        c.delete('tile')
+        for item in c.find_withtag(new):
+            c.addtag_withtag('tile', item)
+        c.dtag(new, new)
         c.tag_lower('tile')
         # keep memory bounded when panning at high zoom (a tile costs
         # px * px * 4 bytes in Tk, so 512 px and up are pruned hard)
@@ -625,7 +631,10 @@ class MapWindow:
 
     def zoom_to(self, px, sx=None, sy=None, smooth=False):
         c = self.c
-        if sx is None:
+        w, h = len(mapdata.COLS) * px, mapdata.ROWS * px
+        if sx is None or w <= c.winfo_width() or h <= c.winfo_height():
+            # a map that fits sits in the middle anyway: zoom around the
+            # centre, so the picture does not jump sideways
             sx, sy = c.winfo_width() / 2, c.winfo_height() / 2
         mx = (c.canvasx(sx)) / self.px
         my = (c.canvasy(sy)) / self.px
@@ -635,8 +644,13 @@ class MapWindow:
         if self.zoom_lbl is not None:
             self.zoom_lbl.configure(text=t('map.zoom.now', px=px))
         if smooth:
-            # one redraw for a whole turn of the wheel
-            self._schedule_draw()
+            # Redraw before the window is painted again: a step that first
+            # scrolls and only draws later shows a black canvas in between.
+            # after_idle also collapses a fast turn of the wheel into one
+            # redraw, because Tk runs idle work once the events are done.
+            if self._draw_job:
+                self.win.after_cancel(self._draw_job)
+            self._draw_job = self.win.after_idle(self._redraw_view)
         else:
             self._draw_tiles()
             self._draw_points()
