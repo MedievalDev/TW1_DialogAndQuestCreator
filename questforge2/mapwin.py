@@ -325,6 +325,10 @@ class MapWindow:
             self.center_tile(tile)
         else:
             self.redraw_all()
+            self.win.update_idletasks()
+            w, h = self.world_size()
+            self.center_on(w / 2, h / 2)
+            self._draw_points()
 
     @staticmethod
     def _key(p):
@@ -399,8 +403,15 @@ class MapWindow:
         self._draw_job = self.win.after(30, self._redraw_view)
 
     def _redraw_view(self):
+        self._clamp_view()
         self._draw_tiles()
         self._draw_points()
+
+    def _clamp_view(self):
+        """Back into the frame after dragging: an axis that fits stays in
+        the middle, a larger world does not scroll past its edge."""
+        c = self.c
+        self._scroll_to(c.canvasx(0), c.canvasy(0))
 
     def _image(self, tile, px):
         key = (tile, px)
@@ -425,12 +436,26 @@ class MapWindow:
         self.images[key] = img
         return img
 
+    def world_size(self):
+        return len(mapdata.COLS) * self.px, mapdata.ROWS * self.px
+
+    def _set_region(self):
+        """Scroll region around the world. Is the world smaller than the
+        canvas, the same padding is put on both sides so it sits in the
+        middle instead of the top left corner."""
+        c = self.c
+        w, h = self.world_size()
+        cw, ch = c.winfo_width(), c.winfo_height()
+        px_pad = max(0, (cw - w) / 2)
+        py_pad = max(0, (ch - h) / 2)
+        c.configure(scrollregion=(-px_pad, -py_pad, w + px_pad, h + py_pad))
+        return px_pad, py_pad
+
     def _draw_tiles(self):
         self._draw_job = None
         c = self.c
         px = self.px
-        c.configure(scrollregion=(0, 0, len(mapdata.COLS) * px,
-                                  mapdata.ROWS * px))
+        self._set_region()
         for key in [k for k in self.images if k[1] != px]:
             del self.images[key]
         x0, y0 = c.canvasx(0), c.canvasy(0)
@@ -548,6 +573,7 @@ class MapWindow:
 
     def _release(self, ev):
         if getattr(self, '_moved', False):
+            self._clamp_view()
             return
         i = self._point_at(ev)
         if i is not None:
@@ -567,8 +593,7 @@ class MapWindow:
         mx = (c.canvasx(sx)) / self.px
         my = (c.canvasy(sy)) / self.px
         self.px = px
-        c.configure(scrollregion=(0, 0, len(mapdata.COLS) * px,
-                                  mapdata.ROWS * px))
+        self._set_region()
         self._scroll_to(mx * px - sx, my * px - sy)
         if smooth:
             # one redraw for a whole turn of the wheel
@@ -579,9 +604,13 @@ class MapWindow:
 
     def _scroll_to(self, left, top):
         c = self.c
-        w, h = len(mapdata.COLS) * self.px, mapdata.ROWS * self.px
-        c.xview_moveto(max(0.0, left) / w)
-        c.yview_moveto(max(0.0, top) / h)
+        w, h = self.world_size()
+        px_pad, py_pad = self._set_region()
+        total_w, total_h = w + 2 * px_pad, h + 2 * py_pad
+        left = 0 if px_pad else max(0.0, min(left, w - c.winfo_width()))
+        top = 0 if py_pad else max(0.0, min(top, h - c.winfo_height()))
+        c.xview_moveto((left + px_pad) / total_w)
+        c.yview_moveto((top + py_pad) / total_h)
 
     def center_on(self, mx, my):
         c = self.c

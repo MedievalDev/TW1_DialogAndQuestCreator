@@ -646,7 +646,9 @@ zusammengesetzt aus den Minimaps des Spiels. Das Fenster bleibt offen, waehrend
 du weiterarbeitest.
 
 - **Bedienung:** Mausrad zoomt in 22 feinen Stufen (48 bis 2048 Pixel je
-  Tile, je Raste etwa ein Sechstel groesser), Ziehen verschiebt,
+  Tile, je Raste etwa ein Sechstel groesser), Ziehen verschiebt. Die Karte
+  sitzt immer mittig: passt sie ganz ins Fenster, bleibt sie in der Mitte,
+  sonst laesst sie sich bis an ihren Rand schieben. Ziehen verschiebt,
   Klick auf einen Punkt waehlt ihn in der Liste rechts, Klick in der Liste
   springt auf der Karte hin. Unten steht, auf welchem Tile und welchen
   Koordinaten der Mauszeiger ist.
@@ -691,7 +693,9 @@ together from the minimaps of the game. The window stays open while you keep
 working.
 
 - **Controls:** the mouse wheel zooms in 22 fine steps (48 to 2048 pixels
-  per tile, about a sixth per notch), dragging
+  per tile, about a sixth per notch). The map always sits in the middle:
+  while it fits into the window it stays centred, otherwise it pans up to
+  its edge. Dragging
   pans, a click on a point selects it in the list on the right, a click in the
   list jumps there on the map. The bottom line shows the tile and coordinates
   under the mouse.
