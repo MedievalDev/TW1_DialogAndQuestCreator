@@ -159,6 +159,8 @@ class MapWindow:
         self.selected = None
         self._blink_job = None
         self._draw_job = None
+        self._zoom_target = 64
+        self._zoom_anchor = (None, None)
         self.zoom_lbl = None
 
         self.win = tk.Toplevel(app.root)
@@ -444,7 +446,7 @@ class MapWindow:
     def _schedule_draw(self):
         if self._draw_job:
             self.win.after_cancel(self._draw_job)
-        self._draw_job = self.win.after(30, self._redraw_view)
+        self._draw_job = self.win.after_idle(self._redraw_view)
 
     def _redraw_view(self):
         self._clamp_view()
@@ -671,17 +673,19 @@ class MapWindow:
 
     def zoom_step(self, direction, sx=None, sy=None, factor=None):
         """One notch: a free factor with Pillow, else the next step."""
+        # build on a step that is still waiting, so notches add up
+        base = self._zoom_target if self._draw_job else self.px
         if SMOOTH:
             f = factor or BUTTON_FACTOR
-            px = self.px * (f if direction > 0 else 1 / f)
+            px = base * (f if direction > 0 else 1 / f)
             px = int(max(MIN_PX, min(MAX_PX, round(px))))
-            if px == self.px:
+            if px == base:
                 px += direction
             if not MIN_PX <= px <= MAX_PX:
                 return
         else:
             near = min(range(len(STEPS)),
-                       key=lambda i: abs(STEPS[i] - self.px))
+                       key=lambda i: abs(STEPS[i] - base))
             step = near + direction
             if not 0 <= step < len(STEPS):
                 return
@@ -700,6 +704,27 @@ class MapWindow:
         self.zoom_to(px)
 
     def zoom_to(self, px, sx=None, sy=None, smooth=False):
+        """Scroll and redraw happen in ONE go. Scrolling first and drawing
+        later let the canvas paint the old tiles at the new place for a
+        moment (a visible jump), because its own repaint sits in the idle
+        queue before a redraw scheduled afterwards. With ``smooth`` the
+        whole step waits for the idle queue, so a fast turn of the wheel
+        collapses into one step; the target size is kept in _zoom_target
+        so every notch builds on the last one."""
+        self._zoom_target = px
+        if smooth:
+            self._zoom_anchor = (sx, sy)
+            if self._draw_job:
+                self.win.after_cancel(self._draw_job)
+            self._draw_job = self.win.after_idle(self._apply_zoom)
+        else:
+            self._zoom_anchor = (sx, sy)
+            self._apply_zoom()
+
+    def _apply_zoom(self):
+        self._draw_job = None
+        px = self._zoom_target
+        sx, sy = self._zoom_anchor
         c = self.c
         w, h = len(mapdata.COLS) * px, mapdata.ROWS * px
         if sx is None or w <= c.winfo_width() or h <= c.winfo_height():
@@ -713,17 +738,8 @@ class MapWindow:
         self._scroll_to(mx * px - sx, my * px - sy)
         if self.zoom_lbl is not None:
             self.zoom_lbl.configure(text=t('map.zoom.now', px=px))
-        if smooth:
-            # Redraw before the window is painted again: a step that first
-            # scrolls and only draws later shows a black canvas in between.
-            # after_idle also collapses a fast turn of the wheel into one
-            # redraw, because Tk runs idle work once the events are done.
-            if self._draw_job:
-                self.win.after_cancel(self._draw_job)
-            self._draw_job = self.win.after_idle(self._redraw_view)
-        else:
-            self._draw_tiles()
-            self._draw_points()
+        self._draw_tiles()
+        self._draw_points()
 
     def _scroll_to(self, left, top):
         c = self.c
