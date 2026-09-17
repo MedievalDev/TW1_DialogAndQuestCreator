@@ -16,8 +16,10 @@ from .i18n import t
 NL = chr(10)
 STEPS = (64, 128, 256, 512, 1024)
 LEVEL_OF = {64: 3, 128: 2, 256: 1, 512: 0, 1024: 0}
-RETAIL_DOT = '#e8e0cc'
-DEFAULT_GROUPS = ('quest_enemy', 'quest_object', 'quest_other', 'npc_start',
+# tile name size per zoom step (px per tile): small plates when zoomed out
+TILE_FONT = {64: ('Segoe UI', 7, 'bold'), 128: ('Segoe UI', 9, 'bold')}
+DEFAULT_GROUPS = ('quest_enemy', 'quest_object', 'quest_point', 'quest_walk',
+                  'quest_teleport', 'quest_clear', 'quest_kill', 'npc_start',
                   'chest', 'gate', 'teleport', 'locations', 'containers')
 
 
@@ -156,9 +158,22 @@ class MapWindow:
         self.group_checks = {}
         for key in mapdata.GROUP_KEYS + list(mapdata.EXTRA_LAYERS):
             var = tk.BooleanVar(value=key in DEFAULT_GROUPS)
-            cb = ttk.Checkbutton(side, text=t('map.group.' + key),
+            row = ttk.Frame(side)
+            row.pack(anchor='w', fill='x')
+            dot = tk.Canvas(row, width=14, height=14, bg=theme.BG,
+                            highlightthickness=0, cursor='hand2')
+            if key == 'locations':
+                dot.create_rectangle(3, 3, 11, 11, width=2,
+                                     outline=mapdata.GROUP_COLORS[key])
+            else:
+                dot.create_oval(2, 2, 12, 12, outline='#000000',
+                                fill=mapdata.GROUP_COLORS[key])
+            dot.pack(side='left', padx=(0, 4))
+            dot.bind('<Button-1>', lambda e, v=var: (v.set(not v.get()),
+                                                     self.refilter()))
+            cb = ttk.Checkbutton(row, text=t('map.group.' + key),
                                  variable=var, command=self.refilter)
-            cb.pack(anchor='w')
+            cb.pack(side='left')
             self.group_vars[key] = var
             self.group_checks[key] = cb
         ttk.Label(side, text=t('map.use'), style='Brand.TLabel'
@@ -407,9 +422,19 @@ class MapWindow:
                                                      0.8),
                                    tags=('tile',))
                 if self.labels.get():
-                    c.create_text(tx + 6, ty + 4, anchor='nw', text=tile,
-                                  fill=theme.GOLD_HI, font=theme.FONT_BOLD,
-                                  tags=('tile',))
+                    # light parchment map: white text on a dark plate
+                    small = px <= 64
+                    txt = c.create_text(
+                        tx + (4 if small else 8), ty + (3 if small else 5),
+                        anchor='nw', text=tile, fill='#ffffff',
+                        font=TILE_FONT.get(px, ('Segoe UI', 11, 'bold')),
+                        tags=('tile',))
+                    bx0, by0, bx1, by1 = c.bbox(txt)
+                    pad = 2 if small else 4
+                    plate = c.create_rectangle(
+                        bx0 - pad, by0 - 1, bx1 + pad, by1 + 1, fill=theme.BG,
+                        outline=theme.GOLD, tags=('tile',))
+                    c.tag_lower(plate, txt)
         c.tag_lower('tile')
         # keep memory bounded when panning at high zoom
         if len(self.images) > 48:
@@ -423,35 +448,36 @@ class MapWindow:
         c = self.c
         c.delete('pt')
         px = self.px
-        r = 2 if px <= 64 else (3 if px <= 256 else 4)
+        r = 4 if px <= 64 else (5 if px <= 256 else 6)
         dim = bool(self.focus_keys)
         for i, p in enumerate(self.visible):
             pos = mapdata.world_to_map(p['tile'], p['x'], p['y'], px)
             if pos is None:
                 continue
             x, y = pos
+            colour = mapdata.GROUP_COLORS.get(p['group'], '#8a8a8a')
+            # the source shows as a ring: mods blue, own quests gold
             if p['mod'] is not None:
-                colour = theme.MOD
+                ring, width = theme.MOD, 2
             elif p['own']:
-                colour = theme.GOLD
-            elif p['group'] in ('locations', 'containers'):
-                colour = theme.OK
+                ring, width = theme.GOLD, 2
             else:
-                colour = RETAIL_DOT
+                ring, width = '#000000', 1
             rr = r
             if dim:
                 if self._key(p) in self.focus_keys:
                     rr = r + 3
-                    colour = theme.GOLD_HI if p['mod'] is None else theme.MOD
+                    ring, width = theme.GOLD_HI, 2
                 else:
-                    colour = theme.mix(colour, '#000000', 0.35)
+                    colour = theme.mix(colour, '#000000', 0.45)
             if p['group'] == 'locations':
                 c.create_rectangle(x - rr, y - rr, x + rr, y + rr,
                                    outline=colour, width=2,
                                    tags=('pt', f'p:{i}'))
             else:
                 c.create_oval(x - rr, y - rr, x + rr, y + rr, fill=colour,
-                              outline='#000000', tags=('pt', f'p:{i}'))
+                              outline=ring, width=width,
+                              tags=('pt', f'p:{i}'))
         self._draw_selection()
 
     def _draw_selection(self):
@@ -464,7 +490,7 @@ class MapWindow:
         if pos is None:
             return
         x, y = pos
-        c.create_oval(x - 9, y - 9, x + 9, y + 9, outline=theme.GOLD_HI,
+        c.create_oval(x - 12, y - 12, x + 12, y + 12, outline=theme.GOLD_HI,
                       width=2, tags=('sel',))
 
     # -- navigation -------------------------------------------------------

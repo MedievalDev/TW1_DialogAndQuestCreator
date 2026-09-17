@@ -794,10 +794,9 @@ _DE = {
     'map.layer.surface': 'Oberflaeche',
     'map.layer.interior': 'Innenraeume (_1)',
     'map.types': 'Marker-Typ',
-    'map.group.quest_enemy': 'Quest: Gegner erzeugen',
-    'map.group.quest_object': 'Quest: Objekt erzeugen',
-    'map.group.quest_other': 'Quest: Punkt, Teleport, Weg, Gebiet',
-    'map.group.npc_start': 'NPC-Start (Questgeber)',
+    'map.group.quest_enemy': 'Quest: Gegner erzeugen (Q_Action_Create_Enemy)',
+    'map.group.quest_object': 'Quest: Objekt erzeugen (Q_Action_Create_Object)',
+    'map.group.npc_start': 'NPC-Start, Questgeber (Q_Giver)',
     'map.group.chest': 'Truhen (Marker)',
     'map.group.gate': 'Tore',
     'map.group.teleport': 'Teleporter',
@@ -956,6 +955,11 @@ _DE = {
     'voice.gone': 'Aufnahme verworfen: die Zeile gibt es nicht mehr.',
     'voice.copy.error': 'Aufnahmen konnten nicht mitkopiert werden: {err}',
     'voice.unlink': 'Verknuepfung entfernen',
+    'map.group.quest_point': 'Quest: Zielpunkt (Q_Solve)',
+    'map.group.quest_walk': 'Quest: NPC laeuft hin (Q_Action_Walk)',
+    'map.group.quest_teleport': 'Quest: Teleport (Q_Action_Teleport)',
+    'map.group.quest_clear': 'Quest: Gebiet leeren (Q_Action_Clear_Area)',
+    'map.group.quest_kill': 'Quest: Gebiet toeten (Q_Action_Kill_Area)',
 }
 
 _EN = {
@@ -1719,10 +1723,9 @@ _EN = {
     'map.layer.surface': 'Surface',
     'map.layer.interior': 'Interiors (_1)',
     'map.types': 'Marker type',
-    'map.group.quest_enemy': 'Quest: create enemy',
-    'map.group.quest_object': 'Quest: create object',
-    'map.group.quest_other': 'Quest: point, teleport, walk, area',
-    'map.group.npc_start': 'NPC start (quest giver)',
+    'map.group.quest_enemy': 'Quest: create enemy (Q_Action_Create_Enemy)',
+    'map.group.quest_object': 'Quest: create object (Q_Action_Create_Object)',
+    'map.group.npc_start': 'NPC start, quest giver (Q_Giver)',
     'map.group.chest': 'Chests (markers)',
     'map.group.gate': 'Gates',
     'map.group.teleport': 'Teleporters',
@@ -1881,6 +1884,11 @@ _EN = {
     'voice.gone': 'Recording discarded: the line no longer exists.',
     'voice.copy.error': 'Could not copy the recordings along: {err}',
     'voice.unlink': 'Remove link',
+    'map.group.quest_point': 'Quest: target point (Q_Solve)',
+    'map.group.quest_walk': 'Quest: NPC walks there (Q_Action_Walk)',
+    'map.group.quest_teleport': 'Quest: teleport (Q_Action_Teleport)',
+    'map.group.quest_clear': 'Quest: clear area (Q_Action_Clear_Area)',
+    'map.group.quest_kill': 'Quest: kill area (Q_Action_Kill_Area)',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

@@ -75,6 +75,22 @@ class Coordinates(unittest.TestCase):
         self.assertEqual(mapdata.group_of('MARKER_DUMMY'), 'unknown')
         for name in mods.MARKER_NAMES.values():
             self.assertNotEqual(mapdata.group_of(name), 'unknown', name)
+        self.assertEqual(mapdata.group_of('MARKER_QUEST_TELEPORT'),
+                         'quest_teleport')
+        self.assertEqual(mapdata.group_of('MARKER_QUEST_KILL_AREA'),
+                         'quest_kill')
+
+    def test_group_colours_distinct(self):
+        import itertools
+        import math
+        layers = mapdata.GROUP_KEYS + list(mapdata.EXTRA_LAYERS)
+        self.assertEqual(set(mapdata.GROUP_COLORS), set(layers))
+        for (ka, a), (kb, b) in itertools.combinations(
+                mapdata.GROUP_COLORS.items(), 2):
+            self.assertGreater(math.dist(mapdata.lab(a), mapdata.lab(b)),
+                               29, (ka, kb))
+        for k, v in mapdata.GROUP_COLORS.items():
+            self.assertGreaterEqual(mapdata.lab(v)[0], 50, k)
 
 
 class _Idx:

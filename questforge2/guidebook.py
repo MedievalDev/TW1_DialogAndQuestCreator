@@ -579,8 +579,11 @@ du weiterarbeitest.
   (Oberflaeche oder Innenraeume `_1`), Marker-Typ, nur benutzte oder nur
   unbenutzte Marker, Suche nach Name, Nummer oder Tile (Enter springt zum
   ersten Treffer).
-- **Farben:** Spiel hell, eigene Quests gold, Mods hellblau, Orte als gruene
-  Quadrate.
+- **Farben:** Jeder Marker-Typ hat eine eigene Farbe, dieselbe steht als
+  Punkt vor dem Haken in der Liste links. Die Quest-Marker tragen dort auch
+  ihren Namen im Two Worlds Editor (`Q_Giver`, `Q_Solve`, `Q_Action_...`).
+  Die Herkunft zeigt der Ring: eigene Quests gold, Mods hellblau. Orte sind
+  gruene Quadrate. Tile-Namen stehen weiss auf dunklem Schild.
 - **Aus einem Feld waehlen:** Der Knopf **Karte** neben einem Marker-Feld (und
   im Marker-Picker) oeffnet die Karte gefiltert auf die Sorte, die das Feld
   liest. Rechtsklick auf einen Marker > **In Quest verwenden** traegt Nummer
@@ -619,8 +622,11 @@ working.
 - **Filters:** origin (game, own, mods, every mod), layer (surface or
   interiors `_1`), marker type, only used or only unused markers, search by
   name, number or tile (Enter jumps to the first hit).
-- **Colours:** game light, own quests gold, mods light blue, locations as green
-  squares.
+- **Colours:** every marker type has its own colour, shown as a dot in front
+  of its check box on the left. The quest markers also carry their name in the
+  Two Worlds Editor there (`Q_Giver`, `Q_Solve`, `Q_Action_...`). The ring
+  shows the origin: own quests gold, mods light blue. Locations are green
+  squares. Tile names are white on a dark plate.
 - **Picking for a field:** the **Map** button next to a marker field (and in
   the marker picker) opens the map filtered on the kind the field reads.
   Right click a marker > **Use in quest** fills in number and tile. Another

@@ -50,10 +50,11 @@ _DDS = re.compile(r'^levels[\\/]mipmaps[\\/]map_([a-z])(\d{2})(_\d+)?@(\d)\.dds$
 MARKER_GROUPS = (
     ('quest_enemy', 'PEnums.ech', ('MARKER_QUEST_CREATE_ENEMY',), ()),
     ('quest_object', 'PEnums.ech', ('MARKER_QUEST_CREATE_OBJECT',), ()),
-    ('quest_other', 'PEnums.ech', ('MARKER_QUEST_POINT', 'MARKER_QUEST_WALK',
-                                   'MARKER_QUEST_TELEPORT',
-                                   'MARKER_QUEST_CLEAR_AREA',
-                                   'MARKER_QUEST_KILL_AREA'), ()),
+    ('quest_point', 'PEnums.ech', ('MARKER_QUEST_POINT',), ()),
+    ('quest_walk', 'PEnums.ech', ('MARKER_QUEST_WALK',), ()),
+    ('quest_teleport', 'PEnums.ech', ('MARKER_QUEST_TELEPORT',), ()),
+    ('quest_clear', 'PEnums.ech', ('MARKER_QUEST_CLEAR_AREA',), ()),
+    ('quest_kill', 'PEnums.ech', ('MARKER_QUEST_KILL_AREA',), ()),
     ('npc_start', 'PEnums.ech', ('MARKER_QUEST_START',), ()),
     ('chest', 'PEnums.ech', ('MARKER_CHEST',), ()),
     ('gate', 'PEnums.ech', ('MARKER_GATE',), ()),
@@ -74,6 +75,42 @@ MARKER_GROUPS = (
 GROUP_KEYS = [g[0] for g in MARKER_GROUPS] + ['unknown']
 # layers that are not map markers
 EXTRA_LAYERS = ('locations', 'containers')
+# one colour per layer, drawn on the dark map and in the layer list. Chosen
+# so every pair differs by at least 29 (CIE76 delta E, test_map checks it)
+# and every colour has a lightness of at least 50 on the dark canvas.
+GROUP_COLORS = {
+    'quest_enemy': '#ff2e2e',
+    'quest_object': '#ffe119',
+    'quest_point': '#ffffff',
+    'quest_walk': '#9dff3a',
+    'quest_teleport': '#34d8ff',
+    'quest_clear': '#ff8a1f',
+    'quest_kill': '#b45cff',
+    'npc_start': '#ff3df0',
+    'chest': '#c08040',
+    'gate': '#3a6bff',
+    'teleport': '#2fe0a0',
+    'enemy': '#ff9aa8',
+    'town': '#c9b8ff',
+    'other': '#8a8a8a',
+    'unknown': '#8f8f2a',
+    'locations': '#2e9e3e',
+    'containers': '#1fa0a0',
+}
+
+
+def lab(colour):
+    """sRGB hex -> CIE Lab (D65), for the colour distance check."""
+    def lin(c):
+        return ((c + 0.055) / 1.055) ** 2.4 if c > 0.04045 else c / 12.92
+    r, g, b = (lin(int(colour[i:i + 2], 16) / 255) for i in (1, 3, 5))
+    x = (r * .4124 + g * .3576 + b * .1805) / .95047
+    y = r * .2126 + g * .7152 + b * .0722
+    z = (r * .0193 + g * .1192 + b * .9505) / 1.08883
+
+    def f(v):
+        return v ** (1 / 3) if v > 0.008856 else 7.787 * v + 16 / 116
+    return 116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))
 
 
 def group_of(name):
