@@ -341,6 +341,11 @@ class MpMergeWindow:
         self.npcid = tk.StringVar()
         ttk.Entry(grid, textvariable=self.npcid, width=12).grid(
             row=r, column=1, sticky='w', padx=8)
+        # the default name carries the NEW number, so the node headers show
+        # the number the Q_Giver marker needs (2026-09-18: "NPC 700" in the
+        # nodes made a user put the quest number on the marker)
+        self._auto_name = None
+        self.npcid.trace_add('write', lambda *_: self._follow_name())
         ttk.Label(grid, text=t('mp.npcid.hint', max=MAX_NPC_ID),
                   style='Muted.TLabel', wraplength=520, justify='left'
                   ).grid(row=r, column=2, sticky='w')
@@ -395,9 +400,15 @@ class MpMergeWindow:
         if q.giver is not None:
             spk = next((s for s in q.speakers if s['id'] == q.giver), None)
             name = (spk or {}).get('name') or ''
-            if not name or name == f'NPC_{q.giver}':
-                name = t('mp.npcname.default', id=q.giver)
-        self.npcname.set(name)
+            if name in ('', f'NPC_{q.giver}', f'NPC {q.giver}') or                     name.startswith('Lector'):
+                name = ''
+        if name:
+            self._auto_name = None
+            self.npcname.set(name)
+        else:
+            self._auto_name = ''
+            self.npcname.set('')            # page filled again: start over
+            self._follow_name()
         groups = sorted(((int(k), v) for k, v in app.index.groups.items()),
                         key=lambda kv: kv[0])
         self.groups = groups
@@ -441,6 +452,16 @@ class MpMergeWindow:
                                                           padx=(6, 0))
             self.rows.append((ref, tv, nv))
         self._tile_all(only_empty=True)
+
+    def _follow_name(self):
+        """Keep the default name on the NPC number until the user types an
+        own name."""
+        if self._auto_name is None or                 self.npcname.get() not in ('', self._auto_name):
+            self._auto_name = None
+            return
+        n = self.npcid.get().strip()
+        self._auto_name = t('mp.npcname.default', id=n) if n else ''
+        self.npcname.set(self._auto_name)
 
     def _tile_all(self, only_empty=False):
         tile = self.tile.get().strip().upper()
