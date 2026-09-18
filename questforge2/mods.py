@@ -62,6 +62,17 @@ MARKER_NAMES = {
     'Q_Action_Kill_Area': 'MARKER_QUEST_KILL_AREA',
 }
 NPC_MARKER = 'MARKER_QUEST_START'       # PEnums.ech MARKER_QUEST_START
+
+
+def editor_name(marker):
+    """Name of a marker in the Two Worlds Editor's object tree (Special
+    Objects > Quests), e.g. MARKER_QUEST_START -> Q_Giver."""
+    if marker == NPC_MARKER:
+        return 'Q_Giver'
+    for kind, name in MARKER_NAMES.items():
+        if name == marker and kind.startswith('Q_'):
+            return kind
+    return marker
 CHEST_MARKER = 'MARKER_CHEST'           # PEnums.ech MARKER_CONTAINER
 
 # game archives with maps, later wins
@@ -914,6 +925,10 @@ def write_quest(path, quest, index, master_lan, game_dir=None, log=print,
     files = {INNER_QTX: new_text.encode('latin-1')}
     target = lan_target(lans, quest.id)
     lan_map = dict(lans)
+    if target is None and overlay_inner(path) in lan_map:
+        # our overlay from an earlier save: rebuild it with this quest,
+        # otherwise the texts of the quest saved before are gone
+        target = overlay_inner(path)
     if target:
         files[target] = export.build_lan(lan_map[target], [quest])[0]
     else:

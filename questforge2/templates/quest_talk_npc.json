@@ -51,7 +51,7 @@
         "type": "task",
         "fc": "TALK",
         "args": {
-          "npc": 5
+          "npc": 190
         },
         "x": -230,
         "y": 320.0
@@ -293,8 +293,8 @@
       "en": "Talk to NPC quest"
     },
     "note": {
-      "de": "Das Ziel wird geloest, sobald der Held NPC_5 anspricht. Der angesprochene NPC ueberspringt dabei sein eigenes Angebot.",
-      "en": "The goal is solved as soon as the hero talks to NPC_5. That NPC skips its own offer while this quest runs."
+      "de": "Das Ziel wird geloest, sobald der Held NPC_190 (Nalax Gonga) anspricht. Der angesprochene NPC ueberspringt dabei sein eigenes Angebot.",
+      "en": "The goal is solved as soon as the hero talks to NPC_190 (Nalax Gonga). That NPC skips its own offer while this quest runs."
     }
   }
 }

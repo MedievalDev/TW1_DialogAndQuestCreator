@@ -126,13 +126,17 @@ class Links(unittest.TestCase):
         q.links = [{'type': 'ENABLE', 'event': 'TAKE', 'quest': 12},
                    {'type': 'TAKE', 'event': 'NOW', 'quest': 12},
                    {'type': 'TAKE', 'event': 'TAKE', 'quest': None},
+                   {'type': 'TAKE', 'event': 'TAKE', 'quest': 398},
                    {'type': 'TAKE', 'event': 'TAKE', 'quest': 4444}]
         E, W = validate.validate_quest(q, idx)
         k = keys(E)
         self.assertIn('val.link.type', k)
         self.assertIn('val.link.event', k)
         self.assertIn('val.link.target', k)
-        self.assertIn('val.link.unknown', keys(W))
+        # the engine turns an unknown target into quest 0: an error now
+        self.assertIn('val.link.unknown', k)
+        # above the quest limit: also quest 0 in game
+        self.assertIn('val.link.limit', k)
         self.assertIn('AOQ ENABLE', 'AOQ ENABLE')      # does not exist
         self.assertNotIn('ENABLE', m.AOQ_TYPES)
 

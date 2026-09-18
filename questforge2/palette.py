@@ -40,10 +40,20 @@ class SpeakerBox(ttk.Frame):
             return
         self._row(model.PLAYER, t('speaker.player'), theme.PLAYER_COLOR)
         for spk in q.speakers:
-            title, color = self.app.speaker_style(spk['id'])
-            self._row(spk['id'], title, color)
+            _title, color = self.app.speaker_style(spk['id'])
+            self._row(spk['id'], self.app.speaker_label(spk), color,
+                      tip=self._tip(spk))
 
-    def _row(self, sid, title, color):
+    def _tip(self, spk):
+        sid = spk.get('id')
+        if not isinstance(sid, int):
+            return t('speaker.tip.placeholder')
+        if spk.get('new'):
+            return t('speaker.tip.new', id=sid, tile=spk.get('tile') or '-',
+                     num=spk.get('marker') or sid)
+        return t('speaker.tip.game', id=sid)
+
+    def _row(self, sid, title, color, tip=None):
         f = ttk.Frame(self.rows, style='Panel.TFrame', cursor='hand2')
         f.pack(fill='x', pady=1)
         sw = tk.Canvas(f, width=14, height=14, bg=theme.PANEL,
@@ -52,6 +62,8 @@ class SpeakerBox(ttk.Frame):
         sw.pack(side='left', padx=(0, 6))
         lbl = ttk.Label(f, text=title, style='Panel.TLabel')
         lbl.pack(side='left', fill='x', expand=True)
+        if tip:
+            theme.Tooltip(lbl, tip)
         for w in (f, sw, lbl):
             w.bind('<ButtonPress-1>', lambda e, s=sid: self._press(e, s))
             w.bind('<B1-Motion>', self._motion)
@@ -122,6 +134,8 @@ class SpeakerBox(ttk.Frame):
             self.app.push_undo('rename')
             spk['name'] = dlg.result
             self.app.changed()
+            if not spk.get('new'):
+                self.app.set_info(t('speaker.rename.game'), 'Status.TLabel')
 
     def remove(self, sid):
         q = self.app.quest
@@ -463,6 +477,14 @@ class SpeakerDialog:
             self.err.configure(text=t('speaker.id.invalid'))
             return
         nid = int(m.group(1))
+        from .mpmerge import MAX_NPC_ID
+        if not 1 <= nid <= MAX_NPC_ID:
+            self.err.configure(text=t('val.npc.range', id=nid, max=MAX_NPC_ID))
+            return
+        tile = self.v_tile.get().strip().upper()
+        if not re.fullmatch(r'[A-I](1[0-2]|[1-9])(_\d+)?', tile):
+            self.err.configure(text=t('speaker.tile.invalid', tile=tile or '-'))
+            return
         if self.app.index and self.app.index.npc(nid):
             self.err.configure(text=t('speaker.id.taken', id=nid,
                                       name=self.app.index.npc(nid)['name']))
@@ -472,7 +494,7 @@ class SpeakerDialog:
         self.result = {'id': nid, 'name': name, 'lector': lector,
                        'tile': self.v_tile.get().strip().upper(), 'new': True}
         mk = re.fullmatch(r'\d+', self.v_marker.get().strip())
-        if mk:
+        if mk and int(mk.group(0)) > 0:
             self.result['marker'] = int(mk.group(0))
         tp = re.fullmatch(r'(?:NPC_)?(\d+)', self.v_template.get().strip())
         if tp:

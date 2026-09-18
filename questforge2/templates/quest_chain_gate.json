@@ -79,7 +79,7 @@
         "slot": 1,
         "quest": 4,
         "event": "TAKE",
-        "level": 1,
+        "level": 2,
         "guild": "(null)",
         "min_rep": 0
       },
@@ -244,6 +244,19 @@
         "x": 270,
         "y": 324,
         "slot": 1
+      },
+      "n1b": {
+        "type": "condition",
+        "cond": "after",
+        "attached_to": "entry:first",
+        "x": 40,
+        "y": 188,
+        "slot": 2,
+        "quest": 4,
+        "event": "SOLVE",
+        "level": 1,
+        "guild": "(null)",
+        "min_rep": 0
       }
     },
     "edges": [
@@ -294,8 +307,8 @@
       "en": "Quest chain with a gate"
     },
     "note": {
-      "de": "enable_level steht auf 2: die Quest erscheint erst, wenn zwei andere Quests sie mit AOQ PROMOTE hochzaehlen.",
-      "en": "enable_level is 2: the quest only appears once two other quests count it up with AOQ PROMOTE."
+      "de": "enable_level steht auf 2: die Quest erscheint erst, wenn zwei Vorbedingungen sie mit AOQ PROMOTE hochzaehlen, hier Q_4 angenommen und Q_4 erfuellt. Jede weitere Bedingung zaehlt eins mehr.",
+      "en": "enable_level is 2: the quest only appears once two conditions count it up with AOQ PROMOTE, here Q_4 taken and Q_4 solved. Every further condition counts one more."
     }
   }
 }

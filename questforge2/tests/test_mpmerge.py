@@ -113,10 +113,14 @@ class Merge(unittest.TestCase):
         # validation: open markers warn; giver id ok
         E, W = validate.validate_quest(new, _Idx(), Project('P'), None)
         self.assertFalse([m for m, _ in E if 'NPC_' in m])
-        self.assertEqual(sum(1 for m, _ in W if 'MARKER_' in m), 3)
+        # checklist warnings name the markers as the editor does (Q_...)
+        todo_w = [m for m, _ in W if m.startswith('warn.marker.todo')]
+        self.assertEqual(len(todo_w), 3)
+        self.assertTrue(any("'Q_Giver'" in m for m in todo_w))
         todo[0]['done'] = True
         _E, W = validate.validate_quest(new, _Idx(), Project('P'), None)
-        self.assertEqual(sum(1 for m, _ in W if 'MARKER_' in m), 2)
+        self.assertEqual(sum(1 for m, _ in W
+                             if m.startswith('warn.marker.todo')), 2)
         # export: NPC block with tile, marker and party, lines with tiles
         block = export.build_quest_block(new).emit()
         self.assertIn('ACTION OBJECT_CREATE ENABLE QITEM_040 4 E1', block)

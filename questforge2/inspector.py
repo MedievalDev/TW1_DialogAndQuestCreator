@@ -404,11 +404,12 @@ class Inspector(ttk.Frame):
                           style='PanelMuted.TLabel', wraplength=260
                           ).pack(anchor='w')
         else:
-            self._combo(free, q.id, lambda v: setattr(q, 'id', v),
+            self._combo(free, q.id, lambda v: self.app.renumber_quest(q, v),
                         labels=[f'Q_{i}' for i in free])
             ttk.Label(self.body, text=t('insp.id.hint'),
                       style='PanelMuted.TLabel', wraplength=260).pack(anchor='w')
-        todo = q.extra.get('markers_todo') or []
+        from .mpmerge import current_todo
+        todo = current_todo(q)
         if todo:
             self._marker_checklist(q, todo)
         self._label(t('insp.title'), help_key='help.title')
@@ -430,8 +431,13 @@ class Inspector(ttk.Frame):
             self._text(q.journal.get(key, ''),
                        lambda v, k=key: q.journal.__setitem__(k, v), height=3)
         self._label(t('insp.giver'))
-        svals = [None] + [s['id'] for s in q.speakers]
-        slabels = ['-'] + [self.app.speaker_style(s['id'])[0] for s in q.speakers]
+        real = [s for s in q.speakers if isinstance(s['id'], int)]
+        svals = [None] + [s['id'] for s in real]
+        slabels = ['-'] + [self.app.speaker_label(s) for s in real]
+        if q.giver is not None and q.giver not in svals:
+            # keep an old value visible instead of a blank box
+            svals.insert(1, q.giver)
+            slabels.insert(1, t('insp.giver.missing', id=q.giver))
         self._combo(svals, q.giver, lambda v: setattr(q, 'giver', v),
                     labels=slabels)
         self._label(t('insp.giver_type'))
@@ -714,8 +720,8 @@ class Inspector(ttk.Frame):
                   style='PanelMuted.TLabel', wraplength=260, justify='left'
                   ).pack(anchor='w')
         for item in todo:
-            text = t('mp.item', name=item.get('name'), num=item.get('num'),
-                     tile=item.get('tile'))
+            text = t('mp.item', name=mods.editor_name(item.get('name')),
+                     num=item.get('num'), tile=item.get('tile'))
             cb = self._check(text, item.get('done'),
                              lambda v, it=item: it.__setitem__('done', v))
             theme.Tooltip(cb, item.get('why') or '')
@@ -742,7 +748,16 @@ class Inspector(ttk.Frame):
                 cur = None
         app = self.app
 
+        quest_open = app.quest
+        node_open = quest_open.graph['nodes'].get(nid) if quest_open else None
+
         def use(point):
+            # the field belongs to the node as it was when the map opened;
+            # after undo or another quest it would write into nothing
+            if app.quest is not quest_open or node_open is None or \
+                    app.quest.graph['nodes'].get(nid) is not node_open:
+                app.set_info(t('map.stale'), 'StatusErr.TLabel')
+                return
             if not confirm_mod_marker(app, app.root, point):
                 return
 
@@ -916,7 +931,7 @@ class Inspector(ttk.Frame):
         if not is_player:
             self._label(t('insp.speaker'))
             svals = [s['id'] for s in q.speakers]
-            slabels = [self.app.speaker_style(s['id'])[0] for s in q.speakers]
+            slabels = [self.app.speaker_label(s) for s in q.speakers]
             if node.get('speaker') not in svals:
                 svals.insert(0, node.get('speaker'))
                 slabels.insert(0, '-')
@@ -1099,6 +1114,10 @@ class Inspector(ttk.Frame):
         from . import recorder
         app = self.app
         if getattr(app, 'voice_rec', None):
+            return
+        if app.is_mod_quest(app.quest):
+            messagebox.showinfo(t('voice.title'), t('voice.modquest'),
+                                parent=app.root)
             return
         sw = getattr(app, 'settings_test_running', None)
         if sw and sw():

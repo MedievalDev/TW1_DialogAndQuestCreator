@@ -978,13 +978,20 @@ class App:
         except OSError as e:
             messagebox.showerror(t('mods.title'), str(e), parent=self.root)
             return
+        reopen = None
         for key in [k for k in self.mod_quests
                     if k[0] == os.path.normcase(os.path.abspath(path))]:
+            if self.mod_quests.get(key) is self.quest:
+                reopen = key[1]
             self.mod_quests.pop(key, None)
             self.mod_dirty.discard(key)
         data._BLOCKS.clear()
         data._TREES.clear()
         self.load_modset(force=True)
+        if reopen is not None:
+            # the editor still showed the pre-restore quest; edits to it
+            # would have been dropped on save
+            self.open_mod_quest(path, reopen)
         self.set_info(t('mods.restored', name=mods.mod_name(path),
                         file=os.path.basename(keep)), 'StatusOk.TLabel')
 
@@ -1463,6 +1470,7 @@ class App:
             sub = Project(p.name)
             sub.path, sub.target_archive = p.path, p.target_archive
             sub.quests = [q for q in quests if q is not None]
+            sub.partial = True            # the other quests stay exported
             p = sub
         game = self.cfg.get('game_dir')
         if not p or not p.quests:
@@ -1566,7 +1574,8 @@ class App:
             return
         E, W = validate.validate_quest(q, self.index, self.project,
                                        export.archive_name(self.project)
-                                       if self.project else None, t)
+                                       if self.project else None, t,
+                                       self.modset)
         if self.modset and self.project:
             E2, W2 = validate.validate_mods(q, self.project, self.modset, t)
             E, W = E + E2, W + W2
@@ -1585,7 +1594,8 @@ class App:
             return
         E, W = validate.validate_quest(q, self.index, self.project,
                                        export.archive_name(self.project)
-                                       if self.project else None, t)
+                                       if self.project else None, t,
+                                       self.modset)
         if self.modset and self.project:
             E2, W2 = validate.validate_mods(q, self.project, self.modset, t)
             E, W = E + E2, W + W2
@@ -1620,6 +1630,47 @@ class App:
         if node.get('type') == 'player' or node.get('speaker') == model.PLAYER:
             return t('node.player'), theme.PLAYER_COLOR
         return self.speaker_style(node.get('speaker'))
+
+    def renumber_quest(self, quest, new_id):
+        """New quest id; "after" conditions and links of the other project
+        quests follow, otherwise they keep pointing at the old number."""
+        old = quest.id
+        quest.id = new_id
+        if old is None or old == new_id or not self.project:
+            return
+        n = 0
+        for q in self.project.quests:
+            if q is quest:
+                continue
+            for c in q.conditions_list():
+                if c.get('cond') == 'after' and c.get('quest') == old:
+                    c['quest'] = new_id
+                    n += 1
+            for link in q.links:
+                if isinstance(link, dict) and link.get('quest') == old:
+                    link['quest'] = new_id
+                    n += 1
+        if n:
+            self.mark_dirty()
+            self.set_info(t('quest.renumbered', old=old, new=new_id, n=n),
+                          'StatusOk.TLabel')
+
+    def speaker_label(self, spk):
+        """Name with the NPC number: two speakers may share a name, and the
+        number is what the editor marker and the quest file use."""
+        sid = spk.get('id')
+        name = spk.get('name') or f'NPC_{sid}'
+        return f'{name}  (NPC_{sid})' if isinstance(sid, int) else name
+
+    def giver_name(self, quest):
+        """Giver name from that quest's own speakers, else the index."""
+        spk = quest.speaker(quest.giver) if quest.giver is not None else None
+        if spk:
+            return spk.get('name') or f'NPC_{quest.giver}'
+        if quest.giver is None:
+            return ''
+        npc = self.index.npc(quest.giver) if self.index else None
+        return npc['name'] if npc else f'NPC_{quest.giver}'
 
     def speaker_style(self, sid):
         if sid == model.PLAYER:
@@ -3084,10 +3135,11 @@ class NewQuestDialog:
                 seen.add(q.id)
             idx = self.app.index
             if idx:
+                from .mpmerge import MP_FIRST_QUEST
                 for k in sorted(idx.quests, key=int):
                     qid = int(k)
-                    if qid in seen:
-                        continue
+                    if qid in seen or qid >= MP_FIRST_QUEST:
+                        continue        # Quest > Take over multiplayer quest
                     info = idx.quests[k]
                     label = f"Q_{qid}  {info.get('title') or '-'}"
                     if needle and needle not in label.lower():

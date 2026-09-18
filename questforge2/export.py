@@ -447,7 +447,7 @@ def build_quest_block(quest):
         return None
     level, guild, rep = header_values(quest)
     subs = [tw1_qtx.sub_giver(quest.giver, quest.giver_type, quest.map_sign,
-                              'NONE')]
+                              quest.extra.get('giver_remove') or 'NONE')]
     task = quest.task()
     subs.append(tw1_qtx.sub_fc(task['fc'], *model.op_tokens(
         model.FC_SPECS[task['fc']], task['args'])))
@@ -465,7 +465,8 @@ def build_quest_block(quest):
             acts.append(tw1_qtx.sub_action(a['verb'], when, *toks))
     return tw1_qtx.make_quest(quest.id, subs + acts + rewards,
                               enable_level=level, group=quest.group,
-                              guild=guild, min_rep=rep, add_to_log=True)
+                              guild=guild, min_rep=rep,
+                              add_to_log=quest.extra.get('log', True))
 
 
 def validate_quest(quest, index=None, project=None, archive=None, t=None):
@@ -565,10 +566,19 @@ def patch_qtx(text, quests, index=None):
         block = build_quest_block(q).emit()
         npc_text = ''
         for spk in q.speakers:
-            if spk.get('new') and isinstance(spk['id'], int) and not re.search(
-                    r'^NPC NPC_%d ' % spk['id'], text, re.M):
-                npc_text += npc_block(spk, index)
-                log.append(('npc', spk['id']))
+            if not (spk.get('new') and isinstance(spk['id'], int)):
+                continue
+            rec = npc_block(spk, index)
+            old = re.search(r'^NPC NPC_%d .*?\nEND\n' % spk['id'], text,
+                            re.M | re.S)
+            if old:
+                # tile or marker changed since the last export: replace
+                if old.group(0) != rec:
+                    text = text[:old.start()] + rec + text[old.end():]
+                    log.append(('npc-update', spk['id']))
+                continue
+            npc_text += rec
+            log.append(('npc', spk['id']))
         m = _find_block(text, q.id)
         if m:
             text = text[:m.start()] + npc_text + block + text[m.end():]
@@ -840,16 +850,56 @@ def pack_archive(archive, files, log=print, remove=(), backup=True):
                 pass
 
 
-def build_files(project, base_qtx, master_lan, index=None, overlay_name=None):
-    """{inner path: bytes} for all quests of the project."""
+def quest_ids(qtx_text):
+    return {int(m) for m in re.findall(r'^QUEST Q_(\d+) ', qtx_text, re.M)}
+
+
+def strip_quests(text, ids):
+    """Remove the QUEST blocks of ``ids`` and every AOQ line pointing at
+    them (a quest renumbered or deleted since the last export)."""
+    for qid in sorted(ids):
+        m = _find_block(text, qid)
+        if m:
+            text = text[:m.start()] + text[m.end():]
+        text = re.sub(r'^  AOQ [A-Z_]+ [A-Z_]+ Q_%d\n' % qid, '', text,
+                      flags=re.M)
+    return text
+
+
+def strip_texts(master, ids):
+    """The .lan without title, journal and dialog of ``ids``."""
+    if not ids:
+        return master
+    tr, aliases, rest = tw1_lan.read(master)
+    trees = tw1_lan.parse_trees(rest)
+    for qid in ids:
+        for k in [k for k in tr if k == f'translateQ_{qid}'
+                  or k.startswith(f'translateQ_{qid}_')
+                  or k.startswith(f'translateDQ_{qid}_')]:
+            del tr[k]
+    trees = [x for x in trees
+             if x.id not in {f'translateDQ_{q}' for q in ids}]
+    return tw1_lan.build(tr, aliases, tw1_lan.build_trees(trees))
+
+
+def build_files(project, base_qtx, master_lan, index=None, overlay_name=None,
+                gone=(), prev_overlay=None):
+    """{inner path: bytes} for all quests of the project. ``gone``: quest
+    ids of earlier exports the project no longer has."""
     quests = list(project.quests)
     files = {}
     base_text = base_qtx.decode('latin-1')
+    if gone:
+        base_text = strip_quests(base_text.replace('\r\n', '\n'), gone)
+        master_lan = strip_texts(master_lan, gone)
     text, _ = patch_qtx(base_text, quests, index)
     if text != base_text.replace('\r\n', '\n') or any(
             not q.retail for q in quests):
         files[INNER_QTX] = text.encode('latin-1')
     full, overlay = build_lan(master_lan, quests)
+    if prev_overlay is not None and getattr(project, 'partial', False):
+        # "export this quest": the overlay keeps the other quests' texts
+        overlay = build_lan(prev_overlay, quests)[0]
     files[INNER_LAN] = full
     files[f'Language\\ZZ_{overlay_name or "QuestForge"}.lan'] = overlay
     return files
@@ -921,8 +971,11 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
     base_qtx = master_lan = None
     own_overlay = f'Language\\ZZ_{overlay_stem(project)}.lan'
     stale, remove = {}, []
+    prev_overlay = None
     if os.path.isfile(archive):
         ents = _entries(archive)
+        if own_overlay in ents:
+            prev_overlay = ents[own_overlay].data
         if INNER_QTX in ents:
             base_qtx = ents[INNER_QTX].data
             log(('base', 'qtx', name))
@@ -939,8 +992,21 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
         with open(os.path.join(base_dir, 'TwoWorldsQuests.lan'), 'rb') as f:
             master_lan = f.read()
         log(('base', 'lan', 'Language.wd'))
+    # own quests of an earlier export that are gone from the project
+    # (renumbered or deleted): everything not in the game's own quest file
+    gone = set()
+    retail_path = os.path.join(base_dir, 'TwoWorldsQuests.qtx')
+    if os.path.isfile(retail_path):
+        with open(retail_path, 'rb') as f:
+            retail_ids = quest_ids(f.read().decode('latin-1'))
+        own_now = {q.id for q in project.quests}
+        gone = quest_ids(base_qtx.decode('latin-1')) - retail_ids - own_now
+        if getattr(project, 'partial', False):
+            gone = set()             # "export this quest" keeps the others
+        for qid in sorted(gone):
+            log(('gone', qid))
     files = build_files(project, base_qtx, master_lan, index,
-                        overlay_stem(project))
+                        overlay_stem(project), gone, prev_overlay)
     for inner, blob in files.items():
         log(('file', inner, len(blob)))
     files.update(entries or {})

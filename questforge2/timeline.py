@@ -195,8 +195,7 @@ class Timeline(ttk.Frame):
                 task = q.task()
                 e = dict(e, title=q.title or e.get('title', ''),
                          group=q.group, kind='edited' if q.retail else 'own',
-                         giver=app.speaker_style(q.giver)[0]
-                         if q.giver is not None else '',
+                         giver=app.giver_name(q),
                          lines=sum(len(n.get('lines') or [])
                                    for n in q.graph['nodes'].values()
                                    if n.get('type') in ('npc', 'player')),

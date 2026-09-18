@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.7.2 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1490,6 +1490,56 @@ Entschieden am 2026-09-13 (Umsetzung M6 bis M10):
     stand aber "NPC <alte MP-Nummer>". Jetzt folgt der Vorgabename der neuen
     Nummer ("NPC 508"), bis man einen eigenen tippt; MP-Platzhalter
     ("Lector ...", "NPC_700") gelten nicht als Name.
+74. Grosse Bugfix-Runde "Fehler, die das Spiel still schluckt" (Version
+    3.8.0, Marco 2026-09-18 nach Orions Q_Giver-381-Fall). Vier Pruefer
+    lasen je einen Bereich gegen das SDK; jeder Fund im Code nachgeprueft.
+    - Pruefung (validate.py `_engine_checks`, auch mit modset): Q_Giver mit
+      der NPC-Nummer auf der Kachel des neuen NPC (Orions Fall), jeder
+      Aufgaben-/Aktionsmarker auf seiner Kachel (Warnung; Retail- und
+      Mod-Kartendaten), Q_Action_Walk auf der Kachel des NPC, Kachel leer
+      oder unbekannt = Fehler, NPC-Nummern 1..697 in Geber/Aufgabe/Aktionen,
+      unbekannte NPC-Nummer (Warnung), neuer NPC als Ziel gebraucht aber nie
+      erzeugt, derselbe neue NPC in zwei Quests verschieden, Freischaltung
+      (Zaehler -1, Spielstart +1, je AOQ PROMOTE +1; SDK PQuests.ec 229/429,
+      PQuestsCommon.ech eQuestInitialLevel): Stufe > Vorgaenger = Fehler
+      "nie frei", Stufe 0 mit Bedingung = Warnung; Verknuepfung auf
+      unbekannte Quest jetzt Fehler (Quest 0), Ziel ueber der Questgrenze
+      Fehler, Platzhalter-Geber Fehler, unbekannter Ort Fehler. Vier
+      Meldungen hatten gar keinen Text (val.link.*), ergaenzt.
+    - Sprecher: Entfernen zaehlt Geber und NPC-Ziele mit; Listen zeigen
+      "Name (NPC_n)" (gleiche Namen waehlten den falschen); Geber nur echte
+      NPC; Tooltip mit Kachel und noetigem Q_Giver; Umbenennen eines
+      Spiel-NPC sagt, dass nur der Tool-Name wechselt; Neuer-NPC-Dialog
+      prueft 1..697, Kachel, Marker > 0. Karte "In Quest verwenden" nach
+      Rueckgaengig schreibt nicht mehr ins Leere. Erneuter Export ersetzt
+      den NPC-Eintrag statt den alten zu behalten. Zeitleiste zeigt den
+      Geber der jeweiligen Quest.
+    - MP-Assistent: `recover_null_lines` holt Zeilen mit "(null)" in
+      Zahlenfeldern zurueck - vorher hatten 90 der 120 MP-Quests nach der
+      Uebernahme keine Aufgabe, 204 Zeilen fielen weg; jetzt 0. Zeilen ohne
+      Nummer bekommen je einen eigenen Marker, getippte Nummern bleiben je
+      Zeile; Hauptkachel ueberschreibt nur Zeilen, die ihr noch folgen;
+      leerer Name faellt auf die neue Nummer; Checkliste mit Editor-Namen
+      (Q_Giver ...) und `current_todo` (veraltete Eintraege fallen weg);
+      MP-Quests nicht mehr in der Kopierliste.
+    - Export/Mods: Quests frueherer Exporte, die das Projekt nicht mehr hat
+      (umnummeriert, geloescht), werden samt AOQ-Zeilen und Texten entfernt
+      (Vergleich mit dem Original-qtx); Teil-Export behaelt die Texte der
+      anderen Quests; Mod ohne Quest-lan: zweite gespeicherte Quest loescht
+      die Texte der ersten nicht mehr; Backup wiederherstellen oeffnet die
+      offene Mod-Quest neu; Aufnahmen an Mod-Quests gesperrt (Mod haelt sie
+      nicht); Kopie einer Spielquest behaelt AOQ-Verknuepfungen,
+      Geber-Entfernung und Tagebuch-Flag; Umnummerieren zieht Bedingungen
+      und Verknuepfungen anderer Projekt-Quests mit.
+    - Vorlagen: "Kette mit Tor" war kein Tor (Bedingung Stufe 1, eine
+      Vorbedingung) - jetzt Stufe 2 mit Q_4 angenommen + erfuellt;
+      "Mit NPC reden" zielte auf NPC_5 wie Q_4 selbst - jetzt NPC_190
+      (Nalax Gonga, E2, im Spiel ungeprueft).
+    - Bewusst nicht geaendert: ein vorhandener Marker mit derselben Nummer
+      gilt im Assistenten als "vorhanden" (Wiederverwenden ist erlaubt und
+      spart den Editor); Vorlage-NPC aus eigenen/Mod-Sprechern (selten).
+    - Pruefung: 121 Tests (neu test_bugfix380), gui_380 (11 Faelle),
+      Regression dbg_rec/dbg_rec2/gui_360/dbg_360b/map_check/map_check2.
 
 Offen:
 

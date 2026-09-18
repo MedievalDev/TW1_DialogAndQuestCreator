@@ -124,7 +124,9 @@ def plan(quest, npc_id, tile, retail_tiles, tiles=None, numbers=None):
     next_free = {}
     for i, ref in enumerate(marker_refs(quest)):
         tl = (tiles.get(i) or ref['tile'] or tile).upper()
-        key = (ref['name'], tl, ref['num'])
+        # a line without a number (MP "(null)") needs a marker of its own
+        key = (ref['name'], tl, ref['num'] if ref['num'] is not None
+               else ('line', i))
         if i in numbers:
             num = numbers[i]
         elif key in mapping:
@@ -140,6 +142,7 @@ def plan(quest, npc_id, tile, retail_tiles, tiles=None, numbers=None):
             next_free[(ref['name'], tl)] = max(
                 num, next_free.get((ref['name'], tl), 0))
         mapping[key] = num
+        mapping[('line', i)] = num
         if not any(x['name'] == ref['name'] and x['num'] == num
                    and x['tile'] == tl for x in items):
             items.append({'name': ref['name'], 'num': num, 'tile': tl,
@@ -147,6 +150,72 @@ def plan(quest, npc_id, tile, retail_tiles, tiles=None, numbers=None):
                           'exists': num in mods.marker_ids(
                               retail_tiles.get(tl), ref['name'])})
     return items, mapping
+
+
+def recover_null_lines(quest):
+    """Multiplayer lines with "(null)" in number fields (e.g. FC CLEAR_AREA
+    (null) (null) 60 21, ENEMY_CREATE ... (null) (null) (null) (null) 21)
+    the importer could not read and would drop. The MP script places those
+    markers at run time; for the single player they become lines with the
+    spec default for counts and levels and an open marker number that
+    plan() then gives out. Returns the number of lines taken back."""
+    info = quest.extra.get('qtx') or {}
+    raw = info.get('raw') or []
+    keep, n = [], 0
+    task = quest.task()
+    for kw, toks in raw:
+        spec = body = when = None
+        if kw == 'FC' and toks and toks[0] in model.FC_SPECS and \
+                not task.get('fc'):
+            spec, body = model.FC_SPECS[toks[0]], toks[1:]
+        elif kw == 'ACTION' and len(toks) >= 2 and \
+                ('ACTION', toks[0]) in model.ACTION_SPECS and \
+                toks[1] in model.ACTION_WHEN:
+            spec, body, when = model.ACTION_SPECS[('ACTION', toks[0])], \
+                toks[2:], toks[1]
+        if spec is None or '(null)' not in body or len(spec) != len(body):
+            keep.append([kw, toks])
+            continue
+        fixed = []
+        for f, tok in zip(spec, body):
+            if tok == '(null)' and f[1] in ('int', 'party'):
+                tok = str(f[2] if len(f) > 2 else 1)
+            fixed.append(tok)
+        args = retail.args_from_tokens(spec, fixed)
+        if args is None:
+            keep.append([kw, toks])
+            continue
+        for f in spec:
+            if f[1].startswith('marker:') and not isinstance(args.get(f[0]),
+                                                             int):
+                args[f[0]] = None          # plan() gives out a number
+        if kw == 'FC':
+            model.set_task(quest.graph, toks[0])['args'] = args
+            task = quest.task()
+        else:
+            quest.actions.append({'kind': 'ACTION', 'verb': toks[0],
+                                  'args': args, 'when': when})
+        n += 1
+    info['raw'] = keep
+    return n
+
+
+def current_todo(quest):
+    """The marker checklist without entries the quest no longer uses
+    (giver renumbered or moved, a line given another marker or tile). The
+    ticks of the remaining entries stay."""
+    todo = quest.extra.get('markers_todo') or []
+    if not todo:
+        return []
+    used = set()
+    for s in quest.speakers:
+        if s.get('new') and isinstance(s.get('id'), int):
+            used.add((GIVER_MARKER, str(s.get('tile') or '').upper(),
+                      s.get('marker') or s['id']))
+    for ref in marker_refs(quest):
+        used.add((ref['name'], ref['tile'], ref['num']))
+    return [x for x in todo if isinstance(x, dict) and
+            (x.get('name'), str(x.get('tile')).upper(), x.get('num')) in used]
 
 
 def apply(quest, new_id, npc_id, npc_name, tile, retail_tiles, tiles=None,
@@ -160,8 +229,7 @@ def apply(quest, new_id, npc_id, npc_name, tile, retail_tiles, tiles=None,
     for i, ref in enumerate(marker_refs(new)):
         tl = (tiles.get(i) if tiles else None) or ref['tile'] or tile
         ref['args'][ref['tile_key']] = tl.upper()
-        ref['args'][ref['num_key']] = mapping[(ref['name'], tl.upper(),
-                                               ref['num'])]
+        ref['args'][ref['num_key']] = mapping[('line', i)]
     # the giver: new id everywhere, one new speaker with the NPC block data
     old_spk = next((s for s in new.speakers if s['id'] == old_giver), None)
     new.speakers = [s for s in new.speakers if s['id'] != old_giver]
@@ -194,7 +262,8 @@ def apply(quest, new_id, npc_id, npc_name, tile, retail_tiles, tiles=None,
 
 def checklist_lines(items, lang=None):
     lang = lang or get_lang()
-    return [t('mp.item', name=x['name'], num=x['num'], tile=x['tile'])
+    return [t('mp.item', name=mods.editor_name(x['name']), num=x['num'],
+                   tile=x['tile'])
             + ('   ' + t('mp.exists') if x.get('exists') or x.get('done')
                else '') for x in items]
 
@@ -423,6 +492,8 @@ class MpMergeWindow:
         for w in self.lines_box.winfo_children():
             w.destroy()
         self.rows = []
+        self._auto_nums = {}
+        self._last_tile = self.tile.get().strip().upper()
         refs = marker_refs(q)
         if not refs:
             ttk.Label(self.lines_box, text=t('mp.lines.none'),
@@ -444,8 +515,10 @@ class MpMergeWindow:
             theme.Tooltip(lbl, f"{ref['label']} {vals}")
             ttk.Label(row, text=ref['name'], width=28).pack(side='left')
             tv = tk.StringVar(value=ref['tile'] or self.tile.get())
-            ttk.Combobox(row, textvariable=tv, values=tiles, width=7
-                         ).pack(side='left')
+            tcb = ttk.Combobox(row, textvariable=tv, values=tiles, width=7)
+            tcb.pack(side='left')
+            tcb.bind('<<ComboboxSelected>>', lambda e: self._renumber())
+            tcb.bind('<FocusOut>', lambda e: self._renumber())
             nv = tk.StringVar(value='' if ref['num'] is None else
                               str(ref['num']))
             ttk.Entry(row, textvariable=nv, width=7).pack(side='left',
@@ -464,12 +537,17 @@ class MpMergeWindow:
         self.npcname.set(self._auto_name)
 
     def _tile_all(self, only_empty=False):
+        """Copy the main tile into the lines that are empty or still carry
+        the previous main tile; a tile set per line stays."""
         tile = self.tile.get().strip().upper()
         if not tile:
             return
+        prev = getattr(self, '_last_tile', '')
         for _ref, tv, _nv in self.rows:
-            if not only_empty or not tv.get().strip():
+            cur = tv.get().strip().upper()
+            if not cur or (not only_empty and cur == prev):
                 tv.set(tile)
+        self._last_tile = tile
         self._renumber()
 
     def _renumber(self):
@@ -482,10 +560,15 @@ class MpMergeWindow:
             npc = 0
         _items, mapping = plan(self.src, npc, self.tile.get().strip().upper()
                                or 'E1', self.retail_tiles, tiles)
+        auto = getattr(self, '_auto_nums', {})
         for i, (ref, tv, nv) in enumerate(self.rows):
-            key = (ref['name'], tiles[i], ref['num'])
-            if key in mapping:
-                nv.set(str(mapping[key]))
+            if nv.get().strip() and nv.get().strip() != auto.get(i):
+                continue                    # typed by the user: keep it
+            num = mapping.get(('line', i))
+            if num is not None:
+                nv.set(str(num))
+                auto[i] = str(num)
+        self._auto_nums = auto
 
     def _pick_tile(self):
         from .mappicker import MapPicker
@@ -555,7 +638,7 @@ class MpMergeWindow:
         except (ValueError, IndexError):
             group = None
         name = self.npcname.get().strip() or t('mp.npcname.default',
-                                                id=self.src.giver)
+                                                id=npc)
         return new_id, npc, name, tile, group, tiles, numbers
 
     def _fill_page3(self, settings):
@@ -579,7 +662,8 @@ class MpMergeWindow:
         s.insert('end', NL + t('mp.sum.markers') + NL, 'head')
         s.insert('end', t('mp.sum.markers.hint') + NL + NL, 'mut')
         for x in items:
-            line = t('mp.item', name=x['name'], num=x['num'], tile=x['tile'])
+            line = t('mp.item', name=mods.editor_name(x['name']), num=x['num'],
+                   tile=x['tile'])
             s.insert('end', ('  [x] ' if x['exists'] else '  [ ] ') + line
                      + NL, 'ok' if x['exists'] else None)
             s.insert('end', '        ' + x['why'] + NL, 'mut')
@@ -611,6 +695,7 @@ class MpMergeWindow:
             src = self.app.build_game_quest(qid)
             if src is None:
                 return
+            recover_null_lines(src)
             self.src = src
             self._fill_page2()
             self._show_step(1)

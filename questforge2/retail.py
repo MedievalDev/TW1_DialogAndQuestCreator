@@ -174,7 +174,19 @@ def make_own(quest, new_id):
     q = model.Quest.from_dict(copy.deepcopy(quest.to_dict()))
     q.id = new_id
     q.retail = False
-    q.extra.pop('qtx', None)
+    info = q.extra.pop('qtx', None) or {}
+    # lines the model keeps only as raw qtx: take over what an own quest
+    # can say, so a copy does not lose its quest links silently
+    for kw, toks in info.get('raw') or []:
+        if kw == 'AOQ' and len(toks) == 3 and re.fullmatch(r'Q_\d+', toks[2]):
+            link = {'type': toks[0], 'event': toks[1],
+                    'quest': int(toks[2][2:])}
+            if link not in q.links:
+                q.links.append(link)
+    if info.get('giver_remove') not in (None, 'NONE'):
+        q.extra['giver_remove'] = info['giver_remove']
+    if info.get('log') is False:
+        q.extra['log'] = False
     for n in q.graph['nodes'].values():
         for ln in n.get('lines') or []:
             for k in ('tid', 'order'):

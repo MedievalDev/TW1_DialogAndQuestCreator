@@ -360,7 +360,18 @@ class Quest:
         return spk
 
     def speaker_used(self, sid):
-        return any(n.get('speaker') == sid for n in self.graph['nodes'].values())
+        """Used by a dialog node, as quest giver or as the NPC of the task
+        or an action (removing it would leave those pointing nowhere)."""
+        if self.giver == sid and sid is not None:
+            return True
+        want = {str(sid), f'NPC_{sid}'}
+        for n in self.graph['nodes'].values():
+            if n.get('speaker') == sid:
+                return True
+            if str((n.get('args') or {}).get('npc')) in want:
+                return True
+        return any(str((a.get('args') or {}).get('npc')) in want
+                   for a in self.actions)
 
     def remove_speaker(self, sid):
         if self.speaker_used(sid):
