@@ -597,6 +597,10 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.0.2:** Fehlerfenster sagt "1 error" statt "1 errors" (auch bei
+  Warnungen, offenen Markern und Testschritten), der Hinweis zu
+  **Reparieren** steht in einer eigenen Zeile und wird nicht mehr
+  abgeschnitten.
 - **4.0.1 Fehlerrunde:** zwei Runden Tiefen-Debug (Karten, Export,
   Datenschutz der Meldungen, Spielsitzung) und Tempo: Start 520 -> 280 ms,
   Setz-Fenster öffnen 2,8 -> 0,7 s, erster getönter Zoom 1,7 s -> 60 ms.

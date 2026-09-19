@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1842,6 +1842,19 @@ Offen:
       Kachel, Cache-Bau 250 -> 36 ms und Markerscan 250 -> 57 ms (Entpacken
       begrenzt, `unconsumed_tail`; alle 191 Karten gleich), Verschieben der
       Karte ohne Neuaufbau von Kacheln und Punkten, Cache-Knopf im Thread.
+83. Zwei Kleinigkeiten im Fehlerfenster (Version 4.0.2, Marco 2026-09-19),
+    gesehen beim Aufnehmen der Webseitenbilder.
+    - Einzahl: `t()` nimmt bei `n == 1` den Text `<Schluessel>.one`, wenn
+      es ihn gibt ("Export not possible, 1 error:", "1 Warnung. Trotzdem
+      exportieren?"). Eingetragen fuer 12 Texte in DE und EN (Export-Fehler
+      und -Warnungen, offene Marker, offene Testschritte, rote Kachel,
+      Neuerungen im Update-Fenster, unveraenderte Zeilen, TODO, Dialogzeilen,
+      Nodes). Der Schluessel der Meldung (Guide-Kapitel, Fingerabdruck)
+      bleibt der Grundschluessel.
+    - Der Hinweis zu **Reparieren** stand neben dem Knopf und war bei der
+      Standardgroesse 700x420 abgeschnitten. Jetzt eigene Zeile ueber den
+      Knoepfen, Umbruch folgt der Fensterbreite (geprueft EN/DE, 1 und 3
+      Kacheln, auch bei 520 px Breite).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

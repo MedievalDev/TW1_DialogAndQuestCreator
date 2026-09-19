@@ -416,5 +416,46 @@ class Process(unittest.TestCase):
         self.assertTrue(any(n.lower().startswith('py') for n in names))
 
 
+class Plural(unittest.TestCase):
+    """4.0.2: 'Export not possible, 1 errors'."""
+
+    def tearDown(self):
+        from questforge2 import i18n
+        i18n.set_lang('en')
+
+    def test_one_takes_the_singular(self):
+        from questforge2 import i18n
+        i18n.set_lang('en')
+        self.assertEqual(i18n.t('export.errors', n=1),
+                         'Export not possible, 1 error:')
+        self.assertEqual(i18n.t('export.errors', n=2),
+                         'Export not possible, 2 errors:')
+        self.assertEqual(i18n.t('export.warnings', n=0),
+                         '0 warnings. Export anyway?')
+        i18n.set_lang('de')
+        self.assertEqual(i18n.t('export.warnings', n=1),
+                         '1 Warnung. Trotzdem exportieren?')
+        self.assertEqual(i18n.t('status.nodes', n=1), '1 Node')
+
+    def test_singulars_are_complete(self):
+        import string
+        from questforge2 import i18n
+
+        def names(s):
+            return sorted(f for _, f, _, _ in string.Formatter().parse(s)
+                          if f)
+        ones = [k for k in i18n._EN if k.endswith('.one')]
+        self.assertGreaterEqual(len(ones), 12)
+        for k in ones:
+            for d in (i18n._DE, i18n._EN):
+                self.assertIn(k, d)
+                self.assertEqual(names(d[k]), names(d[k[:-4]]), k)
+
+    def test_problem_key_stays_the_base_key(self):
+        from questforge2 import validate
+        m = validate.keyed(lambda k, **f: k)('warn.todo', n=1)
+        self.assertEqual(m.key, 'warn.todo')
+
+
 if __name__ == '__main__':
     unittest.main()

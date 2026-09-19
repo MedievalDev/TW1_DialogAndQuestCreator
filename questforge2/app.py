@@ -2879,12 +2879,19 @@ class ProblemWindow:
         for _q, m, _n in list(errors) + list(warnings):
             app.feedback.log.add(f'problem {getattr(m, "key", "") or "?"}')
         if self.fill:
-            ttk.Button(bar, text=t('fill.button', tiles=', '.join(self.fill)),
+            # own row above the buttons: the hint wraps to the window width
+            # (next to the button it was cut at the default size, 4.0.2)
+            row = ttk.Frame(f)
+            row.pack(fill='x', pady=(8, 0), before=bar)
+            ttk.Button(row, text=t('fill.button', tiles=', '.join(self.fill)),
                        style='Accent.TButton', command=self._fix
-                       ).pack(side='left')
-            ttk.Label(bar, text=t('fill.hint'), style='Muted.TLabel',
-                      wraplength=380, justify='left'
-                      ).pack(side='left', padx=8)
+                       ).pack(anchor='w')
+            hint = ttk.Label(row, text=t('fill.hint'), style='Muted.TLabel',
+                             wraplength=660, justify='left')
+            hint.pack(fill='x', pady=(4, 0))
+            hint.bind('<Configure>', lambda e: hint.configure(
+                wraplength=max(200, e.width - 4)))
+            self.hint = hint
         self.win = win
 
     def _selected_msg(self):

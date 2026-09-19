@@ -56,6 +56,7 @@ _DE = {
     # status bar
     'status.noproject': 'Kein Projekt', 'status.nogame': 'Kein Spielpfad',
     'status.noquest': 'Keine Quest', 'status.nodes': '{n} Nodes',
+    'status.nodes.one': '{n} Node',
     'status.validation.none': 'Validierung: -',
     'status.index.loading': 'Index wird geladen...',
     'status.index.cache': 'Index aus Cache ({s:.2f} s)',
@@ -340,7 +341,9 @@ _DE = {
     'export.running': 'Two Worlds laeuft. Bitte das Spiel schliessen: es haelt '
                       'die Mod-Archive offen.',
     'export.errors': 'Export nicht moeglich, {n} Fehler:',
+    'export.errors.one': 'Export nicht moeglich, {n} Fehler:',
     'export.warnings': '{n} Warnungen. Trotzdem exportieren?',
+    'export.warnings.one': '{n} Warnung. Trotzdem exportieren?',
     'export.conflict': 'Diese aktiven Mods liefern ebenfalls die komplette '
                        'Quest- oder Textdatei: {mods}. Das spaeter geladene '
                        'Archiv gewinnt still. Empfehlung: in eines davon '
@@ -371,6 +374,7 @@ _DE = {
     'tl.large': 'grosse Karten',
     'tl.count': '{n} von {all} Quests',
     'tl.lines': '{n} Dialogzeilen',
+    'tl.lines.one': '{n} Dialogzeile',
     'tl.open': 'Oeffnen',
     'tl.dup': 'Duplizieren als eigene Quest',
     'tl.delete': 'Loeschen (nur Projekt)',
@@ -388,6 +392,7 @@ _DE = {
     'status.gameedit': '(Spiel, geaendert)',
     'insp.id.game': 'Quest aus dem Spiel. Die ID bleibt fest.',
     'insp.raw': '{n} Zeilen der Quest bleiben unveraendert (AOQ und seltene Befehle).',
+    'insp.raw.one': '{n} Zeile der Quest bleibt unveraendert (AOQ und seltene Befehle).',
     'ctx.setstart': 'Als Start dieser Ebene setzen',
     'val.speaker.taken': 'Neuer NPC_{id} ist im Spiel schon vergeben ({name}).',
     'val.opcode': 'Unbekannter Befehl: {op}',
@@ -640,6 +645,7 @@ _DE = {
     'example.marker': 'z. B. 3',
     'insp.unverified': 'Die Zahl in "{fields}" hat keine belegte Bedeutung (ungeprueft). Kein Original-Quest nutzt sie.',
     'warn.todo': '{n} Stellen tragen noch "TODO" aus der Vorlage.',
+    'warn.todo.one': '{n} Stelle traegt noch "TODO" aus der Vorlage.',
     'newq.title': 'Neue Quest',
     'newq.head': 'Wie soll die neue Quest anfangen?',
     'newq.empty': 'Leer anfangen',
@@ -702,6 +708,7 @@ _DE = {
     'mods.d.records': 'Neu oder geaendert: {npcs} NPCs, {locs} Orte, {chests} Truhen',
     'mods.d.lans': 'Sprachdateien: {n}, Dialogbaeume: {trees}, Texte: {texts}',
     'mods.d.red': 'ROT: {n} Marker des Spiels fehlen',
+    'mods.d.red.one': 'ROT: {n} Marker des Spiels fehlt',
     'mods.d.tileok': 'alle Marker des Spiels vorhanden',
     'mods.d.conflict': 'dieselbe Karte bringen auch: {names}',
     'mods.d.backups': 'Sicherungen: {n}',
@@ -730,6 +737,7 @@ _DE = {
     'mod.overrides': 'ueberschreibt Original',
     'mod.more': '... und {n} weitere',
     'mod.redtile': '{n} Marker des Spiels fehlen in diesem Tile:',
+    'mod.redtile.one': '{n} Marker des Spiels fehlt in diesem Tile:',
     'mod.dep.confirm': 'Tile {tile} aus Mod {mod} wird in den Build uebernommen. Damit kommen auch alle anderen Aenderungen dieser Mod an diesem Tile mit.',
     'modsave.title': 'In Mod speichern',
     'modsave.text': 'Quest-Aenderungen kommen nur in einem neuen Spiel an, nicht in bestehenden Spielstaenden: Das Questskript liest die Questdatei beim Spielstart (SDK PQuests.ec, state Initialize), ein geladener Spielstand setzt danach fort. Vor dem ersten Schreiben des Tages legt das Tool neben der Mod eine Sicherung an.',
@@ -750,6 +758,7 @@ _DE = {
     'warn.mod.id': 'Mod {mod} benutzt dieselbe Questnummer. Im Spiel gewinnt die spaeter geladene Questdatei.',
     'warn.mod.override': 'Mod {mod} veraendert diese Quest ebenfalls. Im Spiel gewinnt die spaeter geladene Questdatei.',
     'val.mod.redtile': 'Marker {markers} auf {tile} gibt es nur in Mod {mod}, und dort fehlen {n} Marker des Spiels. Das Tile wuerde Original-Quests brechen.',
+    'val.mod.redtile.one': 'Marker {markers} auf {tile} gibt es nur in Mod {mod}, und dort fehlt {n} Marker des Spiels. Das Tile wuerde Original-Quests brechen.',
     'val.mod.conflict': 'Marker {markers} auf {tile}: mehrere Mods bringen dieses Tile ({mods}). Unter Mods > Abhaengigkeiten eine Mod waehlen.',
     'deps.title': 'Abhaengigkeiten',
     'deps.head': 'Karten aus Mods im Build',
@@ -1085,6 +1094,7 @@ _DE = {
     'place.blocked.q': 'Der Boden hier ist nicht begehbar (Baum, Fels, Mauer). Eine Figur oder ein Gegenstand steht dort vielleicht im Stein. Trotzdem hier setzen?',
     'place.clash': '{marker} {num} gibt es auf {tile} schon. Der vorhandene Marker wird benutzt, ein zweiter wuerde nicht geschrieben. Andere Kachel waehlen oder den vorhandenen lassen.',
     'place.open.q': '{n} Marker sind noch nicht gesetzt. Trotzdem uebernehmen? Die offenen bleiben in der Liste der Quest.',
+    'place.open.q.one': '{n} Marker ist noch nicht gesetzt. Trotzdem uebernehmen? Der offene bleibt in der Liste der Quest.',
     'place.discard.q': 'Aenderungen verwerfen?',
     'place.save': 'Bitte das Projekt zuerst speichern. Die Karten mit den Markern liegen im Ordner neben der Projektdatei.',
     'place.none': 'Diese Quest hat keine offenen Marker.',
@@ -1150,6 +1160,7 @@ _DE = {
     'test.pass': 'Funktioniert',
     'test.fail': 'Funktioniert nicht',
     'test.steps.open': '{n} Schritte sind nicht abgehakt. Trotzdem als "funktioniert" melden?',
+    'test.steps.open.one': '{n} Schritt ist nicht abgehakt. Trotzdem als "funktioniert" melden?',
     'test.nogame.q': 'Das Spiel wurde nicht ueber "Spiel starten" gestartet, das Protokoll der Spielsitzung fehlt dann. Trotzdem melden?',
     'test.fail.note': 'Bitte kurz beschreiben, was nicht funktioniert hat. Ohne das laesst sich der Fehler nicht finden.',
     'test.close.q': 'Das Spiel laeuft noch, das Protokoll ginge verloren. Trotzdem schliessen?',
@@ -1184,6 +1195,7 @@ _DE = {
     'news.test': 'Ich teste das',
     'problem.guide': 'Im Guide nachlesen',
     'update.untested': 'Diese Version bringt {n} Neuerungen, die noch niemand im Spiel bestaetigt hat. Nach dem Update kannst du unter Hilfe > Ungetestetes testen mithelfen.',
+    'update.untested.one': 'Diese Version bringt {n} Neuerung, die noch niemand im Spiel bestaetigt hat. Nach dem Update kannst du unter Hilfe > Ungetestetes testen mithelfen.',
     'em.lhc.how.tool.ok': '(vom Tool selbst geschrieben, kein SDK noetig; von Nutzern im Spiel bestaetigt)',
     'export.log.lhc': 'Level-Header-Cache ins Archiv gepackt: {n} Karten, {size} Bytes (Spiel + eigene Karten, keine fremden Mods)',
     'export.log.lhcfail': 'Level-Header-Cache fuer das Archiv konnte nicht gebaut werden: {err}',
@@ -1234,6 +1246,7 @@ _EN = {
                    'Quest > New quest creates one.',
     'status.noproject': 'No project', 'status.nogame': 'No game path',
     'status.noquest': 'No quest', 'status.nodes': '{n} nodes',
+    'status.nodes.one': '{n} node',
     'status.validation.none': 'Validation: -',
     'status.index.loading': 'Loading index...',
     'status.index.cache': 'Index from cache ({s:.2f} s)',
@@ -1502,7 +1515,9 @@ _EN = {
     'export.running': 'Two Worlds is running. Please close the game: it keeps '
                       'the mod archives open.',
     'export.errors': 'Export not possible, {n} errors:',
+    'export.errors.one': 'Export not possible, {n} error:',
     'export.warnings': '{n} warnings. Export anyway?',
+    'export.warnings.one': '{n} warning. Export anyway?',
     'export.conflict': 'These enabled mods also ship the full quest or text '
                        'file: {mods}. The archive loaded later wins silently. '
                        'Recommendation: export into one of them (quest panel, '
@@ -1531,6 +1546,7 @@ _EN = {
     'tl.large': 'large cards',
     'tl.count': '{n} of {all} quests',
     'tl.lines': '{n} dialog lines',
+    'tl.lines.one': '{n} dialog line',
     'tl.open': 'Open',
     'tl.dup': 'Duplicate as own quest',
     'tl.delete': 'Delete (project only)',
@@ -1548,6 +1564,7 @@ _EN = {
     'status.gameedit': '(game, changed)',
     'insp.id.game': 'Quest of the game. The id is fixed.',
     'insp.raw': '{n} lines of the quest stay unchanged (AOQ and rare commands).',
+    'insp.raw.one': '{n} line of the quest stays unchanged (AOQ and rare commands).',
     'ctx.setstart': 'Set as start of this level',
     'val.speaker.taken': 'New NPC_{id} already exists in the game ({name}).',
     'val.opcode': 'Unknown command: {op}',
@@ -1800,6 +1817,7 @@ _EN = {
     'example.marker': 'e.g. 3',
     'insp.unverified': 'The number in "{fields}" has no proven meaning (unverified). No original quest uses it.',
     'warn.todo': '{n} places still say "TODO" from the template.',
+    'warn.todo.one': '{n} place still says "TODO" from the template.',
     'newq.title': 'New quest',
     'newq.head': 'How should the new quest start?',
     'newq.empty': 'Start empty',
@@ -1862,6 +1880,7 @@ _EN = {
     'mods.d.records': 'New or changed: {npcs} NPCs, {locs} locations, {chests} chests',
     'mods.d.lans': 'Language files: {n}, dialog trees: {trees}, texts: {texts}',
     'mods.d.red': 'RED: {n} markers of the game are missing',
+    'mods.d.red.one': 'RED: {n} marker of the game is missing',
     'mods.d.tileok': 'all markers of the game present',
     'mods.d.conflict': 'the same map also comes from: {names}',
     'mods.d.backups': 'Backups: {n}',
@@ -1890,6 +1909,7 @@ _EN = {
     'mod.overrides': 'overrides original',
     'mod.more': '... and {n} more',
     'mod.redtile': '{n} markers of the game are missing in this tile:',
+    'mod.redtile.one': '{n} marker of the game is missing in this tile:',
     'mod.dep.confirm': 'Tile {tile} from mod {mod} goes into the build. All other changes of this mod to this tile come along.',
     'modsave.title': 'Save into mod',
     'modsave.text': 'Quest changes only reach a new game, not existing saves: the quest script reads the quest file when a game starts (SDK PQuests.ec, state Initialize), a loaded save goes on from there. Before the first write of the day the tool puts a backup next to the mod.',
@@ -1910,6 +1930,7 @@ _EN = {
     'warn.mod.id': 'Mod {mod} uses the same quest number. In the game the quest file loaded later wins.',
     'warn.mod.override': 'Mod {mod} changes this quest as well. In the game the quest file loaded later wins.',
     'val.mod.redtile': 'Marker {markers} on {tile} only exists in mod {mod}, and that map lacks {n} markers of the game. The tile would break original quests.',
+    'val.mod.redtile.one': 'Marker {markers} on {tile} only exists in mod {mod}, and that map lacks {n} marker of the game. The tile would break original quests.',
     'val.mod.conflict': 'Marker {markers} on {tile}: several mods bring this tile ({mods}). Pick one under Mods > Dependencies.',
     'deps.title': 'Dependencies',
     'deps.head': 'Maps from mods in the build',
@@ -2245,6 +2266,7 @@ _EN = {
     'place.blocked.q': 'The ground here is not walkable (tree, rock, wall). A character or item may end up inside the stone. Place it here anyway?',
     'place.clash': '{marker} {num} already exists on {tile}. The existing marker is used, a second one would not be written. Choose another tile or keep the existing one.',
     'place.open.q': '{n} markers are not placed yet. Take over anyway? The open ones stay in the quest list.',
+    'place.open.q.one': '{n} marker is not placed yet. Take over anyway? The open one stays in the quest list.',
     'place.discard.q': 'Discard changes?',
     'place.save': 'Please save the project first. The maps with the markers are kept in the folder next to the project file.',
     'place.none': 'This quest has no open markers.',
@@ -2310,6 +2332,7 @@ _EN = {
     'test.pass': 'Works',
     'test.fail': 'Does not work',
     'test.steps.open': '{n} steps are not ticked. Report "works" anyway?',
+    'test.steps.open.one': '{n} step is not ticked. Report "works" anyway?',
     'test.nogame.q': 'The game was not started with "Start game", so the log of the game session is missing. Report anyway?',
     'test.fail.note': 'Please describe briefly what did not work. Without that the error cannot be found.',
     'test.close.q': 'The game is still running, the log would be lost. Close anyway?',
@@ -2344,6 +2367,7 @@ _EN = {
     'news.test': 'I will test this',
     'problem.guide': 'Read in the guide',
     'update.untested': 'This version brings {n} features nobody has confirmed in the game yet. After the update you can help under Help > Test untested features.',
+    'update.untested.one': 'This version brings {n} feature nobody has confirmed in the game yet. After the update you can help under Help > Test untested features.',
     'em.lhc.how.tool.ok': '(written by the tool itself, no SDK needed; confirmed in the game by users)',
     'export.log.lhc': 'Level header cache packed into the archive: {n} maps, {size} bytes (game + own maps, no foreign mods)',
     'export.log.lhcfail': 'The level header cache for the archive could not be built: {err}',
@@ -2375,6 +2399,9 @@ def get_lang():
 
 
 def t(key, **fmt):
+    # n == 1 takes the '<key>.one' text when there is one (4.0.2)
+    if fmt.get('n') == 1 and key + '.one' in _EN:
+        key += '.one'
     text = _DICTS[_lang].get(key)
     if text is None:
         text = _EN.get(key, key)
