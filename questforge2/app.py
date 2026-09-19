@@ -889,51 +889,35 @@ class App:
                             + NL + NL + t('em.lhc'), parent=self.root)
 
     def run_lhc(self):
-        """Rebuild the level header cache with the SDK's MeshParamsGen.exe
-        (asks for the SDK once); only the batch there: start that."""
-        from . import editormaps
-        path = editormaps.find_lhc_exe(self.cfg) or             editormaps.find_lhc_bat(self.cfg)
-        if not path:
-            messagebox.showinfo(t('em.title'), t('em.lhc.where'),
-                                parent=self.root)
-            path = filedialog.askopenfilename(
-                title=t('em.lhc.pick'), parent=self.root,
-                filetypes=[('LevelHeadersCacheGen.bat, MeshParamsGen.exe',
-                            '*.bat *.exe')])
-            if not path:
-                return
-            self.cfg.set('lhc_bat', path)
-            self.cfg.save()
+        """Rebuild the level header cache: with the SDK's MeshParamsGen.exe
+        when it is there, else the tool writes the file itself (3.9.2,
+        lhcache.py - no SDK needed)."""
+        from . import editormaps, lhcache
+        game = self.cfg.get('game_dir')
+        if not game:
+            messagebox.showerror(t('em.title'), t('export.nogame'),
+                                 parent=self.root)
+            return
         if export.game_running():
             messagebox.showwarning(t('em.title'), t('em.lhc.running'),
                                    parent=self.root)
             return
-        exe = editormaps.find_lhc_exe(self.cfg)
-        if exe:
-            self.root.configure(cursor='watch')
-            self.root.update_idletasks()
-            try:
-                ok, n, text = editormaps.build_lhc(exe,
-                                                   self.cfg.get('game_dir'))
-            finally:
-                self.root.configure(cursor='')
-            if ok:
-                self.set_info(t('em.lhc.built', n=n), 'StatusOk.TLabel')
-                messagebox.showinfo(t('em.title'), t('em.lhc.built', n=n)
-                                    + NL + NL + t('em.lhc.note'),
-                                    parent=self.root)
-            else:
-                messagebox.showerror(t('em.title'), t('em.lhc.failed',
-                                                      err=text or '-'),
-                                     parent=self.root)
-            return
-        try:                      # only the batch is there: its own window
-            editormaps.run_lhc_bat(path)
-        except OSError as e:
-            messagebox.showerror(t('em.title'), t('em.error', err=e),
+        self.root.configure(cursor='watch')
+        self.root.update_idletasks()
+        try:
+            res = lhcache.rebuild(game, editormaps.find_lhc_exe(self.cfg))
+        finally:
+            self.root.configure(cursor='')
+        if res['ok']:
+            text = t('em.lhc.built', n=res['n']) + ' ' + t('em.lhc.how.'
+                                                           + res['how'])
+            self.set_info(text, 'StatusOk.TLabel')
+            messagebox.showinfo(t('em.title'), text + NL + NL
+                                + t('em.lhc.note'), parent=self.root)
+        else:
+            messagebox.showerror(t('em.title'), t('em.lhc.failed',
+                                                  err=res['text'] or '-'),
                                  parent=self.root)
-            return
-        self.set_info(t('em.lhc.started'), 'StatusOk.TLabel')
 
     def _on_drop(self, paths):
         """Files dropped onto the window: editor maps go into the project."""
@@ -1656,26 +1640,28 @@ class App:
                 return
         win = ExportWindow(self)
         result = {}
+        entries_box = {}                  # map files packed by this export
         logq = queue.Queue()
         # 3.9.1: projects with map tiles get the level header cache rebuilt
         # right after the export (the game does not know new markers
         # without it)
-        from . import editormaps
+        from . import editormaps, lhcache
         has_maps = bool(editormaps.present(editormaps.levels_dir(p)))
-        lhc_exe = (editormaps.find_lhc_exe(self.cfg)
-                   if has_maps and not target
-                   and self.cfg.get('lhc_auto', True) else None)
+        lhc_auto = bool(has_maps and not target
+                        and self.cfg.get('lhc_auto', True))
+        lhc_exe = editormaps.find_lhc_exe(self.cfg) if lhc_auto else None
 
         def work():
             try:
                 entries = mods.dependency_entries(deps, logq.put)
+                entries_box.update(entries)
                 result['res'] = export.export_mod(
                     p, game, data.base_dir(), self.index, logq.put,
                     files_only=target, entries=entries)
-                if lhc_exe:
+                if lhc_auto:
                     logq.put('')
                     logq.put(t('em.lhc.auto.run'))
-                    result['lhc'] = editormaps.build_lhc(lhc_exe, game)
+                    result['lhc'] = lhcache.rebuild(game, lhc_exe)
             except Exception as e:          # shown in the log window
                 result['err'] = e
 
@@ -1695,11 +1681,22 @@ class App:
             else:
                 extra, good = '', True
                 if 'lhc' in result:
-                    ok, n, text = result['lhc']
-                    good = ok
+                    res = result['lhc']
+                    good = res['ok']
                     extra = NL + NL + (
-                        t('em.lhc.built', n=n) + NL + t('em.lhc.note') if ok
-                        else t('em.lhc.failed', err=text or '-'))
+                        t('em.lhc.built', n=res['n']) + ' '
+                        + t('em.lhc.how.' + res['how']) + NL
+                        + t('em.lhc.note') if good
+                        else t('em.lhc.failed', err=res['text'] or '-'))
+                    # a map of ours that another source beats never reaches
+                    # the game: say so instead of "nothing happens"
+                    lost = lhcache.overruled(res['used'],
+                                             result['res']['archive'],
+                                             list(entries_box))
+                    if lost:
+                        good = False
+                        extra += NL + NL + t('em.lhc.overruled', items=', '.join(
+                            f'{path} ({winner})' for path, winner in lost))
                 elif has_maps:
                     extra = NL + NL + t('em.lhc')
                 win.finish(t('export.done', path=result['res']['archive'])
@@ -2347,6 +2344,7 @@ class App:
                             f'voicebank={self._selftest_voicebank()} '
                             f'mapzoom={self._selftest_mapzoom()} '
                             f'placed={self._selftest_placed()} '
+                            f'lhc={self._selftest_lhc()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2361,6 +2359,19 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    def _selftest_lhc(self):
+        """3.9.2: the tool's own level header cache against the file in
+        the game folder (nothing is written)."""
+        from . import lhcache
+        game = self.cfg.get('game_dir')
+        blob, used = lhcache.build(game)
+        path = os.path.join(game, lhcache.LHC_FILE)
+        same = '-'
+        if os.path.isfile(path):
+            with open(path, 'rb') as f:
+                same = 'same' if f.read() == blob else 'differs'
+        return f'{len(used)}maps/{same}'
 
     def _selftest_placed(self):
         """3.9.0: the map reader in the frozen build - terrain height and
@@ -3495,7 +3506,7 @@ class SettingsWindow:
                         command=self._save_lhc).pack(anchor='w')
         from . import editormaps
         ttk.Label(f, text=t('settings.lhc.exe', path=editormaps.find_lhc_exe(
-            app.cfg) or t('settings.lhc.none')), style='Muted.TLabel',
+            app.cfg) or t('settings.lhc.tool')), style='Muted.TLabel',
             wraplength=480, justify='left').pack(anchor='w')
         # -- game -------------------------------------------------------------
         ttk.Label(f, text=t('settings.game'), style='Brand.TLabel'

@@ -589,11 +589,14 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   unbegehbarer Boden rot ab Nahzoom. Bestätigen schreibt die Kacheln nach
   `<Projekt>_levels` (Basis: Spielkarte, Mod-Karte oder gesicherte
   Editor-Kachel, fehlende Spielmarker ergänzt). Innenräume weiter im Editor.
-- **Level-Header-Cache automatisch (3.9.1):** Hat das Projekt Kartenkacheln,
-  baut der Export den Cache danach selbst neu (`MeshParamsGen.exe` aus dem
-  SDK, mit dem Spielpfad des Tools; Ergebnis im Export-Fenster, abschaltbar
-  unter Datei > Einstellungen). Ohne SDK bleibt der Hinweis auf
-  `LevelHeadersCacheGen.bat`.
+- **Level-Header-Cache automatisch (3.9.1/3.9.2):** Hat das Projekt
+  Kartenkacheln, baut der Export den Cache danach selbst neu (Ergebnis im
+  Export-Fenster, abschaltbar unter Datei > Einstellungen, von Hand per Knopf
+  im Quest-Panel). Kein SDK nötig (**experimentell**): Das Tool schreibt `Map_LevelHeaders.lhc`
+  selbst, byte-gleich zu `MeshParamsGen.exe`; mit SDK nimmt es dessen
+  Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
+  eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
+  eine eigene Karte, meldet das Export-Fenster das.
 - **Rote Kacheln reparieren:** Meldet der Export eine Mod-Karte ohne
   Originalmarker, bietet das Fehlerfenster **Reparieren** an: Kopie der
   Mod-Kachel mit den fehlenden Spielmarkern im Projektordner, dann erneut

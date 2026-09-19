@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1674,7 +1674,29 @@ Offen:
       Einstellungen. Knopf im Quest-Panel nutzt denselben Weg, die bat nur
       noch, wenn die exe fehlt. Tests in `test_editormaps.py` (3).
     - Idee fuer spaeter: die .lhc ohne SDK selbst schreiben (Format ist
-      gemessen), fuer Nutzer ohne SDK.
+      gemessen), fuer Nutzer ohne SDK. -> 12.78
+78. Level-Header-Cache ohne SDK (Version 3.9.2, Marco 2026-09-19: "bau das
+    ohne sdk auch ein"). `lhcache.py` schreibt `Map_LevelHeaders.lhc`
+    selbst.
+    - Format: `LC` 00 00, u32 Anzahl, u32 0, je Karte u32 Laenge + Pfad +
+      Kopf des entpackten Kartenkoerpers bis Ende Markerblock; nach Pfad
+      sortiert.
+    - Vorrang, gemessen mit MeshParamsGen.exe an nachgebauten Spielordnern
+      im Scratchpad (Archive benannt wie eingeschaltete Mods, je eigener
+      Testmarker; Registry nur gelesen): lose Datei in `Levels` > Mods mit
+      Registry-Wert 1, alphabetisch ERSTES Archiv gewinnt (Minimap vor
+      ShaderFix und Yamalin, QuestLimit600 vor ShaderFix, Dateizeit egal)
+      > `WDFiles`, ebenfalls alphabetisch erstes (Graphics vor Levels vor
+      Update16). Wert 0 oder kein Eintrag: nicht gelesen. Auf Marcos
+      Rechner: Dream Worlds (0) ignoriert, Yamalin (1) schlaegt Levels.wd.
+    - Beweis: byte-gleich zur SDK-Datei im echten Spielordner (160 Karten,
+      0,24 s) und in allen 6 Konfliktfaellen.
+    - Nebenfund: MeshParamsGen mit Schraegstrichen im Spielpfad meldet
+      "Finished" und schreibt nichts; `build_lhc` normalisiert den Pfad.
+    - `lhcache.rebuild` nimmt das SDK-Programm, wenn vorhanden, sonst den
+      eigenen Schreiber (alte Datei einmalig als `.qf2backup`).
+      `overruled`: Karten des eigenen Archivs, die eine andere Quelle
+      schlaegt, meldet das Export-Fenster rot. Tests `test_lhcache.py` (7).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

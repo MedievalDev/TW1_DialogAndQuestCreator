@@ -220,11 +220,17 @@ Editor-Kachel, die vorher nach `<Projekt>_levels_base` gesichert wird; die
 Spielmarker, die der Kopie fehlen, kommen mit hinein) und liest die Mods neu.
 Danach wie unten: exportieren, dann LevelHeadersCacheGen.
 
-**Ab 3.9.1 baut der Export den Level-Header-Cache selbst neu**, wenn das
-Projekt Kartenkacheln hat und das SDK gefunden wird (`MeshParamsGen.exe`
-im SDK-Ordner `Tools`, das Tool ruft es mit deinem Spielpfad auf; dauert
-unter einer Sekunde, das Ergebnis steht im Export-Fenster). Abschaltbar unter
-Datei > Einstellungen. Ohne SDK oder von Hand gilt:
+**Der Export baut den Level-Header-Cache selbst neu**, wenn das Projekt
+Kartenkacheln hat; das Ergebnis steht im Export-Fenster, abschaltbar unter
+Datei > Einstellungen, von Hand mit dem Knopf im Quest-Panel. Ein SDK ist
+dafuer nicht noetig (ab 3.9.2, **experimentell**, im Spiel noch nicht von
+Nutzern bestaetigt): Das Tool schreibt die Datei selbst, byte-gleich
+zu dem, was `MeshParamsGen.exe` aus dem SDK liefert; ist das SDK da, nimmt
+es dessen Programm. **Welche Karte zaehlt**, wenn mehrere Quellen dieselbe
+Kachel haben: zuerst eine lose Datei im Spielordner `Levels`, dann die
+eingeschaltete Mod, die im Alphabet ZUERST kommt, zuletzt das Spiel.
+Ausgeschaltete Mods zaehlen nicht. Verliert eine Karte deiner Mod gegen eine
+andere, sagt das Export-Fenster das in Rot. Der alte Weg von Hand:
 
 **Vor dem naechsten Spielstart** erst exportieren, dann
 `LevelHeadersCacheGen.bat` aus dem SDK (`Tools`) ausfuehren, Knopf im
@@ -310,11 +316,17 @@ tile, which is kept in `<project>_levels_base` first; game markers the copy
 lacks go in as well) and reads the mods again. Then as below: export, then
 LevelHeadersCacheGen.
 
-**From 3.9.1 the export rebuilds the level header cache itself** when the
-project has map tiles and the SDK is found (`MeshParamsGen.exe` in the SDK
-folder `Tools`, called with your game path; takes under a second, the
-result shows in the export window). Switch it off under File > Settings.
-Without the SDK or by hand:
+**The export rebuilds the level header cache itself** when the project has
+map tiles; the result shows in the export window, switch it off under
+File > Settings, by hand with the button in the quest panel. No SDK is
+needed (from 3.9.2, **experimental**, not yet confirmed in the game by
+users): the tool writes the file itself, byte for byte what
+`MeshParamsGen.exe` from the SDK produces; with the SDK present it uses that
+program. **Which map counts** when several sources have the same tile: first
+a loose file in the game folder `Levels`, then the enabled mod that comes
+FIRST in the alphabet, last the game. Disabled mods do not count. When a map
+of your mod loses against another one, the export window says so in red.
+The old way by hand:
 
 **Before the next game start** export first, then run
 `LevelHeadersCacheGen.bat` from the SDK (`Tools`), button in the quest panel.

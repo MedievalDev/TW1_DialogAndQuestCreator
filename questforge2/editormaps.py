@@ -233,7 +233,9 @@ def build_lhc(exe, game_dir, timeout=300):
     before = time.time() - 2
     try:
         r = subprocess.run(
-            [exe, game_dir.rstrip('/' + BS) + '/>', '-levelheaderscache',
+            # backslashes: with forward slashes the program prints
+            # "Finished" and writes nothing (measured 2026-09-19)
+            [exe, os.path.normpath(game_dir) + '/>', '-levelheaderscache',
              'Levels' + BS + 'Map_*.lnd', 'Levels' + BS + 'Map_LevelHeaders.lhc'],
             cwd=os.path.dirname(exe), capture_output=True, timeout=timeout,
             stdin=subprocess.DEVNULL,
