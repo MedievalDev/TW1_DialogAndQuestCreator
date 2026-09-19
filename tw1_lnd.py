@@ -69,11 +69,28 @@ def _marker_section(data):
     pos += 8
     for _ in range(count):
         _name, pos = _ascii(data, pos)
-        pos += ENTRY_TAIL
+        pos = _entry_end(data, pos)
     return start, pos
 
 
-# Per marker, after the name: u32 instance id, i32 x/y/z, u8 angle, 8 spare.
+def _entry_end(data, pos):
+    """Offset just past one marker, ``pos`` right after its name.
+
+    After the name: u32 instance id, i32 x/y/z, u8 angle, then a length-
+    prefixed ASCII text and a u32. The text is empty on nearly every marker
+    (that is why it was read as "8 spare bytes"); measured 2026-09-19 over
+    all archives of the game and the mods: 1 of 18659 markers has one, Dream
+    Worlds' Map_E03 marker 323 "Engine.Draw3DObjects", and a fixed tail ran
+    off the rails there. The u32 behind it was 0 everywhere.
+    """
+    pos += 4 + 12 + 1
+    n = struct.unpack_from('<I', data, pos)[0]
+    return pos + 4 + n + 4
+
+
+# Per marker, after the name: u32 instance id, i32 x/y/z, u8 angle, then
+# u32 text length + text + u32 (see _entry_end). ENTRY_TAIL is the size with
+# an empty text and only right for markers we write ourselves.
 # The XYZ are INTEGERS - reading them as float32 yields nothing but zeros.
 ENTRY_TAIL = 4 + 12 + 9
 
@@ -98,7 +115,7 @@ def markers_full(blob):
         name, pos = _ascii(data, pos)
         ident, x, y, z = struct.unpack_from('<Iiii', data, pos)
         out[name].append((ident, (x, y, z, data[pos + 16])))
-        pos += ENTRY_TAIL
+        pos = _entry_end(data, pos)
     return dict(out)
 
 
@@ -156,7 +173,7 @@ def move_marker(blob, name, ident, dz=0, x=None, y=None, z=None):
                               (mz + dz) if z is None else z)
             out = data[:kopf] + neu + data[kopf + 16:]
             return rewrap(header, out), (mx, my, mz)
-        pos = kopf + ENTRY_TAIL
+        pos = _entry_end(data, kopf)
     raise KeyError(f'{name} {ident} nicht in der Karte')
 
 

@@ -44,7 +44,7 @@ import tw1_wd
 from . import data, model
 
 BS = chr(92)
-MOD_FORMAT = 1
+MOD_FORMAT = 2            # 3.9.3: maps with a marker text were "unreadable"
 MARKER_CACHE_FORMAT = 1
 INNER_QTX = data.INNER_QTX
 INNER_LAN = data.INNER_LAN

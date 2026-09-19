@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1697,6 +1697,17 @@ Offen:
       eigenen Schreiber (alte Datei einmalig als `.qf2backup`).
       `overruled`: Karten des eigenen Archivs, die eine andere Quelle
       schlaegt, meldet das Export-Fenster rot. Tests `test_lhcache.py` (7).
+79. Marker mit Text (Version 3.9.3, Fund des Multiplayer-Chats 2026-09-19,
+    hier nachgemessen). Hinter dem Winkel eines Markers stehen nicht 8 feste
+    Bytes, sondern u32 Textlaenge + Text + u32. Ueber alle Archive des Spiels
+    und der Mods: 1 von 18659 Markern traegt einen Text (Dream Worlds
+    Map_E03, Marker 323 MARKER_ENEMY_ANIMAL2, "Engine.Draw3DObjects"), das
+    u32 dahinter ist ueberall 0. `tw1_lnd._entry_end` in `_marker_section`,
+    `markers_full`, `move_marker`; vorher war die Karte "unreadable" und der
+    Cache-Schreiber aus 12.78 waere mit eingeschaltetem Dream Worlds
+    gescheitert. Selbst geschriebene Marker (8 Nullbytes = leerer Text + 0)
+    bleiben gueltig. `MOD_FORMAT` 2, damit alte Scans verfallen. Tests
+    `MarkerText` in `test_placed.py` (3).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

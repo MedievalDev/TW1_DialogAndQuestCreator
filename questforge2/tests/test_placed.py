@@ -110,6 +110,50 @@ class AddMarkers(unittest.TestCase):
         self.assertEqual(lndmap.add_markers(base, []), base)
 
 
+class MarkerText(unittest.TestCase):
+    """A marker may carry a text behind its angle (Dream Worlds Map_E03,
+    marker 323 "Engine.Draw3DObjects"); a fixed 8 byte tail broke there."""
+
+    def _with_text(self):
+        plain = body([(START, 1, 1, 2, 3, 0), (OBJ, 2, 4, 5, 6, 7)])
+        start, _end = tw1_lnd._marker_section(plain)
+        first = start + 8 + 4 + len(START) + 17      # first marker's tail
+        text = b'Engine.Draw3DObjects'
+        return (plain[:first] + struct.pack('<I', len(text)) + text
+                + plain[first + 4:]), plain
+
+    def test_read_past_the_text(self):
+        d, plain = self._with_text()
+        self.assertEqual(tw1_lnd.markers_full(d),
+                         {START: [(1, (1, 2, 3, 0))], OBJ: [(2, (4, 5, 6, 7))]})
+        _s, end = tw1_lnd._marker_section(d)
+        _s, end_plain = tw1_lnd._marker_section(plain)
+        self.assertEqual(end, end_plain + 20)
+        self.assertEqual(lndmap.Terrain(d).height(64, 64), 1100)
+
+    def test_edit_behind_the_text(self):
+        d, _plain = self._with_text()
+        new = lndmap.add_markers(d, [(START, 9, 7, 7, 7, 0)])
+        self.assertEqual(tw1_lnd.markers(new), {START: {1, 9}, OBJ: {2}})
+        moved, old = tw1_lnd.move_marker(d, OBJ, 2, dz=10)
+        self.assertEqual(old, (4, 5, 6))
+        self.assertEqual(tw1_lnd.markers_full(moved)[OBJ], [(2, (4, 5, 16, 7))])
+
+    def test_dream_worlds_if_installed(self):
+        import glob
+        from questforge2 import data
+        game = data.find_game_dir() if hasattr(data, 'find_game_dir') else None
+        hits = glob.glob(os.path.join(game or '', 'Mods', 'Dream Worlds*.wd'))
+        if not hits:
+            self.skipTest('Dream Worlds not installed')
+        n = 0
+        for e in mods.wd_directory(hits[0]):
+            if e.path.lower().endswith('.lnd'):
+                tw1_lnd.markers_full(mods.wd_data(hits[0], e))
+                n += 1
+        self.assertGreater(n, 0)
+
+
 class Build(unittest.TestCase):
     def test_missing_and_build(self):
         retail = body([(START, 1, 0, 0, 0, 0), (START, 2, 5, 5, 5, 0),
