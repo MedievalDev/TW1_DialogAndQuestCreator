@@ -26,6 +26,7 @@ from . import VERSION, data, theme
 from .i18n import get_lang, t
 
 TOOL = 'questcreator'
+CONFIRM_NEEDED = 2          # the server confirms a test after 2 passes from different PCs
 NL = chr(10)
 
 
@@ -135,6 +136,19 @@ class Feedback:
         if self.summary is None:
             return True                      # offline: offer the text file
         return self.state(test_id) in ('open', 'failed', 'confirmed')
+
+    def mine(self, test_id):
+        """What this PC reported for the test: 'pass', 'fail' or ''."""
+        sent = self.app.cfg.get('test_sent') or {}
+        return sent.get(test_id, '') if isinstance(sent, dict) else ''
+
+    def remember(self, test_id, passed):
+        sent = self.app.cfg.get('test_sent') or {}
+        if not isinstance(sent, dict):
+            sent = {}
+        sent[test_id] = 'pass' if passed else 'fail'
+        self.app.cfg.set('test_sent', sent)
+        self.app.cfg.save()
 
     def issues(self):
         return (self.summary or {}).get('issues') or []
@@ -306,7 +320,10 @@ class TestWindow:
             ok, bad = self.fb.counts(x['id'])
             mark = {'confirmed': '✓', 'failed': '!', 'closed': '-'
                     }.get(st, '○')
-            self.lst.insert('end', f' {mark}  {_loc(x["title"])}')
+            need = max(CONFIRM_NEEDED, ok)
+            tail = f'  ({ok}/{need})' if st in ('open', 'confirmed') and ok \
+                else (f'  ({bad} x !)' if bad else '')
+            self.lst.insert('end', f' {mark}  {_loc(x["title"])}{tail}')
             self.lst.itemconfigure(i, foreground={
                 'confirmed': theme.OK, 'failed': theme.ERR,
                 'closed': theme.MUT}.get(st, theme.INK))
@@ -356,6 +373,7 @@ class TestWindow:
         ttk.Label(r, text=t('test.state.' + st, since=x['since'], ok=ok,
                             bad=bad), style='Muted.TLabel'
                   ).pack(anchor='w', pady=(2, 6))
+        self._bar(r, x, st, ok, bad)
         ttk.Label(r, text=_loc(x.get('why')), wraplength=640, justify='left'
                   ).pack(anchor='w', pady=(0, 8))
         bottom = ttk.Frame(r)
@@ -472,6 +490,37 @@ class TestWindow:
             pass
         self.fb.log.add(f'game session: {state}')
 
+    def _bar(self, parent, x, st, ok, bad):
+        """How far the test is: one tick per confirmation (design 11a)."""
+        need = max(CONFIRM_NEEDED, ok)
+        if st == 'failed':
+            key, colour, filled = 'test.bar.failed', theme.ERR, need
+        elif st in ('confirmed', 'closed'):
+            key, colour, filled = 'test.bar.confirmed', theme.OK, need
+        elif ok:
+            key, colour, filled = 'test.bar.some', theme.GOLD, ok
+        else:
+            key, colour, filled = 'test.bar.none', theme.MUT, 0
+        box = ttk.Frame(parent)
+        box.pack(anchor='w', fill='x', pady=(2, 6))
+        w, h, gap = 150, 12, 4
+        c = tk.Canvas(box, width=w, height=h, highlightthickness=0,
+                      background=theme.BG, bd=0)
+        c.pack(side='left')
+        step = (w - gap * (need - 1)) / need if need else w
+        for i in range(need):
+            x0 = i * (step + gap)
+            c.create_rectangle(x0, 0, x0 + step, h, width=0,
+                               fill=colour if i < filled else theme.FIELD)
+        ttk.Label(box, text=t(key, ok=ok, bad=bad, need=need),
+                  style='Muted.TLabel', wraplength=470, justify='left'
+                  ).pack(side='left', padx=8)
+        mine = self.fb.mine(x['id'])
+        if mine:
+            ttk.Label(parent, text=t('test.mine.' + mine),
+                      foreground=theme.OK if mine == 'pass' else theme.ERR
+                      ).pack(anchor='w', pady=(0, 4))
+
     def result(self, passed):
         x = self.test
         if x is None:
@@ -508,8 +557,16 @@ class TestWindow:
             TOOL, VERSION, self.fb.client_id(), get_lang(), x['id'], passed,
             message=note, log=self.fb.log.text(),
             game_log=self.session.text() if self.session else '')
+        def sent():
+            self.fb.remember(x['id'], passed)
+
+            def shown():
+                self._fill_list()
+                self.test = None      # rebuild the panel with the new count
+                self.select(x['id'])
+            self.fb.refresh(shown)
         _preview_window(self.win, payload, lambda: self.fb.send(
-            payload, self.win, on_ok=self._fill_list))
+            payload, self.win, on_ok=sent))
 
 
 def _loc_list(d):
