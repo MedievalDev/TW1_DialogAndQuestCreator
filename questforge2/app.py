@@ -42,7 +42,12 @@ class App:
         self._carry = carry
         self.cfg = data.Config()
         from .feedbackwin import Feedback
-        self.feedback = Feedback(self)    # session log, tests, known issues
+        old = (carry or {}).get('feedback')
+        if old is not None:               # language switch: same session
+            old.app = self
+            self.feedback = old
+        else:
+            self.feedback = Feedback(self)  # session log, tests, issues
         set_lang(self.cfg.get('lang') or detect_lang())
         self.index = None
         self.project = None
@@ -737,8 +742,10 @@ class App:
         self.schedule_validation(50)
         if modswin.ModsWindow._open:
             modswin.ModsWindow._open.refresh()
-        from . import mapwin
-        if mapwin.MapWindow._open:
+        # only when the map module is loaded at all (it pulls Pillow: 45 ms
+        # at every start for a window nobody opened yet)
+        mapwin = sys.modules.get(__package__ + '.mapwin')
+        if mapwin is not None and mapwin.MapWindow._open:
             try:
                 mapwin.MapWindow._open.reload()
             except tk.TclError:
@@ -885,6 +892,20 @@ class App:
             # last in the list: the tool's load order lets it win
             self.project.mods.append({'path': dest, 'enabled': True})
         self.mark_dirty()
+        from . import placed
+        again = {tile for tile, _inner, _src in done} & (
+            {p['tile'] for p in placed.placements(self.project)}
+            | placed.fill_tiles(self.project))
+        if again:
+            # the new editor tile is the base now; the placed markers and
+            # the put back game markers go on top of it again
+            try:
+                placed.generate(self.project, self.modset,
+                                self.cfg.get('game_dir'), lambda *a: None)
+            except Exception as e:
+                messagebox.showerror(t('place.title'),
+                                     t('place.error', err=e),
+                                     parent=self.root)
         self.load_modset(force=True)
         ticked = editormaps.tick_found(self.project.quests, self.modset)
         open_n = sum(1 for q in self.project.quests
@@ -918,12 +939,32 @@ class App:
             messagebox.showwarning(t('em.title'), t('em.lhc.running'),
                                    parent=self.root)
             return
-        self.root.configure(cursor='watch')
-        self.root.update_idletasks()
-        try:
-            res = lhcache.rebuild(game, editormaps.find_lhc_exe(self.cfg))
-        finally:
+        if getattr(self, '_lhc_busy', False):
+            return
+        self._lhc_busy = True
+        exe = editormaps.find_lhc_exe(self.cfg)
+        box = []
+
+        def work():
+            try:
+                box.append(lhcache.rebuild(game, exe))
+            except Exception as e:
+                box.append({'ok': False, 'n': None, 'text': str(e),
+                            'how': 'tool', 'used': []})
+
+        def poll():
+            if not box:
+                self.root.after(100, poll)
+                return
             self.root.configure(cursor='')
+            self._lhc_busy = False
+            self._lhc_done(box[0])
+        self.root.configure(cursor='watch')
+        self.set_info(t('em.lhc.auto.run'))
+        threading.Thread(target=work, daemon=True).start()
+        self.root.after(100, poll)
+
+    def _lhc_done(self, res):
         if res['ok']:
             text = t('em.lhc.built', n=res['n']) + ' ' + self._lhc_how(res)
             self.set_info(text, 'StatusOk.TLabel')
@@ -1288,6 +1329,7 @@ class App:
             return
         self.project.quests.remove(quest)
         self.mark_dirty()
+        self._placements_changed(quest.id, None)
         if quest is self.quest:
             self.open_quest(self.project.quests[0] if self.project.quests
                             else None)
@@ -1674,9 +1716,14 @@ class App:
                     p, game, data.base_dir(), self.index, logq.put,
                     files_only=target, entries=entries)
                 if lhc_auto:
-                    logq.put('')
-                    logq.put(t('em.lhc.auto.run'))
-                    result['lhc'] = lhcache.rebuild(game, lhc_exe)
+                    logq.put(('text', ''))
+                    logq.put(('text', t('em.lhc.auto.run')))
+                    try:
+                        result['lhc'] = lhcache.rebuild(game, lhc_exe)
+                    except Exception as e:   # the archive is written anyway
+                        result['lhc'] = {'ok': False, 'n': None,
+                                         'text': str(e), 'how': 'tool',
+                                         'used': []}
             except Exception as e:          # shown in the log window
                 result['err'] = e
 
@@ -1716,6 +1763,8 @@ class App:
                     extra = NL + NL + t('em.lhc')
                 win.finish(t('export.done', path=result['res']['archive'])
                            + NL + NL + t('export.next') + extra, ok=good)
+            if 'err' not in result and p is self.project:
+                self.mark_dirty()            # exported_maps changed
             if 'err' not in result and self.coach.tutorial.quest in p.quests:
                 self.coach.tutorial.exported = True
 
@@ -1802,6 +1851,8 @@ class App:
         quest.id = new_id
         if old is None or old == new_id or not self.project:
             return
+        from . import placed
+        placed.forget_quest(self.project, old, new_id)
         n = 0
         for q in self.project.quests:
             if q is quest:
@@ -1818,6 +1869,23 @@ class App:
             self.mark_dirty()
             self.set_info(t('quest.renumbered', old=old, new=new_id, n=n),
                           'StatusOk.TLabel')
+
+    def _placements_changed(self, qid, new_id):
+        """A deleted quest takes its markers placed on the map along: the
+        tiles are written again without them."""
+        from . import editormaps, placed
+        if not self.project or not placed.forget_quest(self.project, qid,
+                                                       new_id):
+            return
+        if new_id is None and editormaps.levels_dir(self.project):
+            try:
+                placed.generate(self.project, self.modset,
+                                self.cfg.get('game_dir'), lambda *a: None)
+                self.load_modset(force=True)
+            except Exception as e:           # shown, the quest is gone anyway
+                messagebox.showerror(t('place.title'),
+                                     t('place.error', err=e),
+                                     parent=self.root)
 
     def speaker_label(self, spk):
         """Name with the NPC number: two speakers may share a name, and the
@@ -2018,7 +2086,11 @@ class App:
     def _restore(self, snap):
         if snap is None:
             return
+        before = self.quest.id
         self.quest.restore(snap)
+        if self.project and self.quest.id != before:
+            from . import placed
+            placed.forget_quest(self.project, before, self.quest.id)
         self.graph.set_graph(self.quest.graph)
         self.changed()
 
@@ -2127,9 +2199,8 @@ class App:
 
     def set_info(self, text, style='Status.TLabel'):
         self.status['info'].configure(text=text, style=style)
-        if text:
-            self.feedback.log.add(('ERROR ' if 'Err' in style else '')
-                                  + str(text))
+        if text and 'Err' in style:
+            self.feedback.log.add('ERROR status: ' + str(text)[:80])
 
     def set_hint(self, text):
         self.status['hint'].configure(text=text[:140])
@@ -2391,6 +2462,8 @@ class App:
         the game folder (nothing is written)."""
         from . import lhcache
         game = self.cfg.get('game_dir')
+        if not game:
+            return 'nogame'
         blob, used = lhcache.build(game)
         path = os.path.join(game, lhcache.LHC_FILE)
         same = '-'
@@ -2580,8 +2653,9 @@ class App:
         return self._write_project(path)
 
     def _write_project(self, path):
-        from . import recorder
+        from . import placed, recorder
         old_dir = recorder.voice_dir(self.project)
+        old_path = self.project.path
         try:
             self.project.save(path)
         except OSError as e:
@@ -2591,6 +2665,13 @@ class App:
             return False
         self.cfg.add_recent(path)
         self.cfg.save()
+        try:
+            if placed.move_levels(self.project, old_path):
+                self.project.save(path)      # new mod path and tile choices
+                self.load_modset(force=True)
+        except OSError as e:
+            messagebox.showwarning(t('place.title'), t('place.error', err=e),
+                                   parent=self.root)
         try:
             recorder.copy_takes(old_dir, recorder.voice_dir(self.project),
                                 recorder.voice_refs(self.project.quests))
@@ -2617,6 +2698,15 @@ class App:
             return
         if getattr(self, 'voice_rec', None):
             self.inspector._voice_stop(undo=False)
+        from . import feedbackwin
+        tw = feedbackwin.TestWindow._open
+        if tw is not None and tw.session is not None and \
+                tw.session.state in ('waiting', 'running'):
+            if not messagebox.askyesno(t('test.title'), t('test.close.q'),
+                                       parent=self.root):
+                self.lang_var.set(get_lang())
+                return
+        feedbackwin.TestWindow._open = None
         self.cfg.set('lang', code)
         self.cfg.set('window', self.root.geometry())
         self.cfg.save()
@@ -2629,6 +2719,7 @@ class App:
             'zoom': g.zoom_i, 'view': (g.xview()[0], g.yview()[0]),
             'grid': self.grid_var.get(), 'edges': self.edge_var.get(),
             'sash': self._sash_positions(),
+            'feedback': self.feedback,
         }
         # timers of this window must not fire into the next one
         # (plain Tcl cancel: after_cancel would delete the Python callback
@@ -2786,7 +2877,7 @@ class ProblemWindow:
             if items:
                 self.msgs += [None] + [m for _q, m, _n in items]
         for _q, m, _n in list(errors) + list(warnings):
-            app.feedback.log.add(f'problem {getattr(m, "key", "")}: {m}')
+            app.feedback.log.add(f'problem {getattr(m, "key", "") or "?"}')
         if self.fill:
             ttk.Button(bar, text=t('fill.button', tiles=', '.join(self.fill)),
                        style='Accent.TButton', command=self._fix
@@ -2817,7 +2908,8 @@ class ProblemWindow:
                  else 'Problem window')
         feedbackwin.BugWindow(self.app, self.win, error_text=str(m or ''),
                               error_key=key,
-                              guide=validate.guide_ref(key), title=title)
+                              guide=validate.guide_ref(key), title=title,
+                              fp_text=i18n._EN.get(key, '') if key else None)
 
     def _fix(self):
         from . import placed, placewin
@@ -2828,6 +2920,7 @@ class ProblemWindow:
                 'fill.ask', tiles=', '.join(self.fill)), parent=self.win):
             return
         extra = app.project.extra
+        before = extra.get('fill_tiles')
         extra['fill_tiles'] = sorted(set(extra.get('fill_tiles') or [])
                                      | set(self.fill), key=data._tile_key)
         try:
@@ -2835,6 +2928,10 @@ class ProblemWindow:
                                      app.cfg.get('game_dir'),
                                      lambda *a: None)
         except Exception as e:
+            if before is None:
+                extra.pop('fill_tiles', None)
+            else:
+                extra['fill_tiles'] = before
             messagebox.showerror(t('fill.title'), t('fill.error', err=e),
                                  parent=self.win)
             return
@@ -2986,6 +3083,8 @@ class EnemyLevelWindow:
         self.txt.configure(state='disabled')
 
     def log(self, msg):
+        if isinstance(msg, str):
+            msg = ('text', msg)
         kind = msg[0]
         tag = None
         if kind == 'patched':
@@ -3729,6 +3828,8 @@ class QuestLimitWindow:
         self.txt.configure(state='disabled')
 
     def log(self, msg):
+        if isinstance(msg, str):
+            msg = ('text', msg)
         kind = msg[0]
         tag = None
         if kind == 'source':
@@ -3864,7 +3965,10 @@ class ExportWindow:
             pass
 
     def log(self, msg):
+        if isinstance(msg, str):
+            msg = ('text', msg)
         kind = msg[0]
+        tag = None
         if kind == 'base':
             text = t('export.log.base', kind=msg[1], src=msg[2])
         elif kind == 'file':
@@ -3881,17 +3985,36 @@ class ExportWindow:
             text = t('export.log.registry', name=msg[1], old=msg[2])
         elif kind == 'overlay_cleaned':
             text = t('export.log.overlay', inner=msg[1])
+        elif kind == 'text':
+            text = msg[1]
+        elif kind == 'lhc_packed':
+            text = t('export.log.lhc', n=msg[1], size=msg[2])
+        elif kind == 'lhc_failed':
+            text = t('export.log.lhcfail', err=msg[1])
+            tag = 'err'
         elif kind == 'removed':
             text = t('export.log.removed', inner=msg[1])
         else:
             text = ' '.join(str(x) for x in msg)
-        self._put(text)
+        self._put(text, tag)
+
+    @staticmethod
+    def _failure_kind(text):
+        """A public, data free name for why an export did not go through."""
+        text = str(text)
+        for needle, kind in ((t('em.lhc.overruled', items='').split(':')[0],
+                              'map overruled by another mod'),
+                             (t('em.lhc.failed', err='').split(NL)[0][:40],
+                              'level header cache not rebuilt')):
+            if needle and needle in text:
+                return kind
+        return 'export error'
 
     def finish(self, text, ok=True):
         self._put('')
         self._put(text, 'ok' if ok else 'err')
-        self.app.feedback.log.add(('ERROR export: ' if not ok else 'export: ')
-                                  + str(text)[:400])
+        self.app.feedback.log.add('export: ok' if ok else
+                                  'ERROR export: ' + self._failure_kind(text))
         if not ok:
             try:
                 from . import feedbackwin
@@ -3900,7 +4023,8 @@ class ExportWindow:
                                self.app, self.win, error_text=str(text),
                                error_key='export.failed', guide='build',
                                title='export.failed: '
-                                     + str(text).split(NL)[0][:80])
+                                     + self._failure_kind(text),
+                               fp_text=self._failure_kind(text))
                            ).pack(anchor='e', pady=(4, 0), before=self.btn)
             except tk.TclError:
                 pass

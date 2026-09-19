@@ -188,11 +188,18 @@ def _markers_prefix(fh, offset, clen, compressed):
         try:
             return tw1_lnd.markers_full(buf)
         except (struct.error, IndexError):
-            if left <= 0:
+            if left <= 0 and not (d is not None and d.unconsumed_tail):
                 raise ValueError('marker section not found')
-        chunk = fh.read(min(32768 if buf else 16384, left))
-        left -= len(chunk)
-        buf += d.decompress(chunk) if d else chunk
+        if d is not None and d.unconsumed_tail:
+            chunk = d.unconsumed_tail      # output was capped, see below
+        else:
+            chunk = fh.read(min(4096, left))
+            if not chunk:                  # archive shorter than it says
+                raise ValueError('marker section not found')
+            left -= len(chunk)
+        # one compressed block of a map unpacks to over a megabyte; the
+        # markers need a few kilobytes (4.0.1, measured in lhcache.py)
+        buf += d.decompress(chunk, 65536) if d else chunk
 
 
 def _plain_markers(markers):

@@ -97,20 +97,31 @@ def _archive_head(fh, entry):
     d = zlib.decompressobj() if entry.flags & 0x01 else None
 
     def read(n):
+        # the head is a few kilobytes but one compressed block of a map
+        # unpacks to over a megabyte (flat heightmap): cap the output, the
+        # rest waits in unconsumed_tail (4.0.1: 250 ms -> 40 ms for 160 maps)
         out = b''
-        while not out and left[0] > 0:
-            raw = fh.read(min(n, left[0]))
-            if not raw:
+        while not out:
+            if d is not None and d.unconsumed_tail:
+                raw = d.unconsumed_tail
+            elif left[0] > 0:
+                raw = fh.read(min(4096, left[0]))
+                if not raw:
+                    break
+                left[0] -= len(raw)
+            else:
                 break
-            left[0] -= len(raw)
-            out = d.decompress(raw) if d else raw
+            out = d.decompress(raw, n) if d else raw
         return out
     return _head(read)
 
 
 def _loose_head(path):
     with open(path, 'rb') as f:
-        body = mods.file_entry(f.read())[4]
+        blob = f.read()
+    flags, _res, _cid, _guid, body = mods.file_entry(blob)
+    if flags is None:                  # the SDK writes one plain stream
+        body = tw1_lnd.unwrap(blob)
     pos = [0]
 
     def read(n):
@@ -119,9 +130,11 @@ def _loose_head(path):
     return _head(read)
 
 
-def sources(game_dir, active=None):
+def sources(game_dir, active=None, loose=True, strict=False):
     """{inner path lower: (shown path, kind, file, entry or None)} - the
-    map that counts for every tile, by the rules above."""
+    map that counts for every tile, by the rules above. ``loose``: files
+    in <game>/Levels take part; ``strict``: an unreadable archive in
+    WDFiles is an error, not a skip."""
     active = active_mods() if active is None else {a.lower() for a in active}
     found = {}
 
@@ -134,7 +147,9 @@ def sources(game_dir, active=None):
             full = os.path.join(folder, name)
             try:
                 entries = mods.wd_directory(full)
-            except Exception:            # not an archive we can read
+            except Exception as e:       # not an archive we can read
+                if strict and only is None:
+                    raise ValueError(f'{name}: {e}')
                 continue
             for e in entries:
                 if _is_map(e.path):
@@ -144,7 +159,7 @@ def sources(game_dir, active=None):
     archives(os.path.join(game_dir, 'WDFiles'))
     archives(os.path.join(game_dir, 'Mods'), active)
     levels = os.path.join(game_dir, 'Levels')
-    if os.path.isdir(levels):
+    if loose and os.path.isdir(levels):
         for name in os.listdir(levels):
             inner = 'Levels' + BS + name
             if _is_map(inner):
@@ -209,7 +224,7 @@ def write(game_dir, active=None):
         if os.path.isfile(target) and not os.path.isfile(keep):
             with open(target, 'rb') as a, open(keep, 'wb') as b:
                 b.write(a.read())
-        tmp = target + '.tmp'
+        tmp = f'{target}.{os.getpid()}.{id(blob):x}.tmp'
         with open(tmp, 'wb') as f:
             f.write(blob)
         os.replace(tmp, target)
@@ -248,3 +263,63 @@ def overruled(used, archive, inners):
     return sorted((path, os.path.basename(full)) for path, full in used
                   if path.lower() in want
                   and os.path.normcase(os.path.abspath(full)) != mine)
+
+
+LHC_INNER = 'Levels' + BS + 'Map_LevelHeaders.lhc'
+
+
+def build_for_mod(game_dir, archive=None, entries=None, skip=()):
+    """Cache bytes to ship INSIDE a mod archive (4.0.1), or None when the
+    mod brings no maps: the game's own maps (WDFiles only - no other mod,
+    a cache with foreign maps baked in breaks the ground textures once that
+    mod is gone), over them the maps the archive already has, over them
+    ``entries`` {inner: tw1_wd.Entry with the uncompressed body}.
+
+    The game reads the cache through its file system like every other file:
+    the original ships it only in Levels.wd, and ``build(game, ())`` gives
+    exactly that file; the Kira campaign ships its own in Yamalin.wd."""
+    src = sources(game_dir, active=(), loose=False, strict=True)
+    heads, shown, mine = {}, {}, 0
+    by_file = {}
+    for key, (path, _kind, full, entry) in src.items():
+        shown[key] = path
+        by_file.setdefault(full, []).append((key, entry))
+    skip = {s.lower() for s in skip}
+    if archive and os.path.isfile(archive):
+        for e in mods.wd_directory(archive):
+            if _is_map(e.path) and e.path.lower() not in skip:
+                key = e.path.lower()
+                shown.setdefault(key, e.path)
+                # the mod's own map replaces the game's
+                for lst in by_file.values():
+                    lst[:] = [ke for ke in lst if ke[0] != key]
+                by_file.setdefault(archive, []).append((key, e))
+                mine += 1
+    own = {}
+    for inner, entry in (entries or {}).items():
+        if _is_map(inner):
+            own[inner.lower()] = (inner, entry)
+    for key in own:
+        for lst in by_file.values():
+            lst[:] = [ke for ke in lst if ke[0] != key]
+    if not own and not mine:
+        return None
+    for full, lst in by_file.items():
+        if not lst:
+            continue
+        with open(full, 'rb') as fh:
+            for key, entry in sorted(lst, key=lambda ke: ke[1].offset):
+                heads[key] = _archive_head(fh, entry)
+    for key, (inner, entry) in own.items():
+        shown.setdefault(key, inner)
+        body = entry.data
+        start, end = tw1_lnd._marker_section(body)
+        heads[key] = body[:end]
+    keys = sorted(heads, key=lambda k: shown[k])
+    out = [b'LC' + bytes(2) + struct.pack('<II', len(keys), 0)]
+    for key in keys:
+        raw = shown[key].encode('latin-1')
+        out.append(struct.pack('<I', len(raw)) + raw + heads[key])
+    blob = b''.join(out)
+    parse(blob)
+    return blob

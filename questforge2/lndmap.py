@@ -53,8 +53,9 @@ class Terrain:
         pos += 12                                       # day, sunrise, sunset
         self.hw, self.hh = struct.unpack_from('<II', d, pos)
         pos += 8
-        self.heights = struct.unpack_from('<%dH' % (self.hw * self.hh), d,
-                                          pos)
+        # a view on bytes instead of a tuple of Python ints (8 MB a tile)
+        self.heights = memoryview(bytes(
+            d[pos:pos + self.hw * self.hh * 2])).cast('H')
         pos += self.hw * self.hh * 2
         for _ in range(2):                              # vertical/horiz. edges
             pos += 4 + _u32(d, pos) * 2
@@ -87,7 +88,10 @@ class Terrain:
             pos += 8 + w * h * size
         pw, ph, _w2 = struct.unpack_from('<III', d, pos)
         pos += 12
-        self.pass_words = struct.unpack_from('<%dI' % (pw * ph), d, pos)
+        # the same field as bytes: bit x of row y is bit (x % 8) of byte
+        # y * 128 + x // 8, lowest bit first - a 1 bit image for drawing
+        self.pass_raw = bytes(d[pos:pos + pw * ph * 4])
+        self.pass_words = memoryview(self.pass_raw).cast('I')
         self.pass_per_row = (pw * ph) // 1024 if pw * ph else 0
 
     def height(self, x, y):

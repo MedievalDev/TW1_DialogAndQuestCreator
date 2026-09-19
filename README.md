@@ -531,7 +531,7 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
 - **Karte (Kopfleiste "Karte", Ansicht > Karte):** Weltkarte aus den Minimaps
   des Spiels (`Levels\MipMaps\Map_E01@0..3.dds`, DXT1, im Tool ohne
   Zusatzbibliothek entpackt und als PNG neben der Projektdatei in
-  `<Projekt>_map/` zwischengespeichert). Nicht-modal, Mausrad zoomt (64 bis
+  im Cache des Tools zwischengespeichert, für alle Projekte gemeinsam). Nicht-modal, Mausrad zoomt (64 bis
   1024 Pixel je Tile), Ziehen verschiebt, Tile-Namen einblendbar, Ebene
   Oberfläche oder Innenräume `_1`. Punkte: alle Marker der Karten des Spiels
   und der Mods, Orte (`LOCATION`), Truhen der Mods (`CONTAINER`). Filter nach
@@ -597,6 +597,15 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.0.1 Fehlerrunde:** zwei Runden Tiefen-Debug (Karten, Export,
+  Datenschutz der Meldungen, Spielsitzung) und Tempo: Start 520 -> 280 ms,
+  Setz-Fenster öffnen 2,8 -> 0,7 s, erster getönter Zoom 1,7 s -> 60 ms.
+  Minimaps liegen jetzt in einem gemeinsamen Cache des Tools.
+- **Cache im Mod-Archiv (4.0.1):** Hat die Mod eigene Karten, packt der Export
+  einen Level-Header-Cache mit ins Archiv (Spiel plus eigene Karten, keine
+  fremden Mods). Wer die Mod nur installiert, braucht weder Tool noch SDK. So
+  liefert auch das Original seinen Cache aus. Im Spiel noch zu bestätigen
+  (Test `lhc-inside-mod`).
 - **Testbereich und Bug-Meldungen (4.0.0):** Hilfe > **Ungetestetes testen**
   listet Neuerungen, die gemessen, aber noch nicht im Spiel bestätigt sind:
   Schritte zum Abhaken, **Spiel starten** (das Tool schreibt mit, was von außen

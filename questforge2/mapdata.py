@@ -218,6 +218,22 @@ def decode_dxt1(blob):
     return w, h, bytes(out)
 
 
+def _pil_png(blob, path):
+    """Write the dds as PNG with Pillow when it is there: the same pixels as
+    decode_dxt1 (checked on the 640 minimaps of the game, 2026-09-19) in
+    0.7 ms instead of 13 ms a tile - the first map window of a new project
+    took over 3 seconds. False: the caller decodes itself."""
+    try:
+        import io
+        from PIL import Image
+        im = Image.open(io.BytesIO(blob))
+        im.load()
+        im.convert('RGB').save(path, 'PNG', compress_level=1)
+        return True
+    except Exception:                    # no Pillow, or a dds it cannot read
+        return False
+
+
 def encode_png(w, h, rgb):
     raw = bytearray()
     stride = w * 3
@@ -235,11 +251,11 @@ def encode_png(w, h, rgb):
 
 
 def tile_cache_dir(project=None):
-    """Next to the project file (``<project>_map``) once it is saved, else
-    ``cache/maptiles``."""
-    if project is not None and project.path:
-        stem = os.path.splitext(project.path)[0]
-        return stem + '_map'
+    """One cache for every project (4.0.1): the minimaps come from the
+    game's archives only (minimap_entries), so a ``<project>_map`` folder
+    per project decoded the same 250 tiles again for every new project and
+    left a copy next to each project file. ``project`` is kept for the
+    callers; the stamp in the folder still notices a changed game."""
     return os.path.join(data.ROOT, 'cache', 'maptiles')
 
 
@@ -275,11 +291,13 @@ class TileStore:
         src = self.entries.get((tile, level))
         if src is None:
             return None
-        w, h, rgb = decode_dxt1(mods.wd_data(*src))
+        blob = mods.wd_data(*src)
         os.makedirs(self.dir, exist_ok=True)
         tmp = path + '.tmp'
-        with open(tmp, 'wb') as f:
-            f.write(encode_png(w, h, rgb))
+        if not _pil_png(blob, tmp):
+            w, h, rgb = decode_dxt1(blob)
+            with open(tmp, 'wb') as f:
+                f.write(encode_png(w, h, rgb))
         os.replace(tmp, path)
         return path
 

@@ -189,7 +189,7 @@ class ActionBox(ttk.Frame):
         f = ttk.Frame(self.rows, style='Panel.TFrame', cursor='hand2')
         f.pack(fill='x', pady=2)
         tk.Label(f, text=glyph, fg=color, bg=theme.PANEL,
-                 font=theme.FONT_BOLD).pack(side='left', padx=(0, 6))
+                 font=theme.FONT_SYMBOL).pack(side='left', padx=(0, 6))
         ttk.Label(f, text=text, style='Panel.TLabel').pack(side='left')
         return f
 

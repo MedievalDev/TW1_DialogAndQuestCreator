@@ -59,6 +59,9 @@ STATE_COLORS = {'first': '#d2a044', 'known': '#b08850', 'running': '#6ca0e0',
 
 FONT = ('Segoe UI', 9)
 FONT_BOLD = ('Segoe UI', 9, 'bold')
+# symbols like the lightning bolt are not in Segoe UI: Tk searched every
+# installed font for a fallback, 100 ms at each start (4.0.1)
+FONT_SYMBOL = ('Segoe UI Symbol', 9, 'bold')
 FONT_SMALL = ('Segoe UI', 8)
 FONT_BRAND = ('Georgia', 12, 'bold')
 FONT_MONO = ('Consolas', 9)

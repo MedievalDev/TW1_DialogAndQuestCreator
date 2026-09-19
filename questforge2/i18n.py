@@ -1185,6 +1185,12 @@ _DE = {
     'problem.guide': 'Im Guide nachlesen',
     'update.untested': 'Diese Version bringt {n} Neuerungen, die noch niemand im Spiel bestaetigt hat. Nach dem Update kannst du unter Hilfe > Ungetestetes testen mithelfen.',
     'em.lhc.how.tool.ok': '(vom Tool selbst geschrieben, kein SDK noetig; von Nutzern im Spiel bestaetigt)',
+    'export.log.lhc': 'Level-Header-Cache ins Archiv gepackt: {n} Karten, {size} Bytes (Spiel + eigene Karten, keine fremden Mods)',
+    'export.log.lhcfail': 'Level-Header-Cache fuer das Archiv konnte nicht gebaut werden: {err}',
+    'test.busy': 'Das Spiel laeuft noch fuer diesen Test. Erst beenden und das Ergebnis melden, dann den naechsten Test waehlen.',
+    'test.notopen': 'Dieser Test nimmt gerade keine Ergebnisse an (auf dem Server noch nicht freigegeben oder abgeschlossen). Bitte spaeter nochmal.',
+    'test.stillrun.q': 'Das Spiel laeuft noch. Ohne das Ende fehlen im Protokoll Laufzeit, Absturzberichte und neue Spielstaende. Trotzdem jetzt melden?',
+    'place.error': 'Die Karten konnten nicht geschrieben werden: {err}',
 }
 
 _EN = {
@@ -2339,6 +2345,12 @@ _EN = {
     'problem.guide': 'Read in the guide',
     'update.untested': 'This version brings {n} features nobody has confirmed in the game yet. After the update you can help under Help > Test untested features.',
     'em.lhc.how.tool.ok': '(written by the tool itself, no SDK needed; confirmed in the game by users)',
+    'export.log.lhc': 'Level header cache packed into the archive: {n} maps, {size} bytes (game + own maps, no foreign mods)',
+    'export.log.lhcfail': 'The level header cache for the archive could not be built: {err}',
+    'test.busy': 'The game is still running for this test. Quit it and report the result first, then pick the next test.',
+    'test.notopen': 'This test does not take results right now (not released on the server yet, or closed). Please try again later.',
+    'test.stillrun.q': 'The game is still running. Without its end the log lacks run time, crash reports and new saves. Report now anyway?',
+    'place.error': 'The maps could not be written: {err}',
 }
 
 _DICTS = {'de': _DE, 'en': _EN}

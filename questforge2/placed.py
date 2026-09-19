@@ -70,6 +70,70 @@ def _generated(project):
     return set(project.extra.get('generated_tiles') or [])
 
 
+def _ours(project, path):
+    """True when ``path`` is a tile this module wrote for the project: the
+    editor header carries the GUID kept in ``tile_guids``. Survives a
+    project that was not saved after placing (4.0.1)."""
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(4096)
+        info = mods.file_entry(head + b'')
+        guid = info[3]
+    except Exception:
+        return False
+    if not guid:
+        return False
+    return guid.hex() in _known_guids(project)
+
+
+SIDECAR = 'qf2_generated.json'
+
+
+def _sidecar(project):
+    lv = editormaps.levels_dir(project)
+    return os.path.join(lv, SIDECAR) if lv else None
+
+
+def _known_guids(project):
+    out = set((project.extra.get('tile_guids') or {}).values())
+    path = _sidecar(project)
+    if path and os.path.isfile(path):
+        try:
+            import json
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+            out |= {str(v) for v in (data.get('guids') or {}).values()}
+        except (OSError, ValueError, AttributeError):
+            pass
+    return out
+
+
+def _write_sidecar(project, written):
+    """The GUIDs of the tiles in the levels folder that this module wrote,
+    next to them: generate() knows its own tiles again after the project
+    was closed without saving."""
+    import json
+    path = _sidecar(project)
+    if not path:
+        return
+    guids = {t: g for t, g in (project.extra.get('tile_guids') or {}).items()
+             if t in written}
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump({'format': 1, 'guids': guids}, f, indent=1)
+    os.replace(tmp, path)
+
+
+def _unwrap_file(blob):
+    """Uncompressed map body of a file: editor form (two streams, metadata
+    first) or a plain one stream .lnd as the SDK writes it."""
+    flags, _res, _cid, _guid, body = mods.file_entry(blob)
+    if flags is None:
+        body = tw1_lnd.unwrap(blob)
+    return body
+
+
 # -- where a tile comes from --------------------------------------------------
 
 def _read_mod_tile(info, tile):
@@ -91,7 +155,7 @@ def _read_mod_tile(info, tile):
     if not os.path.isfile(full):
         return None, None
     with open(full, 'rb') as f:
-        body = mods.file_entry(f.read())[4]
+        body = _unwrap_file(f.read())
     pfull = os.path.join(path, *phx_inner.split(BS))
     phx = None
     if os.path.isfile(pfull):
@@ -115,12 +179,18 @@ def base_of(project, modset, game_dir, tile):
     own = levels_name(project)
     keep = base_dir(project)
     inner = mods.lnd_of_tile(tile)
+    lv = editormaps.levels_dir(project)
+    target = os.path.join(lv, *inner.split(BS)) if lv else None
+    # the file in the levels folder is the user's when we did not write it
+    # (a new import from the editor replaces the kept copy)
+    theirs = bool(target and os.path.isfile(target)
+                  and not _ours(project, target))
     # 1. a tile the user imported from the editor and we wrote over
-    if keep:
+    if keep and not theirs:
         full = os.path.join(keep, *inner.split(BS))
         if os.path.isfile(full):
             with open(full, 'rb') as f:
-                body = mods.file_entry(f.read())[4]
+                body = _unwrap_file(f.read())
             pfull = os.path.join(keep, *mods._phx_inner(inner).split(BS))
             phx = None
             if os.path.isfile(pfull):
@@ -128,17 +198,21 @@ def base_of(project, modset, game_dir, tile):
                     phx = mods.file_entry(f.read())[4]
             return body, phx, 'editor'
     # 2. a tile in the levels folder that is not ours: the user's import
-    lv = editormaps.levels_dir(project)
-    if lv and tile not in _generated(project):
-        full = os.path.join(lv, *inner.split(BS))
-        if os.path.isfile(full):
-            with open(full, 'rb') as f:
-                body = mods.file_entry(f.read())[4]
-            return body, None, 'editor'
+    if theirs:
+        with open(target, 'rb') as f:
+            body = _unwrap_file(f.read())
+        pt = os.path.join(lv, *mods._phx_inner(inner).split(BS))
+        phx = None
+        if os.path.isfile(pt):
+            with open(pt, 'rb') as f:
+                phx = mods.file_entry(f.read())[4]
+        return body, phx, 'editor'
     # 3. a foreign mod the project uses for this tile
     if modset is not None:
-        provs = [i for i in modset.tile_providers(tile) if i['name'] != own]
-        choice = project.mod_tiles.get(tile)
+        provs = [i for i in modset.tile_providers(tile) if i['name'] != own
+                 and not _is_levels_folder(i.get('path'))]
+        choice = (project.extra.get('base_choice') or {}).get(tile) or \
+            project.mod_tiles.get(tile)
         info = next((i for i in provs if i['name'] == choice), None) or (
             provs[0] if provs else None)
         if info is not None:
@@ -148,6 +222,13 @@ def base_of(project, modset, game_dir, tile):
     # 4. the game
     body = retail_body(game_dir, modset, tile)
     return body, None, 'game'
+
+
+def _is_levels_folder(path):
+    """A ``<project>_levels`` folder of this tool (after "Save as" the old
+    one is still in the mod list; its tiles carry our old markers)."""
+    return bool(path) and os.path.isdir(path) and \
+        os.path.basename(os.path.normpath(path)).endswith('_levels')
 
 
 def terrain(project, modset, game_dir, tile):
@@ -192,10 +273,16 @@ def editor_file(body, guid):
     return zlib.compress(head) + zlib.compress(body)
 
 
+# the first four bytes of the GUID of every tile this module writes: a
+# tile is recognised as ours even when the project was closed without
+# saving and lost ``tile_guids`` (4.0.1); the other 12 bytes are random
+GUID_TAG = b'QF2L'
+
+
 def _guid(project, tile):
     g = project.extra.setdefault('tile_guids', {})
     if tile not in g:
-        g[tile] = uuid.uuid4().hex
+        g[tile] = (GUID_TAG + uuid.uuid4().bytes[4:]).hex()
     return bytes.fromhex(g[tile])
 
 
@@ -214,17 +301,22 @@ def generate(project, modset, game_dir, log=print):
     lv = editormaps.levels_dir(project)
     if not lv:
         raise ValueError('project not saved')
+    if modset is None and game_dir:
+        # without the game's maps every tile would count as "no base" and
+        # the tiles of all other quests would be taken away
+        raise ValueError('the maps of the game are not loaded')
     keep = base_dir(project)
     by_tile = {}
     for p in placements(project):
         by_tile.setdefault(p['tile'], []).append(p)
     wanted = set(by_tile) | fill_tiles(project)
+    written = set(wanted)
     report = {}
     for tile in sorted(wanted):
         inner = mods.lnd_of_tile(tile)
         target = os.path.join(lv, *inner.split(BS))
         # the user's own editor tile is kept aside before we write over it
-        if tile not in _generated(project) and os.path.isfile(target):
+        if os.path.isfile(target) and not _ours(project, target):
             dst = os.path.join(keep, *inner.split(BS))
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copyfile(target, dst)
@@ -237,40 +329,136 @@ def generate(project, modset, game_dir, log=print):
         if base is None:
             report[tile] = {'source': None, 'added': [], 'placed': [],
                             'clash': by_tile.get(tile, [])}
+            if not (os.path.isfile(target) and _ours(project, target)):
+                written.discard(tile)    # keep a tile of ours as it is
             continue
         retail = retail_body(game_dir, modset, tile)
         body, add, mine, clash = build_body(base, retail,
                                             by_tile.get(tile, []))
         _write(target, editor_file(body, _guid(project, tile)))
+        pt = os.path.join(lv, *mods._phx_inner(inner).split(BS))
         if phx is not None:
-            _write(os.path.join(lv, *mods._phx_inner(inner).split(BS)), phx)
+            _write(pt, phx)
+        elif os.path.isfile(pt):
+            os.remove(pt)                # physics of an earlier base
         report[tile] = {'source': src, 'added': add, 'placed': mine,
                         'clash': clash}
         log(('tile', tile, src, len(add), len(mine)))
-    # tiles we wrote earlier that nothing needs any more
-    gone = _generated(project) - wanted
+    # tiles we wrote earlier that nothing needs any more (found by their
+    # GUID too, so a project closed without saving is cleaned as well)
+    gone = set(_generated(project)) - written
+    for tile in _levels_tiles(lv):
+        if tile not in written and _ours(project, os.path.join(
+                lv, *mods.lnd_of_tile(tile).split(BS))):
+            gone.add(tile)
     for tile in gone:
         inner = mods.lnd_of_tile(tile)
         for sub in (inner, mods._phx_inner(inner)):
             path = os.path.join(lv, *sub.split(BS))
             saved = os.path.join(keep, *sub.split(BS)) if keep else None
             if saved and os.path.isfile(saved):
-                shutil.copyfile(saved, path)       # the user's tile again
-            elif os.path.isfile(path) and sub == inner:
+                lnd = os.path.join(lv, *inner.split(BS))
+                # back only over our own tile: a newer import stays
+                if not os.path.isfile(lnd) or _ours(project, lnd):
+                    shutil.copyfile(saved, path)   # the user's tile again
+                os.remove(saved)
+            elif os.path.isfile(path) and (sub == inner or not os.path.isfile(
+                    os.path.join(lv, *inner.split(BS)))
+                    or _ours(project, os.path.join(lv, *inner.split(BS)))):
                 os.remove(path)
-    project.extra['generated_tiles'] = sorted(wanted)
+    project.extra['generated_tiles'] = sorted(written)
+    _write_sidecar(project, written)
     # the levels folder is a mod of the project and wins these tiles
     key = os.path.normcase(os.path.abspath(lv))
     if not any(os.path.normcase(os.path.abspath(m['path'])) == key
                for m in project.mods):
         project.mods.append({'path': lv, 'enabled': True})
     name = levels_name(project)
-    for tile in wanted:
+    choice = project.extra.setdefault('base_choice', {})
+    for tile in written:
+        before = project.mod_tiles.get(tile)
+        if before and before != name and not _is_levels_folder_name(before):
+            choice[tile] = before        # the user's pick among the mods
         project.mod_tiles[tile] = name
     for tile in gone:
         if project.mod_tiles.get(tile) == name:
             project.mod_tiles.pop(tile, None)
+            if tile in choice:
+                project.mod_tiles[tile] = choice.pop(tile)
     return report
+
+
+def _is_levels_folder_name(name):
+    return str(name or '').endswith('_levels')
+
+
+def _levels_tiles(lv):
+    """Tiles with a map file in the levels folder."""
+    out = []
+    folder = os.path.join(lv or '', 'Levels')
+    if not os.path.isdir(folder):
+        return out
+    for fn in os.listdir(folder):
+        info = editormaps.parse_name(fn)
+        if info and info[2] == 'lnd':
+            out.append(info[0])
+    return out
+
+
+def forget_quest(project, qid, new_id=None):
+    """Placements of a quest that was deleted (``new_id`` None) or got
+    another number. Returns True when something changed."""
+    lst = placements(project)
+    mine = [p for p in lst if p.get('quest') == qid]
+    if not mine:
+        return False
+    if new_id is None:
+        lst[:] = [p for p in lst if p.get('quest') != qid]
+    else:
+        for p in mine:
+            p['quest'] = new_id
+    return True
+
+
+def move_levels(project, old_path):
+    """"Save as": the new project file gets its own levels folder - copy
+    ``<old>_levels`` and ``<old>_levels_base`` along and point the mod list
+    and the tile choices at the copy."""
+    if not old_path or not project.path or \
+            os.path.normcase(old_path) == os.path.normcase(project.path):
+        return False
+    old_lv = os.path.splitext(old_path)[0] + '_levels'
+    new_lv = editormaps.levels_dir(project)
+    if not os.path.isdir(old_lv):
+        return False
+    # a project saved over an older one: its levels folder is no longer of
+    # any project - kept under another name, never used, never deleted
+    import time
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    for folder in (new_lv, new_lv + '_base'):
+        if os.path.exists(folder):
+            os.replace(folder, f'{folder}.old-{stamp}')
+    shutil.copytree(old_lv, new_lv)
+    if os.path.isdir(old_lv + '_base'):
+        shutil.copytree(old_lv + '_base', new_lv + '_base')
+    old_key = os.path.normcase(os.path.abspath(old_lv))
+    for m in project.mods:
+        if os.path.normcase(os.path.abspath(m['path'])) == old_key:
+            m['path'] = new_lv
+    old_name, new_name = mods.mod_name(old_lv), mods.mod_name(new_lv)
+    # a folder copied with shutil keeps the old GUIDs: the new project
+    # file keeps the same tile_guids, so its tiles are still "ours"
+    for tile, name in list(project.mod_tiles.items()):
+        if name == old_name:
+            project.mod_tiles[tile] = new_name
+    return True
+
+
+def marker_head(body):
+    """The map body up to the end of its marker block (what numbering and
+    the level header cache need)."""
+    _start, end = tw1_lnd._marker_section(body)
+    return bytes(body[:end])
 
 
 def marker_exists(body, name, num):

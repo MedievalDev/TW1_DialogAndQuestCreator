@@ -32,6 +32,29 @@ if SMOOTH:
 
 NL = chr(10)
 OVERLAY_FROM_PX = 256          # blocked tint only when a few tiles show
+TINT_PX = 512                  # the tinted tile is made once at this size
+
+
+_T0 = bytes(0 if b & 1 else 120 for b in range(256))
+_T4 = bytes(0 if b & 16 else 120 for b in range(256))
+
+
+def _mask_image(ter):
+    """Blocked ground as an 'L' image 256 x 256, north up, 120 where
+    blocked - the same samples as lndmap.Terrain.blocked_mask(256) (bit 0
+    of every 4th row and column), read straight from the bytes of the
+    passable field: 0.2 ms instead of 20 ms a tile."""
+    if ter.pass_per_row == 32 and len(ter.pass_raw) == 1024 * 128:
+        raw, out = ter.pass_raw, bytearray(65536)
+        for r in range(256):
+            row = raw[r * 512:r * 512 + 128]
+            o = (255 - r) * 256
+            out[o:o + 256:2] = row.translate(_T0)
+            out[o + 1:o + 256:2] = row.translate(_T4)
+        return Image.frombytes('L', (256, 256), bytes(out))
+    return Image.frombytes('L', (256, 256), bytes(
+        120 * v for v in ter.blocked_mask(256))).transpose(
+            Image.FLIP_TOP_BOTTOM)
 
 
 class PlaceWindow(MapWindow):
@@ -56,6 +79,7 @@ class PlaceWindow(MapWindow):
         self.px = 128
         self.images, self._sources, self._terrain, self._bases = {}, {}, {}, {}
         self._masks = {}
+        self._tinted = {}
         self.points, self.visible, self.focus_keys = [], [], set()
         self.selected = self.on_pick = self.kind = None
         self._blink_job = self._draw_job = None
@@ -178,6 +202,8 @@ class PlaceWindow(MapWindow):
 
     def _pick(self, tg):
         """Take a marker from the list (lifts a placed one again)."""
+        if self.held is not None and self.held is not tg:
+            self._drop()                     # the lifted one back first
         if tg.get('placed') is not None:
             tg['_prev'] = tg['placed']       # same tile keeps its number
             tg['placed'] = None
@@ -187,6 +213,15 @@ class PlaceWindow(MapWindow):
         self._draw_points()
 
     def _drop(self):
+        tg = self.held
+        prev = (tg or {}).get('_prev') or {}
+        if tg is not None and tg.get('placed') is None and \
+                prev.get('x') is not None:
+            tg['placed'] = prev          # lifted by mistake: back in place
+            self._draw_points()
+        self._drop_hand()
+
+    def _drop_hand(self):
         """The hanging marker goes back unplaced (Esc, right click)."""
         self.held = None
         self.c.delete('ghost')
@@ -195,20 +230,28 @@ class PlaceWindow(MapWindow):
     # -- terrain -----------------------------------------------------------
 
     def _base(self, tile):
+        """(marker head of the tile as generate() will write it, source).
+        Only the head is kept: the whole map is 4 MB a tile."""
         if tile not in self._bases:
             body, _phx, src = placed.base_of(self.app.project,
                                              self.app.modset, self.game, tile)
+            if body:
+                try:
+                    self._terrain[tile] = placed.lndmap.Terrain(body)
+                except Exception:            # a map we cannot read
+                    self._terrain[tile] = None
+                # the game markers generate() puts back count for numbers
+                retail = placed.retail_body(self.game, self.app.modset, tile)
+                if retail:
+                    body = placed.build_body(body, retail, [])[0]
+                body = placed.marker_head(body)
             self._bases[tile] = (body, src)
         return self._bases[tile]
 
     def terrain(self, tile):
         if tile not in self._terrain:
-            body, _src = self._base(tile)
-            try:
-                self._terrain[tile] = placed.lndmap.Terrain(body) \
-                    if body else None
-            except Exception:                  # a map we cannot read
-                self._terrain[tile] = None
+            self._base(tile)                 # reads the map once
+            self._terrain.setdefault(tile, None)
         return self._terrain[tile]
 
     def _image(self, tile, px):
@@ -217,14 +260,24 @@ class PlaceWindow(MapWindow):
             return img
         if not SMOOTH or not self.tint.get() or px < OVERLAY_FROM_PX:
             return super()._image(tile, px)
-        base = super()._image(tile, px)
         mask = self._mask(tile)
-        if base is None or mask is None:
-            return base
-        pil = ImageTk.getimage(base).convert('RGB')
-        red = Image.new('RGB', (px, px), (200, 40, 30))
-        img = ImageTk.PhotoImage(Image.composite(
-            red, pil, mask.resize((px, px), Image.NEAREST)))
+        if mask is None:
+            return super()._image(tile, px)
+        tinted = self._tinted.get(tile)
+        if tinted is None:
+            pil = self._pil_tile(tile, TINT_PX)
+            if pil is None:
+                return None
+            red = Image.new('RGB', (TINT_PX, TINT_PX), (200, 40, 30))
+            tinted = Image.composite(red, pil, mask.resize(
+                (TINT_PX, TINT_PX), Image.NEAREST))
+            if len(self._tinted) >= 32:          # 0.75 MB a tile
+                self._tinted.pop(next(iter(self._tinted)))
+            self._tinted[tile] = tinted
+        if px != TINT_PX:
+            tinted = tinted.resize((px, px), Image.LANCZOS
+                                   if px < TINT_PX else Image.BILINEAR)
+        img = ImageTk.PhotoImage(tinted)
         self.images[(tile, px)] = img
         return img
 
@@ -236,12 +289,11 @@ class PlaceWindow(MapWindow):
             if ter is None or not ter.pass_per_row:
                 self._masks[tile] = None
             else:
-                self._masks[tile] = Image.frombytes('L', (256, 256), bytes(
-                    120 * v for v in ter.blocked_mask(256))).transpose(
-                        Image.FLIP_TOP_BOTTOM)
+                self._masks[tile] = _mask_image(ter)
         return self._masks[tile]
 
     def _retint(self):
+        self._tiles_view = None
         self.images.clear()
         self._draw_tiles()
         self._draw_points()
@@ -276,6 +328,7 @@ class PlaceWindow(MapWindow):
         tile = (done[0]['tile'] if done else
                 next((tg.get('tile') for tg in self.targets
                       if tg.get('tile')), None))
+        tile = (tile or '').split('_')[0]
         if tile and mapdata.split_tile(tile):
             self.px = 256
             self._zoom_target = 256
@@ -334,20 +387,28 @@ class PlaceWindow(MapWindow):
             return
         tg = self.held
         body, _src = self._base(tile)
+        # numbers already given out: the other quests' placements and the
+        # markers set in this window (not the one in the hand)
+        mine = {id(o.get('orig')) for o in self.targets if o.get('orig')}
+        others = [p for p in placed.placements(self.app.project)
+                  if id(p) not in mine]
+        others += [dict(o['placed'], name=o['name'])
+                   for o in self.targets if o.get('placed') and o is not tg]
+
+        def taken(n):
+            return placed.marker_exists(body, tg['name'], n) or any(
+                o['tile'] == tile and o['name'] == tg['name']
+                and int(o['num']) == int(n) for o in others)
         num = tg.get('num')
         prev = tg.get('_prev') or {}
-        if num is None and prev.get('tile') == tile and prev.get('num')                 and not placed.marker_exists(body, tg['name'], prev['num']):
+        if num is None and prev.get('tile') == tile and prev.get('num') \
+                and not taken(prev['num']):
             num = prev['num']
         if num is None:
-            # the project's placements minus those being placed right now
-            mine = {id(o.get('orig')) for o in self.targets}
-            others = [p for p in placed.placements(self.app.project)
-                      if id(p) not in mine]
-            others += [dict(o['placed'], name=o['name'])
-                       for o in self.targets if o.get('placed')]
             num = placed.free_number(tg['name'], tile, body, others)
-        elif placed.marker_exists(body, tg['name'], num):
-            # the map has it already: a second one would not be written
+        elif taken(num):
+            # the map or another quest has it already: a second one would
+            # not be written
             messagebox.showwarning(t('place.title'), t(
                 'place.clash', marker=mods.editor_name(tg['name']), num=num,
                 tile=tile), parent=self.win)
@@ -378,6 +439,12 @@ class PlaceWindow(MapWindow):
         self._close()
 
     def _close(self):
+        if self._draw_job:
+            try:
+                self.win.after_cancel(self._draw_job)
+            except tk.TclError:
+                pass
+            self._draw_job = None
         self.tip.hide()
         self.images.clear()
         self._sources.clear()
@@ -407,6 +474,8 @@ def quest_targets(project, q):
                      == key), None)
         if item.get('done') and orig is None:
             continue
+        if is_interior(key[1]):
+            continue
         giver = item.get('name') == GIVER_MARKER
         out.append({
             'key': key, 'name': key[0], 'label': item.get('why') or '',
@@ -417,20 +486,37 @@ def quest_targets(project, q):
     return out
 
 
-def _retarget(q, old, new):
+def is_interior(tile):
+    s = mapdata.split_tile(tile or '')
+    return bool(s and s[2])
+
+
+def _ref_map(q):
+    """{(name, tile, num): [line refs or giver speakers]} taken ONCE before
+    anything moves: moving A onto the old place of B must not drag B's
+    lines along (or A's along with B)."""
+    from .mpmerge import GIVER_MARKER, marker_refs
+    out = {}
+    for s in q.speakers:
+        if s.get('new') and isinstance(s.get('id'), int):
+            out.setdefault(_key(GIVER_MARKER, s.get('tile'),
+                                s.get('marker') or s['id']), []).append(
+                ('giver', s))
+    for ref in marker_refs(q):
+        out.setdefault(_key(ref['name'], ref['tile'], ref['num']),
+                       []).append(('line', ref))
+    return out
+
+
+def _retarget(q, old, new, refs=None):
     """Point the quest lines (or the giver) from marker ``old`` to ``new``,
     both (name, tile, num)."""
-    from .mpmerge import GIVER_MARKER, marker_refs
-    if old[0] == GIVER_MARKER:
-        for s in q.speakers:
-            if s.get('new') and _key(GIVER_MARKER, s.get('tile'),
-                                     s.get('marker') or s['id']) == old:
-                s['tile'], s['marker'] = new[1], new[2]
-        return
-    for ref in marker_refs(q):
-        if _key(ref['name'], ref['tile'], ref['num']) == old:
-            ref['args'][ref['tile_key']] = new[1]
-            ref['args'][ref['num_key']] = new[2]
+    for kind, obj in (refs if refs is not None else _ref_map(q)).get(old, []):
+        if kind == 'giver':
+            obj['tile'], obj['marker'] = new[1], new[2]
+        else:
+            obj['args'][obj['tile_key']] = new[1]
+            obj['args'][obj['num_key']] = new[2]
 
 
 def commit(app, q, targets, log=lambda *a: None):
@@ -440,20 +526,26 @@ def commit(app, q, targets, log=lambda *a: None):
     project = app.project
     lst = placed.placements(project)
     todo = q.extra.setdefault('markers_todo', [])
+    refs = _ref_map(q)
+    # checklist items by their key BEFORE anything moves (same reason as
+    # _ref_map: A moved onto the old place of B must not take B's item)
+    items = {}
+    for x in todo:
+        items.setdefault(_key(x.get('name'), x.get('tile'), x.get('num')),
+                         []).append(x)
     for tg in targets:
         old = tg['key']
         if tg.get('orig') is not None:
             lst[:] = [p for p in lst if p is not tg['orig']]
         p = tg.get('placed')
-        match = [x for x in todo if _key(x.get('name'), x.get('tile'),
-                                         x.get('num')) == old]
+        match = items.get(old, [])
         if p is None:                   # lifted and not set again
             for x in match:
                 x['done'] = False
                 x.pop('placed', None)
             continue
         new = _key(tg['name'], p['tile'], int(p['num']))
-        _retarget(q, old, new)
+        _retarget(q, old, new, refs)
         for x in match:
             x.update(tile=new[1], num=new[2], done=True, placed=True)
         entry = {'name': tg['name'], 'num': new[2], 'tile': new[1],
@@ -461,11 +553,34 @@ def commit(app, q, targets, log=lambda *a: None):
                  'quest': q.id}
         lst.append(entry)
         tg['orig'], tg['key'] = entry, new
+    app.mark_dirty()
+    # the maps on disk cannot be undone: an older snapshot of the quest
+    # would point its lines back at markers that are no longer written
+    if getattr(app, 'quest', None) is q and hasattr(app, 'undo'):
+        app.undo.clear()
     report = placed.generate(project, app.modset, app.cfg.get('game_dir'),
                              log)
-    app.mark_dirty()
+    # a marker the map had already was not written: its item stays open
+    for r in report.values():
+        for c in r['clash']:
+            for x in todo:
+                if _key(x.get('name'), x.get('tile'), x.get('num')) == \
+                        _key(c['name'], c['tile'], int(c['num'])):
+                    x['done'] = False
+                    x.pop('placed', None)
     app.load_modset(force=True)
     return report
+
+
+def safe_commit(app, q, targets, parent=None):
+    """commit with the error shown instead of a half written state left
+    silently. Returns the report or None."""
+    try:
+        return commit(app, q, targets)
+    except Exception as e:
+        messagebox.showerror(t('place.title'), t('place.error', err=e),
+                             parent=parent or app.root)
+        return None
 
 
 def can_place(app, parent):
@@ -488,8 +603,9 @@ def place_for_quest(app, q):
         return None
 
     def done(tgs):
-        report = commit(app, q, tgs)
-        _report(app, report)
+        report = safe_commit(app, q, tgs)
+        if report is not None:
+            _report(app, report)
         if app.inspector:
             app.inspector.refresh()
     return PlaceWindow(app, targets, done)

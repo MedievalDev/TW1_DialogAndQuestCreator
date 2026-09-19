@@ -160,6 +160,39 @@
         "de": "Am Ende steht \"Level-Header-Cache neu gebaut: <Zahl> Karten\" und keine rote Meldung. Im Spielordner unter Levels hat Map_LevelHeaders.lhc die Uhrzeit des Exports.",
         "en": "At the end it says \"Level header cache rebuilt: <number> maps\" and no red message. In the game folder under Levels, Map_LevelHeaders.lhc carries the time of the export."
       }
+    },
+    {
+      "id": "lhc-inside-mod",
+      "since": "4.0.1",
+      "needs_game": true,
+      "title": {
+        "de": "Mod mit eingepacktem Level-Header-Cache: laeuft ohne Tool und ohne SDK",
+        "en": "Mod with a packed level header cache: works without the tool and without the SDK"
+      },
+      "why": {
+        "de": "Ab 4.0.1 packt der Export den Cache mit ins Mod-Archiv, gebaut aus Spiel plus eigenen Karten. Gemessen: Das Original liefert seinen Cache genauso im Archiv aus, und die Datei ist byte-gleich zu der einer Kampagne, die so verteilt wird. Offen: ob das auf einem fremden Rechner reicht und ob eine lose Datei im Spielordner Vorrang hat.",
+        "en": "From 4.0.1 the export packs the cache into the mod archive, built from the game plus the own maps. Measured: the original ships its cache in an archive the same way, and the file is byte for byte that of a campaign distributed like this. Open: whether that is enough on another PC and whether a loose file in the game folder comes first."
+      },
+      "steps": {
+        "de": [
+          "Ein Projekt mit mindestens einem im Tool gesetzten Marker exportieren. Im Export-Fenster steht \"Level-Header-Cache ins Archiv gepackt\".",
+          "Am besten auf einem ZWEITEN Rechner oder einer zweiten Installation: nur die .wd aus dem Ordner Mods dorthin kopieren und die Mod einschalten. Im Spielordner unter Levels darf dort KEINE Map_LevelHeaders.lhc liegen.",
+          "Nur ein Rechner: Im Spielordner unter Levels die Map_LevelHeaders.lhc umbenennen (z. B. in .aus), nicht loeschen.",
+          "\"Spiel starten\", neues Spiel, zur Stelle des gesetzten Markers gehen.",
+          "Spiel beenden, die umbenannte Datei zurueckbenennen und hier das Ergebnis waehlen. In der Anmerkung bitte angeben: zweiter Rechner oder umbenannt."
+        ],
+        "en": [
+          "Export a project with at least one marker placed in the tool. The export window says \"Level header cache packed into the archive\".",
+          "Best on a SECOND PC or a second installation: copy only the .wd from the Mods folder there and enable the mod. There must be NO Map_LevelHeaders.lhc in the game folder under Levels.",
+          "Only one PC: rename Map_LevelHeaders.lhc in the game folder under Levels (e.g. to .off), do not delete it.",
+          "\"Start game\", new game, walk to the spot of the placed marker.",
+          "Quit the game, rename the file back and pick the result here. Please say in the note: second PC or renamed."
+        ]
+      },
+      "expect": {
+        "de": "Das Spiel startet normal, Bodentexturen sehen aus wie immer, und am gesetzten Marker passiert, was die Quest vorsieht.",
+        "en": "The game starts normally, the ground textures look as always, and what the quest wants happens at the placed marker."
+      }
     }
   ]
 }

@@ -451,7 +451,8 @@ class MapWindow:
     def _redraw_view(self):
         self._clamp_view()
         self._draw_tiles()
-        self._draw_points()
+        if getattr(self, '_points_px', None) != self.px:
+            self._draw_points()
 
     def _clamp_view(self):
         """Back into the frame after dragging: an axis that fits stays in
@@ -471,24 +472,31 @@ class MapWindow:
             self._sources[(tile, level)] = src
         return src
 
+    def _pil_tile(self, tile, px):
+        """The tile as a PIL image of ``px`` pixels (Pillow only)."""
+        level = source_level(px)
+        src = None
+        while src is None and level < len(LEVEL_PX):
+            src = self._source(tile, level)
+            level += 1
+        if src is None:
+            return None
+        if src.size != (px, px):
+            # shrinking looks better with a proper filter, growing is
+            # cheap and bilinear is enough
+            src = src.resize((px, px), Image.LANCZOS
+                             if px < src.size[0] else Image.BILINEAR)
+        return src
+
     def _image(self, tile, px):
         key = (tile, px)
         img = self.images.get(key)
         if img is not None:
             return img
         if SMOOTH:
-            level = source_level(px)
-            src = None
-            while src is None and level < len(LEVEL_PX):
-                src = self._source(tile, level)
-                level += 1
+            src = self._pil_tile(tile, px)
             if src is None:
                 return None
-            if src.size != (px, px):
-                # shrinking looks better with a proper filter, growing is
-                # cheap and bilinear is enough
-                src = src.resize((px, px), Image.LANCZOS
-                                 if px < src.size[0] else Image.BILINEAR)
             img = ImageTk.PhotoImage(src)
             self.images[key] = img
             return img
@@ -535,6 +543,14 @@ class MapWindow:
         x0, y0 = c.canvasx(0), c.canvasy(0)
         x1, y1 = x0 + c.winfo_width(), y0 + c.winfo_height()
         interior = self.layer.get() == 'interior'
+        # nothing to do while the same tiles are in view (panning inside
+        # them): the items move with the canvas
+        view = (px, int(x0 // px), int(x1 // px), int(y0 // px),
+                int(y1 // px), interior, bool(self.labels.get()))
+        if view == getattr(self, '_tiles_view', None) and self.images \
+                and c.find_withtag('tile'):
+            return
+        self._tiles_view = view
         # the old tiles stay until the new ones are there, otherwise the
         # canvas is black for a moment on every zoom step
         new = 'tile_new'
@@ -595,6 +611,7 @@ class MapWindow:
         c = self.c
         c.delete('pt')
         px = self.px
+        self._points_px = px
         r = 4 if px <= 64 else (5 if px <= 256 else 6)
         dim = bool(self.focus_keys)
         for i, p in enumerate(self.visible):

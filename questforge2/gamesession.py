@@ -83,6 +83,7 @@ class GameSession:
     # -- before ---------------------------------------------------------------
 
     def before(self, exe):
+        self._snapshot()
         a = self.add
         a(f'== before the start  {_stamp(time.time())}')
         a(f'program: {exe}')
@@ -98,6 +99,8 @@ class GameSession:
             a('  switched on but not in the Mods folder: ' + ', '.join(missing))
         self._cache_state()
         self._archive_state()
+
+    def _snapshot(self):
         self._logs = {n: s for n, (s, _m) in _listing(self.game).items()
                       if n.lower().endswith('.log')}
         self._saves = _listing(SAVES)
@@ -174,13 +177,26 @@ class GameSession:
         """Start the game and watch it in a thread; ``on_change(state)`` is
         called from that thread."""
         exe = os.path.join(self.game, exe_name)
-        self.before(exe_name)
+        try:
+            self.before(exe_name)
+        except Exception as e:           # the log must never stop the game
+            self.add(f'(log before the start incomplete: {e!r})')
+            if self._logs is None:
+                try:
+                    self._snapshot()
+                except Exception:
+                    self._logs, self._saves, self._crashes = {}, {}, {}
         try:
             self._proc = subprocess.Popen([exe], cwd=self.game)
         except OSError as e:
-            self.add(f'could not start: {e}')
-            self.state = 'failed'
-            return False
+            # e.g. WinError 740: the exe wants "run as administrator"
+            self.add(f'direct start refused ({e}), asking the shell')
+            try:
+                os.startfile(exe, cwd=self.game)
+            except (OSError, AttributeError, TypeError) as e2:
+                self.add(f'could not start: {e2}')
+                self.state = 'failed'
+                return False
         self.started = time.time()
         self.state = 'waiting'
         self.add(f'== started  {_stamp(self.started)}')
@@ -196,15 +212,21 @@ class GameSession:
                 except Exception:          # the window may be gone
                     pass
         # a launcher may end at once and the real game appear a bit later
+        def alive():
+            return self._proc is not None and self._proc.poll() is None
         seen = False
         while time.time() - self.started < APPEAR_SECONDS:
-            if export.game_running():
+            if export.game_state():
                 seen = True
                 break
-            if self._proc.poll() is not None and \
+            # a launcher that ended: give the game 20 s; started through
+            # the shell (no process of ours) the UAC prompt may take longer
+            if self._proc is not None and not alive() and \
                     time.time() - self.started > 20:
                 break
             time.sleep(1.5)
+        if not seen and alive():
+            seen = True                  # our own process is the game
         if not seen:
             self.add('the game process never appeared')
             self.state = 'failed'
@@ -213,8 +235,15 @@ class GameSession:
             return
         self.state = 'running'
         tell()
-        while export.game_running():
-            time.sleep(2)
+        # one failed look at the process list is not the end of the game
+        misses = 0
+        while misses < 3:
+            state = export.game_state()
+            if state or (state is None and alive()):
+                misses = 0
+            else:                        # not there, or unknown and ours gone
+                misses += 1
+            time.sleep(2 if misses == 0 else 1)
         self.ended = time.time()
         self.state = 'ended'
         self.after()
@@ -243,7 +272,8 @@ class GameSession:
             for n in sorted(set(_listing(folder)) - old):
                 crashed = True
                 a(f'NEW CRASH REPORT {d}/{n}')
-                a(self._read(os.path.join(folder, n), 0, 3000, indent='    '))
+                a(self._read(os.path.join(folder, n), 0, 3000, indent='    ',
+                             head=True))
         a('crash report: ' + ('YES' if crashed else 'none'))
         for n, (size, _mt) in sorted(_listing(self.game).items()):
             if not n.lower().endswith('.log'):
@@ -256,12 +286,39 @@ class GameSession:
                 a(self._read(os.path.join(self.game, n), old, 40000))
 
     @staticmethod
-    def _read(path, offset, limit, indent=''):
+    def _read(path, offset, limit, indent='', head=False):
+        """At most ``limit`` bytes: the START of a crash report (``head``),
+        else the END of what is new in a log; never the whole file."""
         try:
+            size = os.path.getsize(path)
             with open(path, 'rb') as f:
-                f.seek(offset)
-                raw = f.read()
+                f.seek(offset if head else max(offset, size - limit))
+                raw = f.read(limit)
         except OSError as e:
             return f'{indent}(unreadable: {e})'
-        text = raw[-limit:].decode('utf-8', 'replace')
-        return NL.join(indent + ln for ln in text.splitlines())
+        return NL.join(indent + ln for ln in _decode(raw).splitlines())
+
+
+def _decode(raw):
+    """Bytes of a log cut anywhere: UTF-16 (with or without BOM - a tail
+    has none), UTF-8 (a cut character at either end is dropped), else the
+    system code page."""
+    if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        return raw.decode('utf-16', 'replace')
+    odd = raw[1::2]
+    if len(raw) >= 16 and odd.count(0) > len(odd) * 0.6:
+        return raw[len(raw) % 2 and 1:].decode('utf-16-le', 'replace')
+    even = raw[0::2]
+    if len(raw) >= 16 and even.count(0) > len(even) * 0.6:
+        return raw[1:len(raw) - (len(raw) - 1) % 2].decode('utf-16-le',
+                                                            'replace')
+    body = raw
+    for _ in range(3):                   # continuation bytes of a cut char
+        if body[:1] and 0x80 <= body[0] < 0xC0:
+            body = body[1:]
+    try:
+        return body.decode('utf-8')
+    except UnicodeDecodeError as e:
+        if e.start >= len(body) - 3:     # only the last character was cut
+            return body[:e.start].decode('utf-8', 'replace')
+    return raw.decode('mbcs' if os.name == 'nt' else 'latin-1', 'replace')

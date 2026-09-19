@@ -643,23 +643,82 @@ def build_lan(master, quests):
 
 # -- environment ----------------------------------------------------------------
 
-def game_running():
+def process_names():
+    """Names of the running processes, or None when they cannot be read.
+    The Windows snapshot API takes a few milliseconds; ``tasklist`` took a
+    third of a second per call (4.0.1: the game watcher asked every 2 s)
+    and stays as the fallback."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class ENTRY(ctypes.Structure):
+            _fields_ = [('dwSize', wintypes.DWORD),
+                        ('cntUsage', wintypes.DWORD),
+                        ('th32ProcessID', wintypes.DWORD),
+                        ('th32DefaultHeapID', ctypes.c_size_t),
+                        ('th32ModuleID', wintypes.DWORD),
+                        ('cntThreads', wintypes.DWORD),
+                        ('th32ParentProcessID', wintypes.DWORD),
+                        ('pcPriClassBase', wintypes.LONG),
+                        ('dwFlags', wintypes.DWORD),
+                        ('szExeFile', ctypes.c_wchar * 260)]
+        k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ENTRY)]
+        k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ENTRY)]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        snap = k32.CreateToolhelp32Snapshot(0x2, 0)
+        if snap in (None, wintypes.HANDLE(-1).value):
+            raise OSError('no snapshot')
+        try:
+            e = ENTRY()
+            e.dwSize = ctypes.sizeof(ENTRY)
+            names = []
+            ok = k32.Process32FirstW(snap, ctypes.byref(e))
+            while ok:
+                names.append(e.szExeFile)
+                ok = k32.Process32NextW(snap, ctypes.byref(e))
+            if names:
+                return names
+        finally:
+            k32.CloseHandle(snap)
+    except Exception:                  # not Windows, or the API refused
+        pass
     try:
         out = subprocess.run(['tasklist', '/FO', 'CSV', '/NH'],
                              capture_output=True, text=True, timeout=10,
                              creationflags=getattr(subprocess,
                                                    'CREATE_NO_WINDOW', 0))
     except (OSError, subprocess.SubprocessError):
-        return False
-    return running_game_name(out.stdout) is not None
+        return None
+    return [ln.split(',')[0].strip('"') for ln in out.stdout.splitlines()]
+
+
+def game_state():
+    """True: Two Worlds runs, False: it does not, None: cannot tell."""
+    names = process_names()
+    if names is None:
+        return None
+    return any(_is_game(n) for n in names)
+
+
+def game_running():
+    return bool(game_state())
+
+
+def _is_game(name):
+    low = name.lower()
+    # "TwoWorlds1 Mod Selector.exe" only switches mods, it holds no archive
+    return low.startswith(GAME_EXE_PREFIX) and low.endswith('.exe') \
+        and 'mod selector' not in low
 
 
 def running_game_name(tasklist_csv):
     """Name of a running Two Worlds process in ``tasklist /FO CSV`` output."""
     for ln in tasklist_csv.splitlines():
         name = ln.split(',')[0].strip('"')
-        if name.lower().startswith(GAME_EXE_PREFIX) and \
-                name.lower().endswith('.exe'):
+        if _is_game(name):
             return name
     return None
 
@@ -960,6 +1019,16 @@ def archive_name(project):
     return name
 
 
+def _own_record(project, name):
+    """What this project added to archive ``name`` ({'files': [...]}),
+    per archive: a changed target archive starts empty."""
+    per = project.extra.setdefault('exported', {})
+    if not isinstance(per, dict):
+        per = project.extra['exported'] = {}
+    rec = per.setdefault(name.lower(), {})
+    return rec if isinstance(rec, dict) else per.setdefault(name.lower(), {})
+
+
 def export_mod(project, game_dir, base_dir, index=None, log=print,
                files_only=None, register=True, entries=None):
     """Full export (plan 3.1 "Exportieren als Mod"). Returns a summary.
@@ -972,7 +1041,9 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
     own_overlay = f'Language\\ZZ_{overlay_stem(project)}.lan'
     stale, remove = {}, []
     prev_overlay = None
+    present = set()                      # paths the archive has now
     if os.path.isfile(archive):
+        present = {p.lower() for p in wd_paths(archive)}
         ents = _entries(archive)
         if own_overlay in ents:
             prev_overlay = ents[own_overlay].data
@@ -1010,6 +1081,41 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
     for inner, blob in files.items():
         log(('file', inner, len(blob)))
     files.update(entries or {})
+    # Map files (and the level header cache) that THIS project added to
+    # THIS archive and nothing needs now leave it again. Only what was not
+    # in the archive before our first export counts as ours: the archive
+    # may be someone else's mod (4.0.1 review: exporting into Yamalin.wd
+    # and then exporting without maps took the campaign's own map away).
+    from . import lhcache
+    record = _own_record(project, name)
+    ours = set(record.get('files') or [])
+    maps_now = sorted(i for i in (entries or {})
+                      if i.lower().startswith('levels' + chr(92)))
+    partial = getattr(project, 'partial', False)
+    maps_gone = [] if partial else sorted(
+        i for i in ours - set(maps_now) if i != lhcache.LHC_INNER)
+    for inner in maps_gone:
+        log(('removed', inner))
+    # 4.0.1: a mod with maps carries its own level header cache, so whoever
+    # only installs the mod needs neither this tool nor the SDK. Only when
+    # the project brings maps (or the cache in the archive is ours): a
+    # cache another mod ships is left as it is.
+    cache = None
+    lhc_ours = lhcache.LHC_INNER in ours
+    if maps_now or lhc_ours:
+        try:
+            cache = lhcache.build_for_mod(game_dir, archive, entries,
+                                          skip=maps_gone)
+        except Exception as e:           # the export itself must not fail
+            log(('lhc_failed', str(e)))
+    if cache is not None:
+        files[lhcache.LHC_INNER] = cache
+        log(('lhc_packed', len(lhcache.parse(cache)), len(cache)))
+    elif lhc_ours and not maps_now and not partial:
+        # our cache from an earlier export would still describe the maps
+        # that just left the archive
+        maps_gone.append(lhcache.LHC_INNER)
+        log(('removed', lhcache.LHC_INNER))
     if files_only:
         for inner, blob in files.items():
             if isinstance(blob, tw1_wd.Entry):
@@ -1022,7 +1128,14 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
     os.makedirs(os.path.dirname(archive), exist_ok=True)
     for inner in list(stale) + remove:
         log(('overlay_cleaned', inner))
-    pack_archive(archive, {**files, **stale}, log, remove)
+    pack_archive(archive, {**files, **stale}, log,
+                 list(remove) + maps_gone)
+    # recorded only once the archive is really written
+    if not partial:
+        added = {i for i in list(maps_now) + ([lhcache.LHC_INNER]
+                                              if cache is not None else [])
+                 if i.lower() not in present or i in ours}
+        record['files'] = sorted(added)
     old = None
     if register:
         old = enable_mod(name)

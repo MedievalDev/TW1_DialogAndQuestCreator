@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1753,7 +1753,95 @@ Offen:
     - Tests `test_feedback.py` (16) gegen einen Server auf localhost.
     - Nebenfund: `Yamalin.wd` traegt eine `Levels\Map_LevelHeaders.lhc` IM
       Archiv. Ob das Spiel die nimmt und wer gegen die lose Datei gewinnt,
-      ist ungemessen.
+      ist ungemessen. -> 12.81
+81. Level-Header-Cache im Mod-Archiv (Version 4.0.1, Marco 2026-09-19).
+    - Gemessen: `Levels.wd` liefert `Levels\Map_LevelHeaders.lhc` im Archiv
+      aus (485.722 B, 160 Karten) und `lhcache.build(game, ())` ergibt genau
+      diese Datei; `Yamalin.wd` traegt eine (501.262 B), byte-gleich zur losen
+      Datei; Dream Worlds (ausgeschaltet) eine LEERE (12 B, 0 Karten). Das
+      Spiel liest den Cache also ueber sein Dateisystem wie jede Datei.
+      Ungemessen: Vorrang lose Datei gegen Archiv, und was ein leerer Cache
+      bewirkt.
+    - `lhcache.build_for_mod(game, archive, entries)`: Karten des Spiels (nur
+      WDFiles, keine fremden Mods: ein Cache mit eingebackenen fremden Karten
+      macht laut QuestForge-README bunte Bodentexturen, sobald die Mod fehlt),
+      darueber die Karten, die das Archiv schon hat, darueber die des Exports.
+      Ohne eigene Karten kein Cache. `export_mod` packt ihn als
+      `Levels\Map_LevelHeaders.lhc` (auch bei "Dateien exportieren").
+      Gegenprobe: fuer `Yamalin.wd` byte-gleich zu dem Cache, den die
+      Kampagne ausliefert. Die lose Datei schreibt das Tool weiterhin.
+    - Behoben (seit 3.9.1): der automatische Cache-Lauf legte Klartext in das
+      Export-Log, das Tupel erwartet; die leere Zeile haette `msg[0]` mit
+      IndexError abbrechen lassen. Log nimmt jetzt auch Text, neue Arten
+      `text`, `lhc_packed`, `lhc_failed`.
+    - Neuer Community-Test `lhc-inside-mod`. Tests `ModCache` in
+      `test_lhcache.py`.
+    - Buchfuehrung pro Zielarchiv (`extra['exported'][archiv]['files']`):
+      nur was vor unserem ersten Export NICHT im Archiv lag, gilt als
+      unseres und wird wieder herausgenommen, wenn es nicht mehr gebraucht
+      wird; erst nach erfolgreichem Packen eingetragen, nicht bei "Dateien
+      exportieren". Einen Cache packt der Export nur, wenn das Projekt
+      Karten bringt oder der Cache im Archiv unserer ist - den Cache einer
+      fremden Mod (Dream Worlds: 12 B, 0 Karten) laesst er stehen. Lose
+      Karten im Spielordner gehen nicht in den Mod-Cache; ein unlesbares
+      Spielarchiv bricht den Mod-Cache ab statt ihn ohne Levels.wd zu bauen.
+82. Zwei Runden Tiefen-Debug und Performance fuer 4.0.1 (Marco
+    2026-09-19). Je Runde zwei unabhaengige Pruefer (Karten/Export und
+    Feedback/Spielsitzung), jeder Fund nachgestellt, dann behoben, dann als
+    Test festgehalten (`test_debug401.py`, 22 Tests; Suite 177 -> 207).
+    - Datenschutz: oeffentlicher Bug-Titel eines Export-Fehlers enthielt
+      Pfad und Projektnamen -> feste Texte (`_failure_kind`). `scrub`:
+      Namen nur als ganze Woerter, nie in Platzhaltern, Standard-Kontonamen
+      (user, admin, test ...) ausgenommen; Profilordner auch mit doppelten
+      Backslashes und `Documents and Settings`, UNC-Server/Freigabe,
+      OneDrive-Firmenname, E-Mail, Rechnername, Steuerzeichen, Surrogate.
+      Sitzungsprotokoll nur noch Fehlerstatus (gekuerzt) und Schluessel.
+    - Groesse in Bytes statt Zeichen (`fit`, 280 KB): ein Log in fremder
+      Codepage waere 730 KB geworden. Fingerabdruck aus Schluessel und
+      englischer Vorlage: gleicher Fehler in DE/EN und anderem Projekt =
+      gleicher Bug; UNC-Pfade, `: [Errno n]` bleibt unterscheidbar.
+    - Karten: eigene Kacheln an der GUID aus `tile_guids` plus
+      `qf2_generated.json` im Levels-Ordner erkannt (ueberlebt ein nicht
+      gespeichertes Projekt; Kacheln anderer Projekte bleiben fremd). Neuer
+      Editor-Import ueber unsere Kachel wird Basis statt ueberschrieben,
+      Sicherung wird nach dem Zurueckspielen geloescht und nie ueber eine
+      neuere Kachel kopiert, verwaiste .phx weg, Kachel ohne lesbare Basis
+      bleibt stehen, ohne geladene Spielkarten bricht generate ab statt
+      alle Kacheln zu loeschen. "Speichern unter" kopiert den Levels-Ordner
+      mit (ein vorhandener Zielordner wird umbenannt, nie geloescht) und
+      haengt Mod-Liste und Kachelwahl um; der alte Ordner ist nie Basis.
+      Die Mod-Wahl des Nutzers je Kachel (`base_choice`) bleibt erhalten.
+      Geloeschte Quests nehmen ihre Marker mit, Umnummerieren und Undo
+      nehmen sie mit. Einzelstrom-.lnd (SDK) wird gelesen.
+    - Setzen: Nummern pruefen Karte, andere Quests und die vom Spiel
+      zurueckgelegten Marker; Umhaengen per Schnappschuss (A auf den alten
+      Platz von B zieht B nicht mit); Esc legt einen aufgehobenen Marker an
+      seinen Platz zurueck, auch beim Wechsel auf eine andere Zeile;
+      Innenraeume nicht auf der Oberflaechenkarte; Kollisionen bleiben offen;
+      Fehler beim Schreiben werden gemeldet (`safe_commit`); Undo-Stapel
+      nach dem Schreiben der Karten geleert.
+    - Spielsitzung: Prozessliste per Toolhelp-API (18 ms statt 330 ms
+      tasklist), ein Fehlblick beendet die Sitzung nicht (3 Fehlversuche),
+      Mod Selector ist nicht das Spiel, Start ueber die Shell bei
+      "Als Administrator" (mit Spielordner), Absturzbericht vom Anfang,
+      Logs vom Ende mit Byte-Grenze, UTF-8/UTF-16/Codepage auch angeschnitten,
+      Vorab-Listen zuerst (Absturzerkennung bleibt an).
+    - Feedback-Fenster: kein Tk aus Threads (`_bg` fragt aus dem UI-Thread
+      ab), Rueckfall auf das Hauptfenster, wenn das Testfenster zu ist,
+      Tests, die der Server nicht kennt, werden nicht angeboten, Wechsel
+      waehrend das Spiel laeuft gesperrt, Sprachwechsel behaelt Protokoll
+      und fragt bei laufendem Spiel, "Neu in" nur mit bekanntem Serverstand.
+    - Performance (gemessen): App-Konstruktor 520 -> 280 ms (Symbolschrift
+      fuer die Palettensymbole: Tk suchte 100 ms eine Ersatzschrift; Karten-
+      modul und Pillow erst bei Bedarf); `foxfeedback` laedt urllib erst beim
+      Senden. Setz-Fenster oeffnen 2,8 s -> 0,65-0,8 s (Minimaps per Pillow
+      0,7 statt 13 ms je Kachel, pixelgleich auf 640 Kacheln geprueft; ein
+      gemeinsamer Minimap-Cache statt `<Projekt>_map`), erster getoenter
+      Zoom 1,7 s -> 60 ms (Toenung einmal je Kachel bei 512 px), Maske
+      20 -> 0,5 ms und exakt wie `blocked_mask`, Terrain 16 -> 0,66 MB je
+      Kachel, Cache-Bau 250 -> 36 ms und Markerscan 250 -> 57 ms (Entpacken
+      begrenzt, `unconsumed_tail`; alle 191 Karten gleich), Verschieben der
+      Karte ohne Neuaufbau von Kacheln und Punkten, Cache-Knopf im Thread.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

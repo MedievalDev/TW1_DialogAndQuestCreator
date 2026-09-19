@@ -691,6 +691,8 @@ class MpMergeWindow:
             key = (x['name'], x['tile'], x['num'])
             if x['exists'] and key not in self.placements:
                 continue
+            if placewin.is_interior(x['tile']):
+                continue                 # rooms: the editor's job
             giver = x['name'] == GIVER_MARKER
             targets.append({'key': key, 'name': x['name'], 'label': x['why'],
                             'num': x['num'] if giver else None,
@@ -699,6 +701,9 @@ class MpMergeWindow:
                             'placed': self.placements.get(key)})
         if targets:
             placewin.PlaceWindow(self.app, targets, self._placed)
+        else:
+            messagebox.showinfo(t('place.title'), t('place.none'),
+                                parent=self.win)
 
     def _placed(self, targets):
         for tg in targets:
@@ -770,11 +775,17 @@ class MpMergeWindow:
                     tiles, numbers, group)
         app.project.quests.append(new)
         app.mark_dirty()
-        if self.placements:
+        # only what the lines use now (page 2 may have changed since)
+        used = {(x['name'], x['tile'], x['num'])
+                for x in new.extra.get('markers_todo') or []}
+        keep = {k: p for k, p in self.placements.items() if k in used}
+        if keep:
             from . import placewin
             targets = [{'key': key, 'name': key[0], 'placed': p, 'orig': None}
-                       for key, p in self.placements.items()]
-            placewin._report(app, placewin.commit(app, new, targets))
+                       for key, p in keep.items()]
+            report = placewin.safe_commit(app, new, targets, self.win)
+            if report is not None:
+                placewin._report(app, report)
         app.open_quest(new)
         open_items = [x for x in new.extra['markers_todo'] if not x['done']]
         app.set_info(t('mp.done', old=self.src.id, new=new_id,

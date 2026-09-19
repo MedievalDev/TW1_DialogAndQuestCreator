@@ -219,7 +219,12 @@ class State(unittest.TestCase):
         n = len(self.fb.untested())
         self.fb.summary = SUMMARY['tools']['questcreator']
         self.assertEqual(self.fb.state('placed-giver-ingame'), 'confirmed')
-        self.assertEqual(len(self.fb.untested()), n - 1)
+        # with the server known only the tests it takes are offered: the
+        # confirmed one is gone, the ones it does not list are not offered
+        self.assertEqual(n, len(self.fb.tests))
+        self.assertEqual([x['id'] for x in self.fb.untested()],
+                         ['lhc-without-sdk'])
+        self.assertFalse(self.fb.can_report('placed-object-enemy-ingame'))
         self.assertEqual(self.fb.counts('lhc-without-sdk'), (0, 1))
         self.assertTrue(self.fb.experimental('lhc'))     # failed: stays
         self.fb.summary['tests']['lhc-without-sdk']['status'] = 'confirmed'

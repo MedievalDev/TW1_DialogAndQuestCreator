@@ -59,8 +59,9 @@ class Feedback:
             return []
 
     def client_id(self):
+        import re
         cid = self.app.cfg.get('client_id')
-        if not cid or len(str(cid)) != 32:
+        if not isinstance(cid, str) or not re.fullmatch('[0-9a-f]{32}', cid):
             cid = foxfeedback.new_client_id()
             self.app.cfg.set('client_id', cid)
             self.app.cfg.save()
@@ -68,21 +69,39 @@ class Feedback:
 
     # -- server state ------------------------------------------------------
 
+    def _bg(self, work, done):
+        """Run ``work()`` in a thread, then ``done(result)`` in the UI
+        thread. The UI polls: Tk must not be called from the worker."""
+        box = []
+
+        def run():
+            try:
+                box.append((work(), None))
+            except Exception as e:           # handed to done()
+                box.append((None, e))
+
+        def poll():
+            if not box:
+                try:
+                    self.app.root.after(80, poll)
+                except (tk.TclError, RuntimeError):
+                    pass
+                return
+            try:
+                done(*box[0])
+            except tk.TclError:              # the window is gone
+                pass
+        threading.Thread(target=run, daemon=True).start()
+        self.app.root.after(80, poll)
+
     def refresh(self, then=None):
         """Read the summary in a thread; ``then()`` runs in the UI after."""
-        def work():
-            s = foxfeedback.fetch_summary(TOOL, VERSION)
+        def done(s, _err):
             if s is not None:
                 self.summary = s
-
-            def done():
-                if then:
-                    then()
-            try:
-                self.app.root.after(0, done)
-            except (tk.TclError, RuntimeError):
-                pass
-        threading.Thread(target=work, daemon=True).start()
+            if then:
+                then()
+        self._bg(lambda: foxfeedback.fetch_summary(TOOL, VERSION), done)
 
     def state(self, test_id):
         """'open', 'confirmed', 'failed', 'closed' or 'unknown' (the server
@@ -95,18 +114,27 @@ class Feedback:
         return int(rec.get('pass') or 0), int(rec.get('fail') or 0)
 
     def untested(self):
-        """Tests of this version or older that nobody has confirmed."""
+        """Tests of this version or older that nobody has confirmed and
+        that the server takes (offline: all of them)."""
         return [x for x in self.tests
                 if _vkey(x.get('since', '0')) <= _vkey(VERSION)
-                and self.state(x['id']) not in ('confirmed', 'closed')]
+                and self.state(x['id']) not in ('confirmed', 'closed')
+                and self.can_report(x['id'])]
 
     def experimental(self, label):
         """True while the test behind an "experimental" label is not
-        confirmed (no server: still experimental)."""
+        confirmed or closed (no server: still experimental)."""
         for x in self.tests:
             if x.get('experimental') == label:
-                return self.state(x['id']) != 'confirmed'
+                return self.state(x['id']) not in ('confirmed', 'closed')
         return False
+
+    def can_report(self, test_id):
+        """False when the server was reached and does not take this test
+        (not created there yet, or closed) - it would answer 400."""
+        if self.summary is None:
+            return True                      # offline: offer the text file
+        return self.state(test_id) in ('open', 'failed', 'confirmed')
 
     def issues(self):
         return (self.summary or {}).get('issues') or []
@@ -115,32 +143,27 @@ class Feedback:
 
     def send(self, payload, parent, on_ok=None):
         """Send in a thread, tell the user how it went."""
-        def work():
+        def done(rid, err):
+            # the window the report came from may be closed by now
             try:
-                rid, err = foxfeedback.submit(payload), None
-            except foxfeedback.FeedbackError as e:
-                rid, err = None, e
-
-            def done():
-                if err is None:
-                    self.log.add(f'report sent: {rid}')
-                    messagebox.showinfo(t('fb.title'), t('fb.sent', id=rid),
-                                        parent=parent)
-                    self.refresh()
-                    if on_ok:
-                        on_ok()
-                    return
-                key = 'fb.err.' + (err.code if err.code in (
-                    'rate', 'closed', 'too_large', 'offline') else 'invalid')
-                if messagebox.askyesno(
-                        t('fb.title'), t(key, detail=err.detail) + NL + NL
-                        + t('fb.savefile'), parent=parent):
-                    self.save_file(payload, parent)
-            try:
-                self.app.root.after(0, done)
-            except (tk.TclError, RuntimeError):
-                pass
-        threading.Thread(target=work, daemon=True).start()
+                par = parent if parent.winfo_exists() else self.app.root
+            except tk.TclError:
+                par = self.app.root
+            if err is None:
+                self.log.add(f'report sent: {rid}')
+                messagebox.showinfo(t('fb.title'), t('fb.sent', id=rid),
+                                    parent=par)
+                self.refresh(on_ok)
+                return
+            code = getattr(err, 'code', 'offline')
+            detail = getattr(err, 'detail', str(err))
+            self.log.add(f'report not sent: {code} {detail}')
+            key = 'fb.err.' + (code if code in ('rate', 'closed', 'too_large',
+                                                'offline') else 'invalid')
+            if messagebox.askyesno(t('fb.title'), t(key, detail=detail) + NL
+                                   + NL + t('fb.savefile'), parent=par):
+                self.save_file(payload, par)
+        self._bg(lambda: foxfeedback.submit(payload), done)
 
     @staticmethod
     def save_file(payload, parent):
@@ -149,8 +172,11 @@ class Feedback:
             initialfile=f"{payload.get('kind')}_report.txt",
             filetypes=[('Text', '*.txt')])
         if path:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(foxfeedback.preview(payload))
+            try:
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(foxfeedback.preview(payload))
+            except OSError as e:
+                messagebox.showerror(t('fb.title'), str(e), parent=parent)
 
 
 def _loc(d):
@@ -268,7 +294,9 @@ class TestWindow:
         except tk.TclError:
             return
         self.items = [x for x in self.fb.tests
-                      if _vkey(x.get('since', '0')) <= _vkey(VERSION)]
+                      if _vkey(x.get('since', '0')) <= _vkey(VERSION)
+                      and (self.fb.can_report(x['id'])
+                           or self.fb.state(x['id']) == 'closed')]
         order = {'failed': 0, 'open': 1, 'unknown': 1, 'confirmed': 2,
                  'closed': 3}
         self.items.sort(key=lambda x: (order.get(self.fb.state(x['id']), 1),
@@ -304,6 +332,12 @@ class TestWindow:
             return
         x = self.items[sel[0]]
         if self.test is x:
+            return
+        if self.session is not None and self.session.state in ('waiting',
+                                                               'running'):
+            messagebox.showinfo(t('test.title'), t('test.busy'),
+                                parent=self.win)
+            self.select(self.test['id'], rebuild=False)
             return
         self.test = x
         self.session = None
@@ -399,20 +433,34 @@ class TestWindow:
         app.cfg.set('game_exe', exe)
         app.cfg.save()
         name = export.archive_name(app.project) if app.project else None
+        earlier = self.session.text() if self.session is not None else ''
         self.session = gamesession.GameSession(app.cfg.get('game_dir'),
                                                app.project, name)
+        if earlier:
+            self.session.add(earlier)
+            self.session.add('== started again')
         self.fb.log.add(f'test {self.test["id"]}: game started ({exe})')
 
-        def changed(state):
-            try:
-                self.win.after(0, lambda: self._game_state(state))
-            except (tk.TclError, RuntimeError):
-                pass
-        if not self.session.start(exe, changed):
+        if not self.session.start(exe):
             self._game_state('failed')
             return
         self.game_btn.state(['disabled'])
         self._game_state('waiting')
+        self._watch_game(self.session, 'waiting')
+
+    def _watch_game(self, session, shown):
+        """Poll the session from the UI thread (Tk is not called from the
+        watcher thread)."""
+        if session is not self.session:
+            return                         # another test was picked
+        state = session.state
+        if state != shown:
+            self._game_state(state)
+        if state in ('waiting', 'running'):
+            try:
+                self.win.after(500, lambda: self._watch_game(session, state))
+            except tk.TclError:
+                pass
 
     def _game_state(self, state):
         try:
@@ -433,6 +481,15 @@ class TestWindow:
                 t('test.title'), t('test.steps.open', n=open_steps),
                 parent=self.win):
             return
+        if not self.fb.can_report(x['id']):
+            messagebox.showinfo(t('test.title'), t('test.notopen'),
+                                parent=self.win)
+            return
+        if self.session is not None and self.session.state in ('waiting',
+                                                               'running'):
+            if not messagebox.askyesno(t('test.title'), t('test.stillrun.q'),
+                                       parent=self.win):
+                return
         if x.get('needs_game') and self.session is None and \
                 not messagebox.askyesno(t('test.title'), t('test.nogame.q'),
                                         parent=self.win):
@@ -464,11 +521,12 @@ class BugWindow:
     key, ``guide`` the guide chapter the tool pointed to."""
 
     def __init__(self, app, parent=None, error_text='', error_key='',
-                 guide='', title=None):
+                 guide='', title=None, fp_text=None):
         self.app = app
         self.fb = app.feedback
         self.error_text, self.error_key, self.guide = (error_text, error_key,
                                                        guide)
+        self.fp_text = fp_text
         self.title = title or (error_key or t('bug.general'))
         parent = parent or app.root
         self.win = tk.Toplevel(parent)
@@ -519,8 +577,8 @@ class BugWindow:
         payload = foxfeedback.bug_payload(
             TOOL, VERSION, self.fb.client_id(), get_lang(), self.title,
             error_key=self.error_key, error_text=self.error_text,
-            guide_ref=self.guide,
-            message=(self.error_text + NL + NL + note).strip(),
+            guide_ref=self.guide, fp_text=self.fp_text,
+            message=(note + NL + NL + self.error_text[:1500]).strip(),
             log=self.fb.log.text())
         _preview_window(self.win, payload, lambda: self.fb.send(
             payload, self.app.root, on_ok=None) or self.win.destroy())
@@ -585,7 +643,9 @@ class WhatsNewWindow:
         seen = app.cfg.get('news_seen')
         if seen == VERSION:
             return None
-        first_run = seen is None
+        if app.feedback.summary is None:
+            return None                  # offline: ask again next start
+        first_run = not isinstance(seen, str)
         app.cfg.set('news_seen', VERSION)
         app.cfg.save()
         fresh = [x for x in app.feedback.untested()

@@ -26,8 +26,6 @@ import platform
 import re
 import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 
 BASE = 'https://alchemy-fox.de/game/_feedback/'
@@ -35,15 +33,31 @@ SCHEMA = 1
 MAX_LOG = 120000
 MAX_MESSAGE = 4000
 MAX_TITLE = 120
+MAX_BODY = 280 * 1024           # the server takes 300 KB, counted in BYTES
 TIMEOUT = 15
 
 
 # -- text ---------------------------------------------------------------------
 
-def scrub(text):
-    """``text`` without the user's name: the home folder and every
-    ``Users/<name>`` path part become ``<user>``."""
-    text = str(text or '')
+# separators may come doubled: str(OSError) and JSON write C:\\Users\\X
+_PROFILE = re.compile(
+    r'(?i)([/\\]+(?:users|documents and settings|benutzer)[/\\]+)'
+    r'[^/\\\r\n"<>|;:*?\']+')
+# \\SERVER\share: both say who the user is (company, home folder)
+_UNC = re.compile(r'(?<![\w\\/:])(?:\\\\|//)[^\\/\s"\'<>|]+[\\/]+'
+                  r'[^\\/\s"\'<>|]+')
+# "OneDrive - Firma GmbH": the company name
+_ORG = re.compile(r'(?i)(onedrive|sharepoint) - [^/\\\r\n"<>|:*?]+')
+_MAIL = re.compile(r'(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63})+')
+_CONTROL = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ufffd\ud800-\udfff]+')
+_COMMON = {'user', 'users', 'admin', 'administrator', 'test', 'tester',
+           'owner', 'guest', 'gast', 'benutzer', 'besitzer', 'default',
+           'public', 'home', 'mail', 'pc', 'desktop', 'laptop', 'windows',
+           'player', 'spieler', 'gamer', 'workgroup'}
+_PLACEHOLDER = ('<user>', '<mail>', '<server>', '<org>', '<path>')
+
+
+def _own_names():
     names = set()
     try:
         names.add(getpass.getuser())
@@ -52,10 +66,32 @@ def scrub(text):
     home = os.path.expanduser('~')
     if home and home != '~':
         names.add(os.path.basename(home.rstrip('/' + chr(92))))
-    text = re.sub(r'(?i)([/\\]users[/\\])[^/\\\r\n"<>|]+', r'\1<user>', text)
-    for name in sorted((n for n in names if n and len(n) > 2), key=len,
-                       reverse=True):
-        text = re.sub(re.escape(name), '<user>', text, flags=re.I)
+    names.add(os.environ.get('COMPUTERNAME') or '')
+    names.add(os.environ.get('USERDOMAIN') or '')
+    # default account names say nothing about the person but are everyday
+    # words: replacing them would wreck the log ("test", "user", "admin")
+    return sorted((n for n in names if n and len(n) > 2
+                   and n.lower() not in _COMMON), key=len, reverse=True)
+
+
+def scrub(text, names=True):
+    """``text`` without the user: the profile folder in every path, e-mail
+    addresses, and (``names``) the user and machine name as WHOLE words - a
+    user called "mark" must not turn "marker" into "<user>er". Control
+    characters and U+FFFD go too (a log in another code page would triple
+    in size and the server counts bytes)."""
+    text = _CONTROL.sub(' ', str(text or ''))
+    text = _PROFILE.sub(lambda m: m.group(1) + '<user>', text)
+    text = _UNC.sub(lambda m: m.group(0)[:2] + '<server>' + chr(92)
+                    + '<share>', text)
+    text = _ORG.sub(lambda m: m.group(1) + ' - <org>', text)
+    text = _MAIL.sub('<mail>', text)
+    if names:
+        for name in _own_names():
+            # never inside a placeholder we just wrote: a user called
+            # "User" or "mail" must not turn <user> into <<user>>
+            text = re.sub(r'(?<![A-Za-z0-9_<])' + re.escape(name)
+                          + r'(?![A-Za-z0-9_>])', '<user>', text, flags=re.I)
     return text
 
 
@@ -64,6 +100,8 @@ def clip(text, limit=MAX_LOG):
     text = str(text or '')
     if len(text) <= limit:
         return text
+    if limit < 40:
+        return ''
     head = '[... cut ...]' + chr(10)
     return head + text[-(limit - len(head)):]
 
@@ -71,8 +109,11 @@ def clip(text, limit=MAX_LOG):
 def fingerprint(tool, error_key, message):
     """The same bug gives the same 40 hex characters on every PC: numbers,
     paths and quoted names are taken out of the message first."""
-    msg = scrub(message).lower()
-    msg = re.sub(r'[a-z]:[/\\][^\s"\']+', '<path>', msg)
+    msg = scrub(message, names=False).lower()
+    # a path ends at a quote, a line end or ": " / ", " - so "x.wd: [Errno
+    # 13] ..." and "x.wd: [Errno 28] ..." stay two different bugs
+    msg = re.sub(r'(?:[a-z]:[/\\]|[/\\]{2})(?:(?![:,] )[^"\'\r\n])*',
+                 '<path>', msg)
     msg = re.sub(r'"[^"]*"|\'[^\']*\'', '<s>', msg)
     msg = re.sub(r'\d+', '#', msg)
     msg = re.sub(r'\s+', ' ', msg).strip()[:300]
@@ -133,20 +174,45 @@ def test_payload(tool, version, client_id, lang, test_id, passed,
                  message='', log='', game_log=''):
     p = _base('test', tool, version, client_id, lang, message, log, game_log)
     p.update(test_id=test_id, result='pass' if passed else 'fail')
-    return p
+    return fit(p)
 
 
 def bug_payload(tool, version, client_id, lang, title, error_key='',
-                error_text='', guide_ref='', message='', log='', game_log=''):
+                error_text='', guide_ref='', message='', log='', game_log='',
+                fp_text=None):
     """``title`` comes from the tool (error text in English or the key),
-    ``message`` is what the user typed."""
+    ``message`` is what the user typed. ``fp_text``: what makes two reports
+    the same bug - without project data and not translated (the English
+    template of the message); default the error text."""
     p = _base('bug', tool, version, client_id, lang, message, log, game_log)
     key = re.sub(r'[^A-Za-z0-9._-]', '', error_key or '')[:80]
     p.update(error_key=key, title=scrub(title).replace(chr(10), ' ')
              .strip()[:MAX_TITLE] or 'bug',
-             fingerprint=fingerprint(tool, key, error_text or title),
+             fingerprint=fingerprint(tool, key, fp_text if fp_text is not None
+                                     else (error_text or title)),
              guide_ref=str(guide_ref or '')[:80])
-    return p
+    return fit(p)
+
+
+def fit(payload, limit=MAX_BODY):
+    """Cut the logs until the JSON body fits ``limit`` BYTES (umlauts,
+    quotes and line ends cost more than one byte each)."""
+    def size():
+        return len(json.dumps(payload, ensure_ascii=False).encode(
+            'utf-8', 'replace'))
+    for _ in range(20):
+        now = size()
+        if now <= limit:
+            break
+        key = max(('log', 'game_log'), key=lambda k: len(payload.get(k) or ''))
+        text = payload.get(key) or ''
+        if len(text) < 200:
+            payload['log'] = payload['game_log'] = ''
+            payload['message'] = (payload.get('message') or '')[:1000]
+            break
+        # bytes per character differ, so shrink by the ratio and look again
+        payload[key] = clip(text, int(len(text) * limit / now * 0.9))
+    return payload
 
 
 def preview(payload):
@@ -179,13 +245,16 @@ def _agent(tool, version):
 
 def submit(payload, base=BASE, timeout=TIMEOUT):
     """Send one report. Returns the id the server gave it."""
-    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-    req = urllib.request.Request(
-        base + 'submit', data=body, method='POST',
-        headers={'Content-Type': 'application/json; charset=utf-8',
-                 'User-Agent': _agent(payload.get('tool'),
-                                      payload.get('version'))})
+    import urllib.error
+    import urllib.request
     try:
+        body = json.dumps(payload, ensure_ascii=False).encode('utf-8',
+                                                              'replace')
+        req = urllib.request.Request(
+            base + 'submit', data=body, method='POST',
+            headers={'Content-Type': 'application/json; charset=utf-8',
+                     'User-Agent': _agent(payload.get('tool'),
+                                          payload.get('version'))})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             answer = json.loads(r.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
@@ -193,30 +262,52 @@ def submit(payload, base=BASE, timeout=TIMEOUT):
             info = json.loads(e.read().decode('utf-8'))
         except Exception:
             info = {}
+        if not isinstance(info, dict):
+            info = {}
+        if e.code >= 500 and e.code != 503:
+            raise FeedbackError('offline', str(e.code))  # server trouble
         code = info.get('error') or {413: 'too_large', 429: 'rate',
                                      503: 'closed'}.get(e.code, 'invalid')
-        raise FeedbackError(code, info.get('field') or str(e.code))
-    except (OSError, ValueError) as e:
+        raise FeedbackError(str(code), str(info.get('field') or e.code))
+    except Exception as e:             # no network, broken answer, ...
         raise FeedbackError('offline', str(e))
-    if not answer.get('ok'):
-        raise FeedbackError(answer.get('error') or 'invalid')
+    if not isinstance(answer, dict) or not answer.get('ok'):
+        raise FeedbackError((answer.get('error') if isinstance(answer, dict)
+                             else None) or 'invalid')
     return answer.get('id')
 
 
 def fetch_summary(tool, version, base=BASE, timeout=TIMEOUT):
     """{'tests': {...}, 'issues': [...], 'accept': bool} of one tool, or
     None when the server cannot be reached."""
-    req = urllib.request.Request(
-        base + 'summary.json',
-        headers={'Cache-Control': 'no-cache',
-                 'User-Agent': _agent(tool, version)})
+    import urllib.request
     try:
+        req = urllib.request.Request(
+            base + 'summary.json',
+            headers={'Cache-Control': 'no-cache',
+                     'User-Agent': _agent(tool, version)})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode('utf-8'))
-    except (OSError, ValueError):
+    except Exception:                  # offline, proxy page, broken JSON
         return None
-    mine = (data.get('tools') or {}).get(tool) or {}
-    return {'tests': mine.get('tests') or {},
-            'issues': mine.get('issues') or [],
+    if not isinstance(data, dict):
+        return None
+    tools = data.get('tools')
+    mine = tools.get(tool) if isinstance(tools, dict) else None
+    if not isinstance(mine, dict):
+        mine = {}
+    tests = mine.get('tests')
+    tests = {str(k): v for k, v in tests.items() if isinstance(v, dict)} \
+        if isinstance(tests, dict) else {}
+    for rec in tests.values():
+        for n in ('pass', 'fail'):
+            try:
+                rec[n] = int(rec.get(n) or 0)
+            except (TypeError, ValueError):
+                rec[n] = 0
+    issues = mine.get('issues')
+    issues = [i for i in issues if isinstance(i, dict)] \
+        if isinstance(issues, list) else []
+    return {'tests': tests, 'issues': issues,
             'accept': bool(data.get('accept', True)),
             'updated': data.get('updated')}
