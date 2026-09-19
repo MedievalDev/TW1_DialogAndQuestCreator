@@ -597,6 +597,12 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.1.0: Marker frei setzen.** Quest > **Marker auf der Karte setzen** (oder
+  Knopf unter der Karte) setzt Marker für eine neue Quest, ohne Editor: links
+  die Marker-Arten, Klick auf die Karte, dann die ID eingeben. Vorbelegt ist
+  die nächste freie, eine belegte wird abgelehnt und das Fenster zeigt, welche
+  belegt sind. In der Quest-Zeile dann Kachel und ID eintragen.
+  Experimentell (Test `free-marker-ingame`).
 - **4.0.3:** Unter der Fehlerliste steht die gewählte Meldung in voller
   Länge (die Liste schneidet lange Meldungen rechts ab).
 - **4.0.2:** Fehlerfenster sagt "1 error" statt "1 errors" (auch bei

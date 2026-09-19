@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1862,6 +1862,41 @@ Offen:
     Ueberschrift zeigt die erste Meldung. Die Liste fordert nur noch 5
     Zeilen an und nimmt den Rest: Volltext, Reparieren-Zeile und Knoepfe
     bleiben auch bei 460x320 ganz sichtbar (geprueft EN/DE).
+85. Marker frei setzen (Version 4.1.0, Marco 2026-09-19). Anlass: Orion
+    brauchte Objektmarker 501/502 auf E1 fuer eine neue Quest und musste
+    dafuer in den Editor; das Setzfenster gab es nur fuer uebernommene
+    Multiplayer-Quests. Marcos Entwurf: links eine Liste der Marker-Arten,
+    beim Setzen die ID in ein Textfeld, belegte werden mit einem Fehler
+    abgelehnt, der sagt welche belegt sind, vorbelegt ist die naechste freie.
+    - Oeffnen: Quest > Marker auf der Karte setzen, Knopf **Marker setzen**
+      unter der Karte. Projekt muss gespeichert sein (Levels-Ordner).
+    - Links die 10 Arten, die eine Quest-Zeile liest (`FREE_KINDS`: alle
+      aus `ACTION_MARKER` und `FC_MARKER`, Q_Giver, Truhe), mit der Zeile
+      dazu; darunter die frei gesetzten Marker des Projekts (anklicken =
+      verschieben mit bisheriger ID, Kreuz = entfernen), scrollt bei vielen.
+    - ID-Dialog (`IdDialog`): vorbelegt `free_number` (eins ueber der
+      hoechsten dieser Art auf der Kachel: Basiskarte, zurueckgelegte
+      Spielmarker, alle Platzierungen des Projekts), darunter die belegten
+      (`ranges`, "1-12, 500"). Belegt = je Kachel und Art. `check_id`:
+      ganze Zahl 1 bis 65535, sonst Fehler; belegt -> Fehler mit Liste und
+      naechster freier. Abbrechen laesst den Marker an der Maus.
+    - Gespeichert wie die Quest-Platzierungen in `placed_markers`, aber mit
+      `quest: None`; `commit_free` ersetzt nur diese, `generate` schreibt
+      alle; eine Nummer, die die Basiskarte inzwischen hat, faellt wieder
+      heraus (steht im Bericht). Quest loeschen nimmt freie Marker nicht mit.
+    - Keine Quest-Zeile folgt einem freien Marker (anders als bei
+      uebernommenen Quests): Zeile bekommt Kachel und ID von Hand oder ueber
+      den Karten-Knopf; die Pruefung `warn.marker.missing` nennt jetzt
+      Quest > Marker auf der Karte setzen statt des Editors.
+    - Setzfenster allgemein: Knoepfe, Status und Toenung stehen unten fest,
+      die Liste scrollt und bricht lange Zeilen um (vorher schob eine lange
+      Liste die Knoepfe aus dem Fenster).
+    - Test `free-marker-ingame` (experimentell `freeplace`), 7 Unit-Tests
+      (`test_free410.py`), GUI-Probe EN/DE mit echtem ID-Dialog: belegte ID
+      und "abc" abgelehnt, Abbrechen haelt den Marker, Esc nach Aufheben
+      legt zurueck, 25 Eintraege scrollen, 900x560 zeigt die Knoepfe,
+      Karte E1 enthaelt danach Objekt 4 und Gegner 502, Wiederoeffnen
+      zeigt beide.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

@@ -769,6 +769,28 @@ du weiterarbeitest.
   in den Abhaengigkeiten; Rechtsklick auf eine Quest in der Zeitleiste zeigt
   alle ihre Marker hervorgehoben.
 
+## Neue Marker frei setzen (ab 4.1.0)
+
+Braucht eine neue Quest einen Marker, den es noch nicht gibt: **Quest > Marker
+auf der Karte setzen** (oder der Knopf **Marker setzen** unter der Karte).
+Das Projekt muss gespeichert sein. Links stehen die Marker-Arten mit der
+Zeile, die sie liest (Objekt erzeugen, Gegner erzeugen, NPC-Start ...).
+Art anklicken, der Marker haengt an der Maus, Klick auf die Karte, dann
+die **ID** eingeben. Vorbelegt ist die naechste freie, eins ueber der
+hoechsten dieser Art auf der Kachel (Karte, zurueckgelegte Spielmarker und
+alle im Projekt gesetzten). Eine belegte ID lehnt das Fenster ab und zeigt,
+welche belegt sind. Belegt ist je Kachel und Art: Objekt 5 und Gegner 5 auf
+E1 gehen beide. Darunter stehen die frei gesetzten Marker des Projekts:
+anklicken hebt einen zum Verschieben auf (seine ID steht dann im Feld),
+das Kreuz entfernt ihn. **Bestaetigen** schreibt die Kacheln wie oben.
+
+In der Quest-Zeile dann Kachel und ID eintragen oder den Marker ueber den
+Knopf **Karte** waehlen. Ein frei gesetzter Marker haengt an keiner Quest:
+Verschiebt man ihn auf eine andere Kachel oder gibt ihm eine andere ID,
+muss die Zeile mit (die Pruefung warnt). Hoehe und Innenraeume wie beim
+Setzen fuer eine uebernommene Quest. Experimentell, bis es im Spiel
+bestaetigt ist.
+
 Die Marker-Typen kommen aus den Abschnitten von `PEnums.ech` (Quest-, Einheiten-,
 Stadt-, Wachen-, Arbeits- und sonstige Marker), `TwoWorldsEnemies16.ec`
 (`MARKER_ENEMY_*`, Fallen) und `TwoWorldsTeleports.ec`; Namen, die dort nicht
@@ -816,6 +838,27 @@ working.
 - **Show in map:** right click an entry in the marker picker or in the
   dependencies; right click a quest in the timeline to see all its markers
   highlighted.
+
+## Placing new markers freely (from 4.1.0)
+
+When a new quest needs a marker that does not exist yet: **Quest > Place
+markers on the map** (or the **Place markers** button below the map). The
+project has to be saved. On the left stand the marker kinds with the line
+that reads them (Create object, Create enemies, NPC start ...). Click a
+kind, the marker hangs at the mouse, click on the map, then enter the
+**ID**. The next free one is filled in, one above the highest of that kind
+on the tile (map, game markers put back and all placed in the project). A
+taken ID is refused and the window shows which ones are taken. Taken means
+per tile and kind: object 5 and enemy 5 on E1 both work. Below stand the
+markers placed freely in the project: click one to pick it up and move it
+(its ID is then in the field), the cross removes it. **Confirm** writes the
+tiles as above.
+
+Then put tile and ID into the quest line, or pick the marker with the
+**Map** button. A freely placed marker belongs to no quest: moving it to
+another tile or giving it another ID needs the line changed too (the check
+warns). Height and interiors as when placing for a taken over quest.
+Experimental until it is confirmed in the game.
 
 The marker types come from the sections of `PEnums.ech` (quest, unit, town,
 guard, worker and other markers), `TwoWorldsEnemies16.ec` (`MARKER_ENEMY_*`,

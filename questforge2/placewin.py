@@ -18,6 +18,14 @@ Interiors are not on this map, so nothing lands in a room with two floors.
 e.g. the NPC number of a giver, else None), 'placed' ({'tile', 'x', 'y',
 'z', 'num'} or None), 'tile' (suggested tile)}]. ``on_done(targets)`` gets
 the list back with 'placed' filled in.
+
+Free placing (4.1.0, Marco's design): Quest > Place markers on the map, for
+a marker a new quest needs. On the left the marker kinds a quest line can
+point at; below them the markers placed freely in this project. After the
+click on the map the user gives the ID: the next free one is filled in, a
+taken one is refused with the list of the taken ones. No quest line
+follows a free marker: the line gets tile and ID typed in (or picked on the
+map), and moving the marker to another tile needs the line changed too.
 """
 
 import tkinter as tk
@@ -31,8 +39,59 @@ if SMOOTH:
     from PIL import Image, ImageTk
 
 NL = chr(10)
+MAX_ID = 65535
 OVERLAY_FROM_PX = 256          # blocked tint only when a few tiles show
 TINT_PX = 512                  # the tinted tile is made once at this size
+
+
+# free placing: the kinds a quest line can point at (tw1_lnd.ACTION_MARKER,
+# FC_MARKER, the giver and CONTAINER) and the line that reads them
+FREE_KINDS = (
+    (mods.NPC_MARKER, 'giver'),
+    ('MARKER_QUEST_POINT', 'point'),
+    ('MARKER_QUEST_WALK', 'walk'),
+    ('MARKER_QUEST_TELEPORT', 'teleport'),
+    ('MARKER_QUEST_CREATE_OBJECT', 'object'),
+    ('MARKER_QUEST_CREATE_ENEMY', 'enemy'),
+    ('MARKER_QUEST_CLEAR_AREA', 'clear'),
+    ('MARKER_QUEST_KILL_AREA', 'kill'),
+    ('MARKER_GATE', 'gate'),
+    (mods.CHEST_MARKER, 'chest'),
+)
+_USE = dict(FREE_KINDS)
+
+
+def ranges(nums, limit=40):
+    """'1-12, 500, 501': runs of three and more as from-to, at most
+    ``limit`` parts."""
+    runs = []
+    for n in sorted({int(x) for x in nums}):
+        if runs and n == runs[-1][-1] + 1:
+            runs[-1].append(n)
+        else:
+            runs.append([n])
+    parts = []
+    for r in runs:
+        if len(r) >= 3:
+            parts.append(f'{r[0]}-{r[-1]}')
+        else:
+            parts.extend(str(n) for n in r)
+    if len(parts) > limit:
+        parts = parts[:limit] + ['...']
+    return ', '.join(parts)
+
+
+def check_id(text, taken, tile, free):
+    """(number, None) for an ID that may be given, else (None, the error
+    to show)."""
+    s = str(text or '').strip()
+    if not (s.isascii() and s.isdigit()) or not 1 <= int(s) <= MAX_ID:
+        return None, t('free.id.bad', max=MAX_ID)
+    n = int(s)
+    if n in taken:
+        return None, t('free.id.taken', num=n, tile=tile,
+                       taken=ranges(taken), free=free)
+    return n, None
 
 
 _T0 = bytes(0 if b & 1 else 120 for b in range(256))
@@ -59,10 +118,11 @@ def _mask_image(ter):
 
 class PlaceWindow(MapWindow):
 
-    def __init__(self, app, targets, on_done, title=None):
+    def __init__(self, app, targets, on_done, title=None, free=False):
         # no MapWindow.__init__: this window has its own side panel and no
         # filters; only the drawing, zoom and drag are shared
         self.app = app
+        self.free = free
         self.targets = targets
         self.on_done = on_done
         self.store = None
@@ -103,19 +163,30 @@ class PlaceWindow(MapWindow):
         side.pack(side='left', fill='y')
         mid = ttk.Frame(self.win)
         mid.pack(side='left', fill='both', expand=True)
-        ttk.Label(side, text=t('place.head'), style='Brand.TLabel'
-                  ).pack(anchor='w')
-        ttk.Label(side, text=t('place.hint'), style='Muted.TLabel',
-                  wraplength=280, justify='left').pack(anchor='w', pady=(2, 8))
-        self.rows_box = ttk.Frame(side)
-        self.rows_box.pack(fill='x')
-        ttk.Checkbutton(side, text=t('place.tint'), variable=self.tint,
-                        command=self._retint).pack(anchor='w', pady=(10, 0))
-        self.status = ttk.Label(side, text='', style='Muted.TLabel',
-                                wraplength=280, justify='left')
-        self.status.pack(anchor='w', pady=(8, 0))
+        # bottom first: buttons, status and tint never get pushed out by a
+        # long list (4.1.0)
         bottom = ttk.Frame(side)
         bottom.pack(side='bottom', fill='x')
+        self.status = ttk.Label(side, text='', style='Muted.TLabel',
+                                wraplength=280, justify='left')
+        self.status.pack(side='bottom', anchor='w', pady=(8, 8))
+        ttk.Checkbutton(side, text=t('place.tint'), variable=self.tint,
+                        command=self._retint
+                        ).pack(side='bottom', anchor='w', pady=(10, 0))
+        ttk.Label(side, text=t('free.head' if free else 'place.head'),
+                  style='Brand.TLabel').pack(anchor='w')
+        hint = t('free.hint' if free else 'place.hint')
+        fb = getattr(app, 'feedback', None)
+        if free and fb is not None and fb.experimental('freeplace'):
+            hint += NL + t('free.experimental')
+        ttk.Label(side, text=hint, style='Muted.TLabel',
+                  wraplength=280, justify='left').pack(anchor='w', pady=(2, 8))
+        if free:
+            self.kinds_box = ttk.Frame(side)
+            self.kinds_box.pack(fill='x')
+            ttk.Label(side, text=t('free.placed'), style='Brand.TLabel'
+                      ).pack(anchor='w', pady=(10, 2))
+        self.rows_box = self._scroll_box(side)
         style = ttk.Style(self.win)
         style.configure('Confirm.TButton', background=theme.OK,
                         foreground='#0b1a0f', font=theme.FONT_BOLD)
@@ -158,9 +229,91 @@ class PlaceWindow(MapWindow):
 
     # -- list -------------------------------------------------------------
 
+    def _scroll_box(self, parent):
+        """A frame in a canvas with a scroll bar: the list may grow longer
+        than the window (free placing)."""
+        box = ttk.Frame(parent)
+        box.pack(fill='both', expand=True)
+        cv = tk.Canvas(box, bg=theme.BG, highlightthickness=0, width=270,
+                       height=60)
+        sb = ttk.Scrollbar(box, orient='vertical', command=cv.yview)
+        inner = ttk.Frame(cv)
+        item = cv.create_window((0, 0), window=inner, anchor='nw')
+
+        def fit(_e=None):
+            # the scroll bar only while the list is longer than the box
+            cv.configure(scrollregion=cv.bbox('all'))
+            need = inner.winfo_reqheight() > cv.winfo_height() > 1
+            if need and not sb.winfo_ismapped():
+                sb.pack(side='right', fill='y', before=cv)
+            elif not need and sb.winfo_ismapped():
+                sb.pack_forget()
+                cv.yview_moveto(0)
+        inner.bind('<Configure>', fit)
+        cv.bind('<Configure>', lambda e: (cv.itemconfigure(item,
+                                                           width=e.width),
+                                          fit()))
+        cv.configure(yscrollcommand=sb.set)
+        cv.pack(side='left', fill='both', expand=True)
+        self._list_canvas = cv
+        return inner
+
+    def _list_wheel(self, ev):
+        cv = self._list_canvas
+        if cv.yview() != (0.0, 1.0):
+            cv.yview_scroll(-1 if ev.delta > 0 else 1, 'units')
+
+    def _kind_rows(self):
+        for w in self.kinds_box.winfo_children():
+            w.destroy()
+        held = self.held.get('name') if self.held is not None and \
+            self.held.get('new') else None
+        for name, use in FREE_KINDS:
+            row = tk.Frame(self.kinds_box, bg=theme.PANEL, cursor='hand2',
+                           highlightthickness=1,
+                           highlightbackground=theme.GOLD_HI if held == name
+                           else theme.LINE)
+            row.pack(fill='x', pady=1)
+            dot = tk.Canvas(row, width=14, height=14, bg=theme.PANEL,
+                            highlightthickness=0)
+            dot.create_oval(2, 2, 12, 12, outline='#000000',
+                            fill=self._colour(name))
+            dot.pack(side='left', padx=(6, 4))
+            lbl = tk.Label(row, text=t('free.use.' + use), anchor='w',
+                           bg=theme.PANEL, fg=theme.INK, font=theme.FONT)
+            lbl.pack(side='left', fill='x', expand=True)
+            sub = tk.Label(row, text=mods.editor_name(name), anchor='e',
+                           bg=theme.PANEL, fg=theme.MUT, font=theme.FONT_SMALL)
+            sub.pack(side='right', padx=(0, 6))
+            for w in (row, dot, lbl, sub):
+                w.bind('<Button-1>', lambda e, n=name: self._take_kind(n))
+
+    def _take_kind(self, name):
+        """A new free marker of this kind hangs at the mouse."""
+        if self.held is not None:
+            self._drop()
+        self.held = {'key': None, 'name': name, 'label': '', 'num': None,
+                     'tile': None, 'orig': None, 'placed': None, 'new': True}
+        self._rows()
+
+    def _remove(self, tg):
+        """Free placing: the marker leaves the project (on Confirm)."""
+        if self.held is tg:
+            self.held = None
+            self.c.delete('ghost')
+        self.targets.remove(tg)
+        self.changed = True
+        self._rows()
+        self._draw_points()
+
     def _rows(self):
+        if self.free:
+            self._kind_rows()
         for w in self.rows_box.winfo_children():
             w.destroy()
+        if self.free and not self.targets:
+            ttk.Label(self.rows_box, text=t('free.none'), style='Muted.TLabel'
+                      ).pack(anchor='w')
         for tg in self.targets:
             done = tg.get('placed') is not None
             hanging = self.held is tg
@@ -184,17 +337,34 @@ class PlaceWindow(MapWindow):
                 f' {num}' if num is not None else '')
             where = (t('place.on', tile=tg['placed']['tile'])
                      if done else t('place.open'))
-            lbl = tk.Label(row, text=f'{text}\n{tg.get("label") or ""}  '
-                                     f'{where}',
+            label = (t('free.use.' + _USE.get(tg['name'], 'point'))
+                     if self.free else tg.get('label') or '')
+            lbl = tk.Label(row, text=f'{text}\n{label}  {where}',
                            justify='left', anchor='w', bg=theme.PANEL,
                            fg=theme.OK if done else theme.INK,
                            font=theme.FONT)
+            if self.free:
+                x = tk.Label(row, text='\u2715', bg=theme.PANEL, fg=theme.MUT,
+                             font=theme.FONT_SYMBOL, cursor='hand2')
+                x.pack(side='right', padx=(0, 6))
+                x.bind('<Button-1>', lambda e, g=tg: self._remove(g))
+                theme.Tooltip(x, t('free.remove'))
             lbl.pack(side='left', fill='x', expand=True, padx=(0, 4), pady=2)
+            # the list box gives the width: long labels wrap, never cut
+            lbl.bind('<Configure>', lambda e, lb=lbl: lb.configure(
+                wraplength=max(120, e.width - 4)))
             for w in (row, mark, dot, lbl):
                 w.bind('<Button-1>', lambda e, g=tg: self._pick(g))
+        for w in [self.rows_box] + list(self.rows_box.winfo_children()):
+            w.bind('<MouseWheel>', self._list_wheel)
+            for sub in w.winfo_children():
+                sub.bind('<MouseWheel>', self._list_wheel)
         n = sum(1 for tg in self.targets if tg.get('placed') is not None)
-        self.status.configure(text=t('place.count', n=n,
-                                     total=len(self.targets)))
+        if self.free:
+            self.status.configure(text=t('free.count', n=n))
+        else:
+            self.status.configure(text=t('place.count', n=n,
+                                         total=len(self.targets)))
 
     @staticmethod
     def _colour(name):
@@ -404,7 +574,14 @@ class PlaceWindow(MapWindow):
         if num is None and prev.get('tile') == tile and prev.get('num') \
                 and not taken(prev['num']):
             num = prev['num']
-        if num is None:
+        if self.free:
+            # the user gives the ID; the next free one is filled in
+            free = placed.free_number(tg['name'], tile, body, others)
+            num = self._ask_id(tg, tile, num or free, placed.taken_numbers(
+                tg['name'], tile, body, others), free)
+            if num is None:
+                return                   # still at the mouse
+        elif num is None:
             num = placed.free_number(tg['name'], tile, body, others)
         elif taken(num):
             # the map or another quest has it already: a second one would
@@ -415,15 +592,34 @@ class PlaceWindow(MapWindow):
             return
         tg['placed'] = {'tile': tile, 'x': int(x), 'y': int(y),
                         'z': ter.height(x, y), 'num': int(num)}
+        if tg.pop('new', False):
+            self.targets.append(tg)
         self.held = None
         self.changed = True
         self.c.delete('ghost')
         self._rows()
         self._draw_points()
 
+    def _ask_id(self, tg, tile, default, taken, free):
+        """The ID dialog; None when cancelled."""
+        dlg = IdDialog(self.win, mods.editor_name(tg['name']), tile, default,
+                       taken, free)
+        self.win.wait_window(dlg.win)
+        try:
+            self.win.grab_set()
+        except tk.TclError:
+            pass
+        return dlg.result
+
     # -- finish ------------------------------------------------------------------
 
     def confirm(self):
+        if self.free:
+            if self.held is not None:
+                self._drop()             # a lifted marker back to its place
+            self._close()
+            self.on_done(self.targets)
+            return
         open_n = sum(1 for tg in self.targets if tg.get('placed') is None)
         if open_n and not messagebox.askyesno(
                 t('place.title'), t('place.open.q', n=open_n),
@@ -452,6 +648,71 @@ class PlaceWindow(MapWindow):
 
     def close(self):
         self.cancel()
+
+
+class IdDialog:
+    """The ID of a freely placed marker: the next free one filled in, a
+    taken one refused with the list of the taken ones (Marco 2026-09-19)."""
+
+    def __init__(self, parent, marker, tile, default, taken, free):
+        self.result = None
+        self.taken, self.tile, self.free = set(taken), tile, free
+        w = self.win = tk.Toplevel(parent)
+        w.title(t('free.id.title'))
+        w.transient(parent)
+        w.resizable(False, False)
+        theme.dark_titlebar(w)
+        f = ttk.Frame(w, padding=14)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('free.id.head', marker=marker, tile=tile),
+                  style='Brand.TLabel').pack(anchor='w')
+        row = ttk.Frame(f)
+        row.pack(fill='x', pady=(8, 0))
+        ttk.Label(row, text=t('free.id.label')).pack(side='left')
+        self.var = tk.StringVar(value=str(default))
+        self.ent = ttk.Entry(row, textvariable=self.var, width=10)
+        self.ent.pack(side='left', padx=(6, 0))
+        ttk.Label(f, text=t('free.id.list', tile=tile,
+                            taken=ranges(self.taken)) if self.taken
+                  else t('free.id.nonetaken', tile=tile),
+                  style='Muted.TLabel', wraplength=380, justify='left'
+                  ).pack(anchor='w', pady=(6, 0))
+        self.err = ttk.Label(f, text='', foreground=theme.ERR,
+                             wraplength=380, justify='left')
+        self.err.pack(anchor='w', pady=(4, 0))
+        bar = ttk.Frame(f)
+        bar.pack(fill='x', pady=(8, 0))
+        ttk.Button(bar, text=t('cancel'), command=self.cancel
+                   ).pack(side='right')
+        ttk.Button(bar, text=t('free.id.ok'), style='Accent.TButton',
+                   command=self.ok).pack(side='right', padx=6)
+        w.bind('<Return>', lambda e: self.ok())
+        w.bind('<Escape>', lambda e: self.cancel())
+        w.protocol('WM_DELETE_WINDOW', self.cancel)
+        w.update_idletasks()
+        x = parent.winfo_rootx() + (parent.winfo_width() - w.winfo_width()) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height()
+                                    - w.winfo_height()) // 3
+        w.geometry(f'+{max(0, x)}+{max(0, y)}')
+        self.ent.focus_set()
+        self.ent.select_range(0, 'end')
+        try:
+            w.grab_set()
+        except tk.TclError:
+            pass
+
+    def ok(self):
+        n, err = check_id(self.var.get(), self.taken, self.tile, self.free)
+        if err:
+            self.err.configure(text=err)
+            self.ent.focus_set()
+            self.ent.select_range(0, 'end')
+            return
+        self.result = n
+        self.win.destroy()
+
+    def cancel(self):
+        self.win.destroy()
 
 
 # ---------------------------------------------------------------------------
@@ -572,10 +833,50 @@ def commit(app, q, targets, log=lambda *a: None):
     return report
 
 
-def safe_commit(app, q, targets, parent=None):
+def free_targets(project):
+    """The markers placed freely in this project, as window targets."""
+    return [{'key': _key(p['name'], p['tile'], p['num']), 'name': p['name'],
+             'label': '', 'num': None, 'tile': p['tile'], 'orig': p,
+             'placed': {k: p[k] for k in ('tile', 'x', 'y', 'z', 'num')}}
+            for p in placed.placements(project) if p.get('quest') is None]
+
+
+def commit_free(app, targets, log=lambda *a: None):
+    """The free placements of the project become the window's list, then
+    the tiles are written like for a quest. A number the base map has
+    meanwhile was not written: that free marker leaves the list again (the
+    report names it). Returns the report of placed.generate."""
+    project = app.project
+    lst = placed.placements(project)
+    lst[:] = [p for p in lst if p.get('quest') is not None]
+    for tg in targets:
+        p = tg.get('placed')
+        if p is None:
+            continue
+        entry = {'name': tg['name'], 'num': int(p['num']), 'tile': p['tile'],
+                 'x': p['x'], 'y': p['y'], 'z': p['z'], 'angle': 0,
+                 'quest': None}
+        lst.append(entry)
+        tg['orig'], tg['key'] = entry, _key(entry['name'], entry['tile'],
+                                            entry['num'])
+    app.mark_dirty()
+    report = placed.generate(project, app.modset, app.cfg.get('game_dir'),
+                             log)
+    gone = {id(c) for r in report.values() if r['source'] is not None
+            for c in r['clash'] if c.get('quest') is None}
+    if gone:
+        lst[:] = [p for p in lst if id(p) not in gone]
+        placed.generate(project, app.modset, app.cfg.get('game_dir'), log)
+    app.load_modset(force=True)
+    return report
+
+
+def safe_commit(app, q, targets, parent=None, fn=None):
     """commit with the error shown instead of a half written state left
     silently. Returns the report or None."""
     try:
+        if fn is not None:
+            return fn(app, targets)
         return commit(app, q, targets)
     except Exception as e:
         messagebox.showerror(t('place.title'), t('place.error', err=e),
@@ -609,6 +910,28 @@ def place_for_quest(app, q):
         if app.inspector:
             app.inspector.refresh()
     return PlaceWindow(app, targets, done)
+
+
+def place_free(app):
+    """Quest > Place markers on the map: markers for a new quest, without a
+    quest (4.1.0)."""
+    if app.project is None:
+        return None
+    if not app.cfg.get('game_dir'):
+        messagebox.showinfo(t('place.title'), t('export.nogame'),
+                            parent=app.root)
+        return None
+    if not can_place(app, app.root):
+        return None
+
+    def done(tgs):
+        report = safe_commit(app, None, tgs, fn=commit_free)
+        if report is not None:
+            _report(app, report)
+        if app.inspector:
+            app.inspector.refresh()
+    return PlaceWindow(app, free_targets(app.project), done,
+                       title=t('free.title'), free=True)
 
 
 def _report(app, report):

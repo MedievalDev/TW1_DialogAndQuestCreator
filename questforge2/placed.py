@@ -24,7 +24,8 @@ GUID is made once per tile and kept in the project.
 
 Project data (``project.extra``, saved with the project):
 - ``placed_markers``: [{'name', 'num', 'tile', 'x', 'y', 'z', 'angle',
-  'quest'}] - name is the engine name (MARKER_QUEST_START ...)
+  'quest'}] - name is the engine name (MARKER_QUEST_START ...); 'quest'
+  None = placed freely (4.1.0), no quest line follows it
 - ``fill_tiles``: tiles whose base only gets the game markers put back
 - ``generated_tiles``: tiles this module wrote into the levels folder
 - ``tile_guids``: {tile: GUID hex}
@@ -467,11 +468,18 @@ def marker_exists(body, name, num):
         i == int(num) for i, _p in tw1_lnd.markers_full(body).get(name, []))
 
 
+def taken_numbers(name, tile, body, placed, skip=None):
+    """Numbers of marker ``name`` on ``tile`` given out already: in the map
+    and in the placements (``skip``: a placement being moved)."""
+    nums = {i for i, _p in tw1_lnd.markers_full(body).get(name, [])} \
+        if body else set()
+    nums |= {int(p['num']) for p in placed
+             if p['tile'] == tile and p['name'] == name and p is not skip}
+    return nums
+
+
 def free_number(name, tile, body, placed, skip=None):
     """Next marker number for ``name`` on ``tile``: above the highest one
     in the map and in the placements (``skip``: a placement being moved)."""
-    nums = [i for i, _p in tw1_lnd.markers_full(body).get(name, [])] \
-        if body else []
-    nums += [int(p['num']) for p in placed
-             if p['tile'] == tile and p['name'] == name and p is not skip]
+    nums = taken_numbers(name, tile, body, placed, skip)
     return (max(nums) + 1) if nums else 1

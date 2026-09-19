@@ -193,6 +193,44 @@
         "de": "Das Spiel startet normal, Bodentexturen sehen aus wie immer, und am gesetzten Marker passiert, was die Quest vorsieht.",
         "en": "The game starts normally, the ground textures look as always, and what the quest wants happens at the placed marker."
       }
+    },
+    {
+      "id": "free-marker-ingame",
+      "since": "4.1.0",
+      "needs_game": true,
+      "experimental": "freeplace",
+      "title": {
+        "de": "Frei gesetzter Marker fuer eine neue Quest wirkt im Spiel",
+        "en": "A marker placed freely for a new quest works in the game"
+      },
+      "why": {
+        "de": "Seit 4.1.0 lassen sich Marker ohne uebernommene Quest setzen, mit selbst gewaehlter ID (Quest > Marker auf der Karte setzen). Gemessen ist, dass die Karte richtig geschrieben wird und die ID frei ist. Ob das Spiel den Marker benutzt, hat noch niemand bestaetigt.",
+        "en": "Since 4.1.0 markers can be placed without a taken over quest, with an ID you choose (Quest > Place markers on the map). Measured: the map is written correctly and the ID is free. Nobody has confirmed yet that the game uses the marker."
+      },
+      "steps": {
+        "de": [
+          "Ein Projekt oeffnen oder neu anlegen und speichern.",
+          "Quest > Marker auf der Karte setzen. Links \"Objekt erzeugen\" anklicken und den Marker an eine freie, begehbare Stelle setzen, die du im Spiel schnell erreichst (z. B. neben einer Strasse nahe dem Start). Die vorgeschlagene ID uebernehmen (Setzen). Kachel und ID merken, dann Bestaetigen.",
+          "Eine Quest nehmen oder anlegen, die du leicht bekommst, und eine Aktion \"Objekt erzeugen\" beim Annehmen (TAKE) einfuegen: einen Gegenstand waehlen, als Kachel und Marker die gemerkten eintragen.",
+          "Datei > Exportieren. Am Ende muss im Export-Fenster stehen, dass der Level-Header-Cache neu gebaut wurde.",
+          "Unten auf \"Spiel starten\" klicken, die Quest annehmen und zur Stelle gehen.",
+          "Pruefen: Liegt der Gegenstand dort auf dem Boden?",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Open a project or create a new one and save it.",
+          "Quest > Place markers on the map. Click \"Create object\" on the left and put the marker on a free, walkable spot you reach quickly in the game (e.g. next to a road near the start). Keep the suggested ID (Set). Note tile and ID, then Confirm.",
+          "Take or create a quest you get easily and add an action \"Create object\" on taking it (TAKE): pick an item, enter the noted tile and marker.",
+          "File > Export. At the end the export window must say that the level header cache was rebuilt.",
+          "Click \"Start game\" below, take the quest and walk to the spot.",
+          "Check: is the item lying on the ground there?",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Der Gegenstand liegt an der gesetzten Stelle auf dem Boden (nicht darunter, nicht in der Luft) und laesst sich aufheben.",
+        "en": "The item lies on the ground at the chosen spot (not below it, not in the air) and can be picked up."
+      }
     }
   ]
 }

@@ -274,6 +274,9 @@ class App:
         m.add_command(label=t('quest.mpmerge'), command=self.merge_mp_quest,
                       state=self._state(self.project is not None
                                         and self.cfg.get('game_dir')))
+        m.add_command(label=t('free.menu'), command=self.place_markers,
+                      state=self._state(self.project is not None
+                                        and self.cfg.get('game_dir')))
         if self.project and len(self.project.quests) > 1:
             sub = theme.Menu(m, tearoff=0)
             for qq in self.project.quests:
@@ -827,6 +830,12 @@ class App:
         """Interactive map (update 5c), see mapwin.MapWindow.show."""
         from . import mapwin
         return mapwin.MapWindow.show(self, **kw)
+
+    def place_markers(self):
+        """Quest > Place markers on the map (4.1.0, placewin.place_free)."""
+        from . import placewin
+        self.feedback.log.add('place free')
+        return placewin.place_free(self)
 
     def show_quest_on_map(self, quest):
         if quest is not None:

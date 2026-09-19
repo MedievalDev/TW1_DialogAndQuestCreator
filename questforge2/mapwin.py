@@ -263,6 +263,11 @@ class MapWindow:
             theme.Tooltip(b, t(key))
         self.zoom_lbl = ttk.Label(bar, text='', style='Muted.TLabel')
         self.zoom_lbl.pack(side='left', padx=(6, 0))
+        # 4.1.0: markers for a new quest right from here
+        if hasattr(self.app, 'place_markers'):
+            ttk.Button(bar, text=t('free.button'), style='Accent.TButton',
+                       command=self.app.place_markers
+                       ).pack(side='left', padx=(12, 0))
         ttk.Label(bar, text=t('map.zoom.tip'), style='Muted.TLabel'
                   ).pack(side='right')
         self.info = ttk.Label(mid, text='', style='Muted.TLabel')
