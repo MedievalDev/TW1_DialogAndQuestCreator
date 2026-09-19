@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1578,6 +1578,81 @@ Offen:
   Retail-Quest (12.53, 12.55, 12.56).
 
 ---
+
+75. Karten aus dem Editor zurueck ins Projekt (Version 3.9.0, Marco
+    2026-09-18: "bei der MP-Uebernahme, wo die Marker gelistet werden, die
+    lnd und physics aus dem Editor ablegen, damit das Tool die neue Map
+    kennt; vor dem naechsten Start LevelHeadersCacheGen.bat").
+    - `editormaps.py`: Namen `Map_<Zelle><s|m|..>.lnd/.phx` -> Kachel und
+      Spielname, Partner-Datei (Editor legt die .phx in `physic\`),
+      Kopie nach `<Projekt>_levels\Levels\...`, `tick_found` hakt Punkte
+      ab, deren Marker jetzt auf Retail- oder Mod-Karte liegt.
+    - Der Ordner wird Ordner-Mod des Projekts (hinten in der Liste), damit
+      `scan_mod` die Marker liest und `dependency_entries` beim Export packt.
+      Gemessen: Editor-.lnd traegt Flags 0x31, Klassen-Id 20044, eigene
+      GUID (so liefert die Kira-Kampagne sie aus); .phx im Retail
+      unkomprimiert, Flags 0x00 (Levels.wd, 191 Stueck).
+    - `dependency_entries` packt jetzt zur .lnd die .phx der Kachel mit
+      (vorher fehlte sie: ein im Editor umgebautes Gelaende haette die alte
+      Kollision behalten).
+    - Inspektor unter der Checkliste: Ablagefeld (ziehen oder klicken),
+      Kacheln im Projekt mit Zeit, noch gebrauchte Kacheln, Hinweis und
+      Knopf LevelHeadersCacheGen (Pfad einmal waehlbar, `lhc_bat` in der
+      Konfiguration; startet nicht bei laufendem Spiel). Der Export-Abschluss
+      nennt den Schritt, wenn das Projekt Editor-Karten hat.
+    - Ziehen und Ablegen: `dropfiles.py` (WM_DROPFILES per ctypes wie im
+      Mod Manager), meldet neu gebaute Widgets nach; getestet mit echter
+      DROPFILES-Nachricht auf Ablagefeld, Graph, Fenster und nach Neuaufbau.
+    - Tests `test_editormaps.py` (6), Durchlauf Q_709 -> Kachel D8 mit
+      Marcos Editor-Export Map_D08s: Gegnermarker 1 abgehakt, Export
+      enthaelt Map_D08.lnd und physic\Map_D08.phx (byte-gleich).
+76. Marker direkt auf der Karte setzen, rote Kacheln reparieren (Version
+    3.9.0, Marco 2026-09-19: Fix-Knopf fuer fehlende Originalmarker in der
+    Mod-Karte; Marker im Tool setzen, Hoehe aus der Hoehenkarte der .lnd;
+    MP-Uebernahme im eigenen Fenster mit Setz-Karte ohne vorhandene Marker,
+    Liste links, Klick = Marker an der Maus, Eintrag gruen mit Haken, gruener
+    Bestaetigen-Knopf, gruenen Eintrag anklicken hebt ihn wieder auf).
+    - `lndmap.py`: Sektionslauf nach dem Markerblock aus dem LND-Viewer
+      (nur gelesen). Gemessen auf den 108 Oberflaechenkacheln von Levels.wd
+      mit 8895 Retail-Markern: Hoehenkarte 512x512 uint16, 64 Einheiten je
+      Pixel, Zeile = y/64, nicht gespiegelt; Marker-z = Gelaendehoehe (97,4 %
+      innerhalb 16 Einheiten interpoliert, 0,8 % hoeher: Bruecken,
+      Hausboeden). Begehbar-Feld 1024x32 uint32 = 1024x1024 Bit, 32
+      Einheiten je Bit, Bit = (x/32) % 32 vom LSB; 99,4 % der Marker auf
+      gesetztem Bit gegen 73,8 % Grundrate. `add_markers` haengt an den
+      Markerblock an, Rest byte-gleich (`tw1_lnd.add_marker` liefert die
+      Zwei-Strom-Form und darf nicht in einen Entry).
+    - `placed.py`: Projektdaten `placed_markers`, `fill_tiles`,
+      `generated_tiles`, `tile_guids` in `project.extra`. Kachel wird immer
+      aus ihrer BASIS neu gebaut (gesicherte Editor-Kachel in
+      `<Projekt>_levels_base`, sonst Import im Levels-Ordner, sonst fremde
+      Mod-Kachel laut `mod_tiles`, sonst Levels.wd), dann fehlende
+      Spielmarker, dann die gesetzten. Datei wie Editor-Export
+      `zlib(FF A1 D0 33, 20044, GUID) + zlib(Body)` - Flags 0x33 wie
+      Levels.wd, weil die Metadatenpruefung des Exports 0x31 anmeckerte.
+      Levels-Ordner wird Mod des Projekts und Anbieter der Kachel.
+    - `placewin.py`: `PlaceWindow` (MapWindow-Unterklasse ohne Markerliste
+      und Filter), Geist am Zeiger, Esc/Rechtsklick legt ab, Nummer je Kachel
+      frei (`free_number`), vorhandene Nummer meldet `place.clash`, roter
+      Ueberzug aus `blocked_mask` ab 256 px, Rueckfrage bei unbegehbarem
+      Boden, Bestaetigen mit offenen Markern nach Rueckfrage.
+      `quest_targets`, `_retarget`, `commit` (Zeilen und Geber auf die
+      gesetzte Kachel/Nummer, Checkliste `done` + `placed`, generate,
+      Modset neu). MP-Assistent Seite 3: Knopf, Setzungen gehen in die
+      Zeilen von Seite 2 zurueck, Uebernehmen schreibt sie. Quest-Panel:
+      Knopf ueber der Checkliste.
+    - Fix-Knopf: `validate_mods` haengt an den Rote-Kachel-Fehler das Ziel
+      `fill:<Kachel>`, `ProblemWindow` zeigt "Reparieren", traegt die Kachel
+      in `fill_tiles` ein, generate, Modset neu, fragt nach erneutem Export.
+    - Tests `test_placed.py` (synthetischer Body mit der ganzen
+      Sektionskette, Hoehe/Begehbar/Maske, Anhaengen byte-gleich, Basis-
+      Roundtrip, Zielliste, Umhaengen). GUI-Probe: Q_700 -> Q_385, Geber 508
+      auf E1 und Objektmarker auf F1 gesetzt, aufgehoben, neu gesetzt,
+      uebernommen: beide Kacheln im Levels-Ordner, Pruefung ohne
+      Markerfehler, Panel oeffnet die gesetzten gruen, Verschieben behaelt
+      die Zahl, Fix-Knopf traegt ein und fragt nach Export.
+    - Offen: Spieltest (so gesetzter Q_Giver muss den NPC erscheinen
+      lassen; LevelHeadersCacheGen nach dem Export).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

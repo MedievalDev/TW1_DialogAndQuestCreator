@@ -190,6 +190,43 @@ Marker. Die Liste steht danach im Quest-Panel mit Haken; offene Punkte meldet
 die Pruefung als Warnung. Der Geber bekommt Partei 25 (Menschen), die
 MP-Bloecke haben keine.
 
+**Karten aus dem Editor zurueck ins Tool:** Der Editor speichert die Kachel
+unter `Saved Games\\Two Worlds Saves\\Levels` als `Map_<Kachel>s.lnd`, die
+Physik als `physic\\Map_<Kachel>s.phx`. Beide unter der Checkliste auf das
+Feld **Karten aus dem Editor** ziehen (oder klicken und waehlen; zur `.lnd`
+findet das Tool die `.phx` selbst). Sie landen unter dem Namen, den das Spiel
+erwartet, im Ordner `<Projekt>_levels` neben der Projektdatei
+(`Levels\\Map_E01.lnd`, `Levels\\physic\\Map_E01.phx`), der als Mod ins
+Projekt kommt. Das Tool liest die Marker sofort und hakt ab, was jetzt auf
+der Karte liegt. Der Export packt `.lnd` und `.phx` der Kacheln mit, die die
+Quests brauchen.
+
+**Marker direkt im Tool setzen (ab 3.9.0):** Der Editor ist dafuer nicht
+mehr noetig. Knopf **Marker auf der Karte setzen** in Schritt 3 des
+Assistenten oder im Quest-Panel ueber der Checkliste. Die Karte oeffnet sich
+ohne die vorhandenen Marker (die wuerden nur verwirren), links stehen die zu
+setzenden. Eintrag anklicken, der Marker haengt an der Maus, Klick auf die
+Karte setzt ihn, der Eintrag wird gruen mit Haken. Gruenen Eintrag nochmal
+anklicken hebt den Marker wieder auf, Esc oder Rechtsklick legt ihn zurueck.
+Die Kachel kommt vom Klick, die Nummer ist auf der Kachel frei (Geber = seine
+NPC-Nummer), die Hoehe aus der Hoehenkarte der Kachel (gemessen an 8895
+Spielmarkern: 97 % liegen innerhalb von 16 Einheiten; Bruecken und
+Hausboeden stehen hoeher, dort im Spiel pruefen). Unbegehbarer Boden (Baum,
+Fels, Mauer) wird ab Nahzoom rot getoent und fragt vor dem Setzen nach.
+Innenraeume (`_1`) gehen so nicht, dort bleibt der Editor. **Bestaetigen**
+schreibt die Kacheln nach `<Projekt>_levels` (Kopie der Spielkarte, der
+fremden Mod-Karte, die das Projekt fuer die Kachel nutzt, oder deiner
+Editor-Kachel, die vorher nach `<Projekt>_levels_base` gesichert wird; die
+Spielmarker, die der Kopie fehlen, kommen mit hinein) und liest die Mods neu.
+Danach wie unten: exportieren, dann LevelHeadersCacheGen.
+
+**Vor dem naechsten Spielstart** erst exportieren, dann
+`LevelHeadersCacheGen.bat` aus dem SDK (`Tools`) ausfuehren, Knopf im
+Quest-Panel. Der Level-Header-Cache traegt die Marker jeder Karte; ohne
+frischen kennt das Spiel die neuen Marker nicht. Er backt alles ein, was
+gerade installiert ist, auch fremde Mods: nur mit den Mods bauen, mit denen
+gespielt wird.
+
 ## Zustaende
 Freigeschaltet (ENABLE), Angebot gehoert (HEAR), angenommen (TAKE), erfuellt
 (SOLVE), abgeschlossen (CLOSE), gescheitert (FAIL). Das Tagebuch zeigt den Text
@@ -238,6 +275,40 @@ example `MARKER_QUEST_START 507 on E1` for the giver. The tool places no
 markers. The list then lives in the quest panel with check boxes; open items
 are reported as warnings. The giver gets party 25 (humans), the MP blocks
 have none.
+
+**Maps from the editor back into the tool:** the editor saves the tile under
+`Saved Games\\Two Worlds Saves\\Levels` as `Map_<tile>s.lnd`, the physics as
+`physic\\Map_<tile>s.phx`. Drag both onto the field **Maps from the editor**
+below the checklist (or click and choose; for a `.lnd` the tool finds the
+`.phx` itself). They go under the name the game expects into the folder
+`<project>_levels` next to the project file (`Levels\\Map_E01.lnd`,
+`Levels\\physic\\Map_E01.phx`), which joins the project as a mod. The tool
+reads the markers at once and ticks what is on the map now. The export packs
+`.lnd` and `.phx` of the tiles the quests need.
+
+**Placing markers right in the tool (from 3.9.0):** the editor is no longer
+needed for this. Button **Place markers on the map** in step 3 of the wizard
+or in the quest panel above the checklist. The map opens without the existing
+markers (they would only confuse), the ones to place stand on the left. Click
+an entry, the marker hangs at the mouse, a click on the map sets it and the
+entry turns green with a tick. Click a green entry again to pick the marker
+up, Esc or right click puts it back. The tile comes from the click, the
+number is free on that tile (giver = its NPC number), the height from the
+tile's heightmap (measured on 8895 game markers: 97 % lie within 16 units;
+bridges and house floors stand higher, check those in the game). Blocked
+ground (tree, rock, wall) is tinted red when zoomed in and asks before
+placing. Interiors (`_1`) do not work this way, the editor stays for them.
+**Confirm** writes the tiles to `<project>_levels` (a copy of the game map,
+of the foreign mod map the project uses for that tile, or of your editor
+tile, which is kept in `<project>_levels_base` first; game markers the copy
+lacks go in as well) and reads the mods again. Then as below: export, then
+LevelHeadersCacheGen.
+
+**Before the next game start** export first, then run
+`LevelHeadersCacheGen.bat` from the SDK (`Tools`), button in the quest panel.
+The level header cache holds the markers of every map; without a fresh one
+the game does not know the new markers. It bakes in everything installed at
+that moment, foreign mods too: build it only with the mods you play with.
 
 ## States
 Enabled (ENABLE), offer heard (HEAR), taken (TAKE), solved (SOLVE), closed

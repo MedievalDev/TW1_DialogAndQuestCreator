@@ -572,6 +572,27 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Haken, offene Punkte meldet die Prüfung. Der Geber wird ein neuer NPC mit
   Partei 25; Dialogzeilen ohne Sprecher (MP-Bäume haben keinen Lector)
   gehören ihm. Zeitleiste: MP-Quests tragen "MP".
+  Unter der Checkliste nimmt das Feld **Karten aus dem Editor** die im Two
+  Worlds Editor gespeicherten Kacheln an (`Map_<Kachel>s.lnd` und
+  `physic\Map_<Kachel>s.phx` aus `Saved Games\Two Worlds Saves\Levels`,
+  ziehen oder wählen). Sie kommen unter dem Spielnamen in den Ordner
+  `<Projekt>_levels` (als Mod im Projekt), die Marker werden sofort gelesen
+  und abgehakt, der Export packt `.lnd` und `.phx` mit. Danach vor dem
+  nächsten Spielstart `LevelHeadersCacheGen.bat` aus dem SDK ausführen
+  (Knopf im Panel, siehe 3.3).
+- **Marker direkt auf der Karte setzen (3.9.0):** Knopf **Marker auf der
+  Karte setzen** in Schritt 3 des MP-Assistenten und im Quest-Panel über der
+  Checkliste. Die Karte öffnet sich ohne vorhandene Marker, links die zu
+  setzenden: Eintrag anklicken, Marker hängt an der Maus, Klick auf die Karte
+  setzt ihn (Eintrag grün mit Haken; nochmal anklicken hebt ihn wieder auf,
+  Esc/Rechtsklick legt ihn zurück). Höhe aus der Höhenkarte der Kachel,
+  unbegehbarer Boden rot ab Nahzoom. Bestätigen schreibt die Kacheln nach
+  `<Projekt>_levels` (Basis: Spielkarte, Mod-Karte oder gesicherte
+  Editor-Kachel, fehlende Spielmarker ergänzt). Innenräume weiter im Editor.
+- **Rote Kacheln reparieren:** Meldet der Export eine Mod-Karte ohne
+  Originalmarker, bietet das Fehlerfenster **Reparieren** an: Kopie der
+  Mod-Kachel mit den fehlenden Spielmarkern im Projektordner, dann erneut
+  exportieren.
 - **Zeilen aufnehmen:** Punkt-Knopf in der Voice-Cue-Zeile jeder Dialogzeile
   (Aufnehmen/Stopp, darunter Zeit und Pegel, danach Abspielen/Löschen).
   Mikrofon mit Probeaufnahme unter Datei > Einstellungen (gemerkt). WAV 16 Bit mono 44,1 kHz

@@ -814,6 +814,115 @@ class App:
         if quest is not None:
             self.show_map(quest=quest)
 
+    # -- maps saved by the Two Worlds editor (editormaps.py) ---------------
+
+    def import_editor_maps(self, paths=None):
+        """Take ``Map_<cell>s.lnd`` / ``physic\\Map_<cell>s.phx`` from the
+        editor into ``<project>_levels`` (a folder mod of the project), read
+        the markers, tick the checklist, remind of LevelHeadersCacheGen."""
+        from . import editormaps
+        if not self.project:
+            return
+        dest = editormaps.levels_dir(self.project)
+        if dest is None:
+            messagebox.showinfo(t('em.title'), t('em.save.first'),
+                                parent=self.root)
+            if not self.save_project() or not self.project.path:
+                return
+            dest = editormaps.levels_dir(self.project)
+        if paths is None:
+            start = editormaps.EDITOR_LEVELS
+            paths = filedialog.askopenfilenames(
+                title=t('em.pick'), parent=self.root,
+                initialdir=start if os.path.isdir(start) else None,
+                filetypes=[(t('em.filter'), '*.lnd *.phx'),
+                           (t('em.filter.all'), '*.*')])
+            if not paths:
+                return
+        items, skipped = editormaps.plan_import(list(paths))
+        if not items:
+            messagebox.showwarning(t('em.title'), t('em.none', files=NL.join(
+                '  ' + os.path.basename(p) for p in skipped[:8])),
+                parent=self.root)
+            return
+        lines = []
+        for rec in items:
+            for ext in ('lnd', 'phx'):
+                src = rec[ext]
+                target = editormaps.inner_path(rec['cell'], ext)
+                lines.append(f"  {rec['tile']}:  "
+                             + (os.path.basename(src) if src else '-')
+                             + '  ->  ' + (target if src else t('em.missing')))
+        text = t('em.confirm', files=NL.join(lines))
+        if any(not rec['phx'] for rec in items):
+            text += NL + NL + t('em.nophx')
+        if any(not rec['lnd'] for rec in items):
+            text += NL + NL + t('em.nolnd')
+        if skipped:
+            text += NL + NL + t('em.skipped', n=len(skipped))
+        if not messagebox.askyesno(t('em.title'), text, parent=self.root):
+            return
+        try:
+            done = editormaps.import_maps(items, dest)
+        except OSError as e:
+            messagebox.showerror(t('em.title'), t('em.error', err=e),
+                                 parent=self.root)
+            return
+        key = os.path.normcase(os.path.abspath(dest))
+        if not any(os.path.normcase(os.path.abspath(m['path'])) == key
+                   for m in self.project.mods):
+            # last in the list: the tool's load order lets it win
+            self.project.mods.append({'path': dest, 'enabled': True})
+        self.mark_dirty()
+        self.load_modset(force=True)
+        ticked = editormaps.tick_found(self.project.quests, self.modset)
+        open_n = sum(1 for q in self.project.quests
+                     for x in (q.extra.get('markers_todo') or [])
+                     if isinstance(x, dict) and not x.get('done'))
+        tiles = ', '.join(rec['tile'] for rec in items)
+        self.set_info(t('em.done', tiles=tiles, n=len(done), ticked=ticked,
+                        open=open_n), 'StatusOk.TLabel')
+        if self.inspector:
+            self.inspector.refresh()
+        messagebox.showinfo(t('em.title'), t('em.done.long', tiles=tiles,
+                                              ticked=ticked, open=open_n)
+                            + NL + NL + t('em.lhc'), parent=self.root)
+
+    def run_lhc(self):
+        """Start the SDK's LevelHeadersCacheGen.bat (asks for it once)."""
+        from . import editormaps
+        path = editormaps.find_lhc_bat(self.cfg)
+        if not path:
+            messagebox.showinfo(t('em.title'), t('em.lhc.where'),
+                                parent=self.root)
+            path = filedialog.askopenfilename(
+                title=t('em.lhc.pick'), parent=self.root,
+                filetypes=[('LevelHeadersCacheGen.bat', '*.bat')])
+            if not path:
+                return
+            self.cfg.set('lhc_bat', path)
+            self.cfg.save()
+        if export.game_running():
+            messagebox.showwarning(t('em.title'), t('em.lhc.running'),
+                                   parent=self.root)
+            return
+        try:
+            editormaps.run_lhc_bat(path)
+        except OSError as e:
+            messagebox.showerror(t('em.title'), t('em.error', err=e),
+                                 parent=self.root)
+            return
+        self.set_info(t('em.lhc.started'), 'StatusOk.TLabel')
+
+    def _on_drop(self, paths):
+        """Files dropped onto the window: editor maps go into the project."""
+        from . import editormaps
+        maps = [p for p in paths if editormaps.parse_name(p)]
+        if maps:
+            self.import_editor_maps(maps)
+        else:
+            self.set_info(t('em.drop.other'), 'StatusErr.TLabel')
+
     def show_mods(self):
         if self.project:
             modswin.ModsWindow.show(self)
@@ -1488,7 +1597,8 @@ class App:
                 if d['status'] == 'ok'] if self.modset else []
         if errors:
             ProblemWindow(self, t('export.errors', n=len(errors)), errors,
-                          warnings)
+                          warnings, retry=lambda: self.export_ui(files_only,
+                                                                 quests))
             return
         target = None
         if files_only:
@@ -1550,8 +1660,11 @@ class App:
             elif target:
                 win.finish(t('export.done.files', path=target))
             else:
+                from . import editormaps
+                extra = ('\n\n' + t('em.lhc')) if editormaps.present(
+                    editormaps.levels_dir(p)) else ''
                 win.finish(t('export.done', path=result['res']['archive'])
-                           + '\n\n' + t('export.next'))
+                           + '\n\n' + t('export.next') + extra)
             if 'err' not in result and self.coach.tutorial.quest in p.quests:
                 self.coach.tutorial.exported = True
 
@@ -2048,6 +2161,11 @@ class App:
 
     def _startup(self):
         updater.cleanup_old()
+        try:
+            from . import dropfiles
+            dropfiles.enable(self.root, self._on_drop)
+        except Exception:                 # drops are a comfort, never a blocker
+            pass
         if not self.selftest and not self._carry and \
                 self.cfg.get('update_check', True):
             self.root.after(1500, self.check_updates)
@@ -2189,6 +2307,7 @@ class App:
                             f'mics={self._selftest_mics()} '
                             f'voicebank={self._selftest_voicebank()} '
                             f'mapzoom={self._selftest_mapzoom()} '
+                            f'placed={self._selftest_placed()} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2203,6 +2322,20 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+
+    def _selftest_placed(self):
+        """3.9.0: the map reader in the frozen build - terrain height and
+        passability in the middle of E1 straight from Levels.wd."""
+        import types
+        from . import placed, placewin  # noqa: F401  (frozen import check)
+        game = self.cfg.get('game_dir')
+        tiles = mods.retail_markers(game)
+        body = placed.retail_body(game, types.SimpleNamespace(
+            retail_tiles=tiles), 'E1')
+        if not body:
+            return 'notile'
+        ter = placed.lndmap.Terrain(body)
+        return f'E1/{ter.height(16384, 16384)}/{ter.passable(16384, 16384)}'
 
     @staticmethod
     def _selftest_mapzoom():
@@ -2523,11 +2656,15 @@ class App:
 
 
 class ProblemWindow:
-    """Errors and warnings; double click jumps to the node (plan 8)."""
+    """Errors and warnings; double click jumps to the node (plan 8).
+    Red tiles (a mod map without markers of the game) get a fix button
+    (3.9.0): the missing markers are put back in the project's own copy of
+    the tile (placed.py), then the export can run again."""
 
-    def __init__(self, app, title, errors, warnings=()):
+    def __init__(self, app, title, errors, warnings=(), retry=None):
         self.app = app
         self.rows = []
+        self.retry = None
         win = tk.Toplevel(app.root)
         win.title(title)
         win.transient(app.root)
@@ -2556,9 +2693,54 @@ class ProblemWindow:
         if not errors and not warnings:
             self.rows.append(None)
         self.lst.bind('<Double-Button-1>', self._go)
-        ttk.Button(f, text=t('close'), command=win.destroy
-                   ).pack(anchor='e', pady=(8, 0))
+        self.retry = retry
+        self.fill = sorted({nid[5:] for _q, _m, nid in errors
+                            if isinstance(nid, str)
+                            and nid.startswith('fill:')}, key=data._tile_key)
+        bar = ttk.Frame(f)
+        bar.pack(fill='x', pady=(8, 0))
+        ttk.Button(bar, text=t('close'), command=win.destroy
+                   ).pack(side='right')
+        if self.fill:
+            ttk.Button(bar, text=t('fill.button', tiles=', '.join(self.fill)),
+                       style='Accent.TButton', command=self._fix
+                       ).pack(side='left')
+            ttk.Label(bar, text=t('fill.hint'), style='Muted.TLabel',
+                      wraplength=380, justify='left'
+                      ).pack(side='left', padx=8)
         self.win = win
+
+    def _fix(self):
+        from . import placed, placewin
+        app = self.app
+        if not placewin.can_place(app, self.win):
+            return
+        if not messagebox.askyesno(t('fill.title'), t(
+                'fill.ask', tiles=', '.join(self.fill)), parent=self.win):
+            return
+        extra = app.project.extra
+        extra['fill_tiles'] = sorted(set(extra.get('fill_tiles') or [])
+                                     | set(self.fill), key=data._tile_key)
+        try:
+            report = placed.generate(app.project, app.modset,
+                                     app.cfg.get('game_dir'),
+                                     lambda *a: None)
+        except Exception as e:
+            messagebox.showerror(t('fill.title'), t('fill.error', err=e),
+                                 parent=self.win)
+            return
+        app.mark_dirty()
+        app.load_modset(force=True)
+        added = sum(len(report[tl]['added']) for tl in self.fill
+                    if tl in report)
+        self.win.destroy()
+        text = t('fill.done', tiles=', '.join(self.fill), n=added)
+        if self.retry and messagebox.askyesno(
+                t('fill.title'), text + NL + NL + t('fill.again'),
+                parent=app.root):
+            self.retry()
+        elif not self.retry:
+            messagebox.showinfo(t('fill.title'), text, parent=app.root)
 
     def _go(self, ev):
         sel = self.lst.curselection()

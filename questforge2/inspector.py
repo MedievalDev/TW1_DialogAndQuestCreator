@@ -714,25 +714,78 @@ class Inspector(ttk.Frame):
         """Markers the user has to place in the Two Worlds editor (quest
         taken over from the multiplayer, mpmerge.py). Ticks are saved in
         the project."""
+        from . import placewin
         open_n = sum(1 for x in todo if not x.get('done'))
         self._label(t('insp.markers.todo', n=open_n), help_key='help.mpmerge')
         ttk.Label(self.body, text=t('insp.markers.hint'),
                   style='PanelMuted.TLabel', wraplength=260, justify='left'
                   ).pack(anchor='w')
+        # 3.9.0: set them right here on the map instead of in the editor
+        ttk.Button(self.body, text=t('insp.markers.place'),
+                   style='Accent.TButton', command=lambda:
+                   placewin.place_for_quest(self.app, q)
+                   ).pack(anchor='w', pady=(4, 4))
         for item in todo:
             text = t('mp.item', name=mods.editor_name(item.get('name')),
                      num=item.get('num'), tile=item.get('tile'))
+            if item.get('placed'):
+                text += '  ' + t('mp.onmap')
             cb = self._check(text, item.get('done'),
                              lambda v, it=item: it.__setitem__('done', v))
             theme.Tooltip(cb, item.get('why') or '')
         ttk.Button(self.body, text=t('insp.markers.map'), command=lambda:
                    self.app.show_map(tile=(todo[0].get('tile') or None))
                    ).pack(anchor='w', pady=(4, 0))
+        self._editor_maps(todo)
         if q.extra.get('mp_source'):
             ttk.Label(self.body, text=t('insp.mp.source',
                                         id=q.extra['mp_source']),
                       style='PanelMuted.TLabel', wraplength=260,
                       justify='left').pack(anchor='w', pady=(4, 0))
+
+    def _editor_maps(self, todo):
+        """Below the checklist: drop zone for the tiles saved in the Two
+        Worlds editor (.lnd + physic .phx), what the project has, and the
+        LevelHeadersCacheGen reminder (editormaps.py)."""
+        from . import editormaps
+        self._label(t('insp.em.head'), help_key='help.mpmerge')
+        zone = tk.Label(self.body, text=t('insp.em.drop'), justify='left',
+                        wraplength=250, anchor='w', cursor='hand2',
+                        bg=theme.FIELD, fg=theme.MUT, padx=8, pady=8,
+                        relief='groove', bd=1)
+        zone.pack(fill='x', pady=(2, 4))
+        zone.bind('<Button-1>', lambda e: self.app.import_editor_maps())
+        theme.Tooltip(zone, t('insp.em.drop.tip',
+                              folder=editormaps.EDITOR_LEVELS))
+        need = sorted({str(x.get('tile') or '').upper() for x in todo
+                       if not x.get('done')})
+        have = editormaps.present(editormaps.levels_dir(self.app.project))
+        import time as _time
+        for tile, lnd, phx, mtime in have:
+            parts = ['.lnd' if lnd else '', '.phx' if phx else '']
+            text = t('insp.em.have', tile=tile, files=' + '.join(p for p in parts if p),
+                     when=_time.strftime('%d.%m. %H:%M', _time.localtime(mtime)))
+            style = 'PanelMuted.TLabel'
+            if lnd and not phx:
+                text += '  ' + t('insp.em.nophx')
+            ttk.Label(self.body, text=text, style=style, wraplength=260,
+                      justify='left').pack(anchor='w')
+        if need:
+            ttk.Label(self.body, text=t('insp.em.need', tiles=', '.join(need)),
+                      style='PanelMuted.TLabel', wraplength=260,
+                      justify='left').pack(anchor='w', pady=(2, 0))
+        # the game only knows new markers after the level header cache is
+        # rebuilt from what is installed (SDK, LevelHeadersCacheGen.bat)
+        tk.Label(self.body, text=t('insp.em.lhc'), bg=theme.PANEL,
+                 fg=theme.GOLD, wraplength=260, justify='left', anchor='w'
+                 ).pack(anchor='w', pady=(6, 0))
+        ttk.Button(self.body, text=t('insp.em.lhc.run'),
+                   command=self.app.run_lhc).pack(anchor='w', pady=(2, 0))
+        try:
+            from . import dropfiles
+            self.body.after_idle(lambda: dropfiles.refresh(self.app.root))
+        except Exception:
+            pass
 
     def _map_pick(self, values, mkind, widget, setter, nid):
         """Open the map filtered on the marker kind the field reads; the

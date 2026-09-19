@@ -738,7 +738,34 @@ def dependency_entries(deps, log=print):
             out[inner] = tw1_wd.Entry(inner, body, flags, res or b'',
                                       class_id or 0, guid or b'')
         log(('lnd', inner, d['mod']))
+        # the physics of the same tile (Levels\physic\Map_<cell>.phx): a tile
+        # changed in the editor comes with its own collision; the retail one
+        # would not match the new ground. Stored uncompressed like retail.
+        phx = _phx_inner(inner)
+        if os.path.isfile(path):
+            ent = next((e for e in wd_directory(path) if e.path.lower()
+                        == phx.lower()), None)
+            if ent is not None:
+                out[ent.path] = tw1_wd.Entry(ent.path, wd_data(path, ent),
+                                             ent.flags, ent.res or b'',
+                                             ent.class_id or 0,
+                                             ent.guid or b'')
+                log(('lnd', ent.path, d['mod']))
+        else:
+            full = os.path.join(path, *phx.split(BS))
+            if os.path.isfile(full):
+                with open(full, 'rb') as f:
+                    flags, res, class_id, guid, body = file_entry(f.read())
+                out[phx] = tw1_wd.Entry(phx, body, flags or 0x00, res or b'',
+                                        class_id or 0, guid or b'')
+                log(('lnd', phx, d['mod']))
     return out
+
+
+def _phx_inner(lnd_inner):
+    """Levels\\Map_E01.lnd -> Levels\\physic\\Map_E01.phx"""
+    head, name = lnd_inner.rsplit(BS, 1)
+    return f'{head}{BS}physic{BS}{os.path.splitext(name)[0]}.phx'
 
 
 # ---------------------------------------------------------------------------

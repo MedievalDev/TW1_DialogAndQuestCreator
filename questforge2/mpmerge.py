@@ -297,6 +297,7 @@ class MpMergeWindow:
         self.src = None            # quest built from the game
         self.step = 0
         self.rows = []             # per marker line: (ref, tile var, num var)
+        self.placements = {}       # (name, tile, num) -> set on the map
         game = app.cfg.get('game_dir')
         self.retail_tiles = (app.modset.retail_tiles if app.modset
                              else mods.retail_markers(game))
@@ -584,6 +585,12 @@ class MpMergeWindow:
     # -- page 3: checklist -----------------------------------------------------
 
     def _build_page3(self, f):
+        bar = ttk.Frame(f)
+        bar.pack(fill='x', pady=(0, 6))
+        ttk.Button(bar, text=t('mp.place'), style='Accent.TButton',
+                   command=self.place).pack(side='left')
+        ttk.Label(bar, text=t('mp.place.hint'), style='Muted.TLabel',
+                  wraplength=560, justify='left').pack(side='left', padx=8)
         self.summary = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=18)
         self.summary.pack(fill='both', expand=True)
         for tag, colour in (('head', theme.GOLD), ('ok', theme.OK),
@@ -664,11 +671,58 @@ class MpMergeWindow:
         for x in items:
             line = t('mp.item', name=mods.editor_name(x['name']), num=x['num'],
                    tile=x['tile'])
-            s.insert('end', ('  [x] ' if x['exists'] else '  [ ] ') + line
-                     + NL, 'ok' if x['exists'] else None)
+            on_map = (x['name'], x['tile'], x['num']) in self.placements
+            if on_map:
+                line += '   ' + t('mp.onmap')
+            s.insert('end', ('  [x] ' if x['exists'] or on_map else '  [ ] ')
+                     + line + NL, 'ok' if x['exists'] or on_map else None)
             s.insert('end', '        ' + x['why'] + NL, 'mut')
         s.insert('end', NL + t('mp.sum.after') + NL, 'mut')
         s.configure(state='disabled')
+
+    def place(self):
+        """Set the open markers on the map (placewin.py); the tiles and
+        numbers chosen there go back into the lines of page 2."""
+        from . import placewin
+        if not placewin.can_place(self.app, self.win):
+            return
+        targets = []
+        for x in self.items:
+            key = (x['name'], x['tile'], x['num'])
+            if x['exists'] and key not in self.placements:
+                continue
+            giver = x['name'] == GIVER_MARKER
+            targets.append({'key': key, 'name': x['name'], 'label': x['why'],
+                            'num': x['num'] if giver else None,
+                            'tile': x['tile'], 'orig': None,
+                            '_prev': {'tile': x['tile'], 'num': x['num']},
+                            'placed': self.placements.get(key)})
+        if targets:
+            placewin.PlaceWindow(self.app, targets, self._placed)
+
+    def _placed(self, targets):
+        for tg in targets:
+            old = tg['key']
+            self.placements.pop(old, None)
+            p = tg.get('placed')
+            if p is None:
+                continue
+            new = (tg['name'], p['tile'], int(p['num']))
+            self.placements[new] = p
+            if tg['name'] == GIVER_MARKER:
+                self.tile.set(p['tile'])
+                self._last_tile = p['tile']
+                continue
+            for ref, tv, nv in self.rows:
+                if (ref['name'], tv.get().strip().upper(),
+                        int(nv.get() or 0)) == old:
+                    tv.set(p['tile'])
+                    nv.set(str(p['num']))
+        settings = self._settings()
+        if settings is not None:
+            self.settings = settings
+            self._fill_page3(settings)
+        self.win.lift()
 
     # -- flow ------------------------------------------------------------------
 
@@ -716,6 +770,11 @@ class MpMergeWindow:
                     tiles, numbers, group)
         app.project.quests.append(new)
         app.mark_dirty()
+        if self.placements:
+            from . import placewin
+            targets = [{'key': key, 'name': key[0], 'placed': p, 'orig': None}
+                       for key, p in self.placements.items()]
+            placewin._report(app, placewin.commit(app, new, targets))
         app.open_quest(new)
         open_items = [x for x in new.extra['markers_todo'] if not x['done']]
         app.set_info(t('mp.done', old=self.src.id, new=new_id,

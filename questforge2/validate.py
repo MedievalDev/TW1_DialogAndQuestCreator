@@ -550,7 +550,8 @@ def validate_mods(quest, project, modset, t=None, deps=None):
         nums = ', '.join(str(n) for _q, _k, n in uses)
         if d['status'] == 'missing':
             errors.append((t('val.mod.redtile', tile=d['tile'], mod=d['mod'],
-                             n=len(d['missing']), markers=nums), None))
+                             n=len(d['missing']), markers=nums),
+                           'fill:' + d['tile']))   # the fix button's target
         elif d['status'] == 'conflict':
             errors.append((t('val.mod.conflict', tile=d['tile'],
                              mods=', '.join(d['providers']), markers=nums),
