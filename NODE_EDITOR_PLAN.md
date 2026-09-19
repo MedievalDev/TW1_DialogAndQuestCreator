@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1897,6 +1897,20 @@ Offen:
       legt zurueck, 25 Eintraege scrollen, 900x560 zeigt die Knoepfe,
       Karte E1 enthaelt danach Objekt 4 und Gegner 502, Wiederoeffnen
       zeigt beide.
+
+86. Ablegen aus dem Explorer stuerzte ab (Version 4.1.1, gemessen
+    2026-09-19 am WD Packer). Anlass: Ein echter Maus-Drop beendete den WD
+    Packer wortlos, ohne Eintrag im Ereignisprotokoll; dasselbe
+    `dropfiles.py` steckt hier. Ursache: die eigene Fensterprozedur rief
+    `root.after` auf, waehrend Windows die Drop-Nachricht zustellte. Ein
+    simulierter `WM_DROPFILES` trifft das nie, weil er aus dem Tk-Thread
+    kommt - deshalb galt der Weg als getestet.
+    - Die Prozedur sammelt die Pfade nur noch in `st['inbox']`, Tk leert
+      die Liste alle `POLL_MS` (120 ms) aus dem eigenen Event-Loop.
+    - Fehlt die alte Prozedur zu einem HWND, geht die Nachricht an
+      `DefWindowProcW` statt in einen KeyError; kein Fehler verlaesst die
+      Prozedur mehr. `QF2_DROPLOG` schreibt bei Bedarf mit.
+    - Bestaetigt von Marco am 19.09.2026 mit dem WD Packer 1.0.2.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

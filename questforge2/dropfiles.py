@@ -9,16 +9,38 @@ registers windows that appeared since; every HWND only once.
 Measured on the Mod Manager: registering a window twice freed the first
 callback while the window still pointed at it (0xc000001d in the old
 procedure). Callbacks are therefore kept for the life of the process.
+
+A window procedure runs inside Windows' own message handling, so it does no
+Tk call at all: it only puts the paths into an inbox, and Tk empties that
+inbox from its own event loop (``POLL_MS``). Calling Tk from inside the
+procedure ended the process without a word on a real drop from Explorer
+(19.09.2026); the simulated message never hit it because it came from the
+Tk thread itself.
 """
 
 import ctypes
+import os
 import sys
+import time
 from ctypes import wintypes
 
 WM_DROPFILES = 0x0233
 GWLP_WNDPROC = -4
+POLL_MS = 120                   # how often Tk looks into the inbox
 _KEEP = []                      # every callback ever handed to Windows
-_state = {}                     # id(root) -> {'hwnds': set, 'olds': {}, 'cb'}
+_state = {}                     # id(root) -> {'hwnds', 'olds', 'mine', 'cb', 'inbox'}
+LOG = os.environ.get('QF2_DROPLOG')
+
+
+def log(text):
+    """Only when QF2_DROPLOG names a file - for tracking a drop down."""
+    if not LOG:
+        return
+    try:
+        with open(LOG, 'a', encoding='utf-8') as f:
+            f.write(f'{time.strftime("%H:%M:%S")} {text}' + chr(10))
+    except OSError:
+        pass
 
 if sys.platform == 'win32':
     _WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT,
@@ -38,6 +60,9 @@ if sys.platform == 'win32':
                                         wintypes.UINT)
     _shell32.DragAcceptFiles.argtypes = (wintypes.HWND, wintypes.BOOL)
     _shell32.DragFinish.argtypes = (wintypes.HANDLE,)
+    _user32.DefWindowProcW.restype = ctypes.c_ssize_t
+    _user32.DefWindowProcW.argtypes = (wintypes.HWND, wintypes.UINT,
+                                       wintypes.WPARAM, wintypes.LPARAM)
 
 
 def _files(hdrop):
@@ -65,11 +90,15 @@ def _register(root, st, hwnd):
             try:
                 files = _files(wp)
                 _shell32.DragFinish(wp)
-                root.after(0, st['cb'], files)
-            except Exception:
-                pass
+                st['inbox'].append(files)     # no Tk call inside a window procedure
+                log(f'drop {len(files)} path(s) on {h}')
+            except Exception as e:            # an error must not leave the procedure
+                log(f'drop failed: {type(e).__name__}: {e}')
             return 0
-        return _user32.CallWindowProcW(olds[h], h, msg, wp, lp)
+        old = olds.get(h)
+        if old is None:                       # not ours (any more)
+            return _user32.DefWindowProcW(h, msg, wp, lp)
+        return _user32.CallWindowProcW(old, h, msg, wp, lp)
     cb = _WNDPROC(proc)
     _KEEP.append(cb)
     _shell32.DragAcceptFiles(hwnd, True)
@@ -102,12 +131,32 @@ def refresh(root):
     return len(st['hwnds'])
 
 
+def _pump(root, st):
+    """Tk's own event loop: hand over what the window procedures collected."""
+    while st['inbox']:
+        files = st['inbox'].pop(0)
+        try:
+            st['cb'](files)
+        except Exception as e:
+            log(f'callback failed: {type(e).__name__}: {e}')
+            raise
+    try:
+        root.after(POLL_MS, _pump, root, st)
+    except Exception:
+        pass                     # window gone
+
+
 def enable(root, callback):
     """Drops anywhere on ``root`` call ``callback(paths)`` on the Tk thread.
     Calling it again only changes the callback."""
     if sys.platform != 'win32':
         return 0
+    first = id(root) not in _state
     st = _state.setdefault(id(root), {'hwnds': set(), 'olds': {}, 'mine': {},
-                                   'cb': callback})
+                                      'cb': callback, 'inbox': []})
     st['cb'] = callback
-    return refresh(root)
+    n = refresh(root)
+    if first:
+        root.after(POLL_MS, _pump, root, st)
+    log(f'enable: {n} window(s) accept drops')
+    return n
