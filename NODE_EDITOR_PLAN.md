@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1653,6 +1653,28 @@ Offen:
       die Zahl, Fix-Knopf traegt ein und fragt nach Export.
     - Offen: Spieltest (so gesetzter Q_Giver muss den NPC erscheinen
       lassen; LevelHeadersCacheGen nach dem Export).
+77. Level-Header-Cache automatisch nach dem Export (Version 3.9.1, Marco
+    2026-09-19: "kann LevelHeadersCacheGen.bat nicht automatisch nach dem
+    export laufen").
+    - Die bat ist ein Aufruf `MeshParamsGen.exe "<Spiel>/>"
+      -levelheaderscache "Levels\Map_*.lnd" "Levels\Map_LevelHeaders.lhc"`
+      mit fest eingetragenen Pfaden und `pause`. Das Tool ruft die exe
+      selbst mit seinem Spielpfad auf (`editormaps.find_lhc_exe`,
+      `build_lhc`), ohne Konsolenfenster.
+    - Gemessen: 0,6 s, Rueckgabe 0, "Finished: 160 levels added", Datei
+      byte-gleich zur vorhandenen. Aufbau .lhc: `LC`, Anzahl, je Karte Pfad
+      + Kopf des Kartenkoerpers bis Ende Markerblock. 10 Kacheln weichen
+      mit installierter Kira-Kampagne von Levels.wd ab (F1 303 statt 82
+      Marker): die exe liest die Mod-Archive mit, lose Karten sind nicht
+      noetig.
+    - Erfolg = Rueckgabe 0 + Finished-Zeile + frisch geschriebene Datei.
+      Laeuft im Export-Thread nach `export_mod`, nur bei Projekten mit
+      Kacheln im Levels-Ordner, nicht bei "Dateien exportieren";
+      Ergebnis im Export-Fenster (Fehler rot). Schalter `lhc_auto` unter
+      Einstellungen. Knopf im Quest-Panel nutzt denselben Weg, die bat nur
+      noch, wenn die exe fehlt. Tests in `test_editormaps.py` (3).
+    - Idee fuer spaeter: die .lhc ohne SDK selbst schreiben (Format ist
+      gemessen), fuer Nutzer ohne SDK.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

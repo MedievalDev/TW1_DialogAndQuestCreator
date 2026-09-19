@@ -118,5 +118,83 @@ class Real(unittest.TestCase):
         self.assertTrue(body)
 
 
+class LevelHeaderCache(unittest.TestCase):
+    """3.9.1: MeshParamsGen.exe called by the tool after the export."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix='qf2lhc_')
+        self.game = os.path.join(self.tmp, 'Two Worlds')
+        os.makedirs(os.path.join(self.game, 'Levels'))
+        self.tools = os.path.join(self.tmp, 'SDK', 'Tools')
+        os.makedirs(self.tools)
+        self.exe = os.path.join(self.tools, editormaps.LHC_EXE)
+        open(self.exe, 'wb').close()
+        self.run = editormaps.subprocess.run
+
+    def tearDown(self):
+        editormaps.subprocess.run = self.run
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_find(self):
+        bat = os.path.join(self.tools, editormaps.LHC_BAT)
+        open(bat, 'wb').close()
+        self.assertEqual(editormaps.find_lhc_exe({'lhc_bat': bat}), self.exe)
+        self.assertEqual(editormaps.find_lhc_exe({'lhc_bat': self.exe}),
+                         self.exe)
+        self.assertEqual(editormaps.find_lhc_exe(
+            {'sdk_dir': os.path.dirname(self.tools)}), self.exe)
+        os.remove(self.exe)
+        guesses, editormaps.LHC_GUESSES = editormaps.LHC_GUESSES, ()
+        try:
+            self.assertIsNone(editormaps.find_lhc_exe({'lhc_bat': bat}))
+        finally:
+            editormaps.LHC_GUESSES = guesses
+
+    def _fake(self, code, text, write=True):
+        calls = []
+
+        def run(args, **kw):
+            calls.append((args, kw))
+            if write:
+                with open(os.path.join(self.game, editormaps.LHC_FILE),
+                          'wb') as f:
+                    f.write(b'LC')
+            return type('R', (), {'returncode': code,
+                                  'stdout': text.encode()})()
+        editormaps.subprocess.run = run
+        return calls
+
+    def test_build(self):
+        nl = chr(13) + chr(10)
+        good = ('Levels' + BS + 'Map_A01.lnd' + nl + nl + 'Finished:' + nl
+                + '  160 levels added to cache file x' + nl)
+        calls = self._fake(0, good)
+        ok, n, text = editormaps.build_lhc(self.exe, self.game + BS)
+        self.assertEqual((ok, n), (True, 160))
+        self.assertNotIn('Map_A01', text)
+        args, kw = calls[0]
+        self.assertEqual(args, [self.exe, self.game + '/>',
+                                '-levelheaderscache',
+                                'Levels' + BS + 'Map_*.lnd',
+                                'Levels' + BS + 'Map_LevelHeaders.lhc'])
+        self.assertEqual(kw['cwd'], self.tools)
+
+    def test_build_fails(self):
+        self._fake(1, 'Finished: 160 levels added')
+        self.assertFalse(editormaps.build_lhc(self.exe, self.game)[0])
+        self._fake(0, 'cannot open archive')
+        ok, n, text = editormaps.build_lhc(self.exe, self.game)
+        self.assertEqual((ok, n, text), (False, None, 'cannot open archive'))
+        os.remove(os.path.join(self.game, editormaps.LHC_FILE))
+        self._fake(0, '160 levels added', write=False)    # nothing written
+        self.assertFalse(editormaps.build_lhc(self.exe, self.game)[0])
+
+        def boom(args, **kw):
+            raise OSError('not a program')
+        editormaps.subprocess.run = boom
+        self.assertEqual(editormaps.build_lhc(self.exe, self.game),
+                         (False, None, 'not a program'))
+
+
 if __name__ == '__main__':
     unittest.main()

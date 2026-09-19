@@ -220,6 +220,12 @@ Editor-Kachel, die vorher nach `<Projekt>_levels_base` gesichert wird; die
 Spielmarker, die der Kopie fehlen, kommen mit hinein) und liest die Mods neu.
 Danach wie unten: exportieren, dann LevelHeadersCacheGen.
 
+**Ab 3.9.1 baut der Export den Level-Header-Cache selbst neu**, wenn das
+Projekt Kartenkacheln hat und das SDK gefunden wird (`MeshParamsGen.exe`
+im SDK-Ordner `Tools`, das Tool ruft es mit deinem Spielpfad auf; dauert
+unter einer Sekunde, das Ergebnis steht im Export-Fenster). Abschaltbar unter
+Datei > Einstellungen. Ohne SDK oder von Hand gilt:
+
 **Vor dem naechsten Spielstart** erst exportieren, dann
 `LevelHeadersCacheGen.bat` aus dem SDK (`Tools`) ausfuehren, Knopf im
 Quest-Panel. Der Level-Header-Cache traegt die Marker jeder Karte; ohne
@@ -303,6 +309,12 @@ of the foreign mod map the project uses for that tile, or of your editor
 tile, which is kept in `<project>_levels_base` first; game markers the copy
 lacks go in as well) and reads the mods again. Then as below: export, then
 LevelHeadersCacheGen.
+
+**From 3.9.1 the export rebuilds the level header cache itself** when the
+project has map tiles and the SDK is found (`MeshParamsGen.exe` in the SDK
+folder `Tools`, called with your game path; takes under a second, the
+result shows in the export window). Switch it off under File > Settings.
+Without the SDK or by hand:
 
 **Before the next game start** export first, then run
 `LevelHeadersCacheGen.bat` from the SDK (`Tools`), button in the quest panel.

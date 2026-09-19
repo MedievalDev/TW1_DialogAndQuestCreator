@@ -26,6 +26,17 @@ The game keeps a cache of all level headers with their markers,
 ``Levels\\Map_LevelHeaders.lhc``. The SDK's ``LevelHeadersCacheGen.bat``
 rebuilds it from what is installed; without a fresh one the game does not
 know the new markers. It has to run after the export, before the next start.
+
+3.9.1: the tool runs it itself after the export. The batch is one call,
+``MeshParamsGen.exe "<game>/>" -levelheaderscache "Levels\\Map_*.lnd"
+"Levels\\Map_LevelHeaders.lhc"``, with the paths of the SDK owner's machine
+typed in and a ``pause`` at the end, so the tool calls the exe with its own
+game path. Measured 2026-09-19: 0.6 s, exit code 0, prints every map and
+"Finished: 160 levels added to cache file", writes
+``<game>\\Levels\\Map_LevelHeaders.lhc``; the file holds, per map, the path
+and the head of the map body up to the end of the marker block, and it has
+the maps of the mod archives in it (10 tiles differ from Levels.wd with
+the Kira campaign installed), so the exe reads the WD files too.
 """
 
 import os
@@ -187,6 +198,56 @@ def find_lhc_bat(cfg):
         if os.path.isfile(c):
             return c
     return None
+
+
+LHC_EXE = 'MeshParamsGen.exe'
+LHC_FILE = os.path.join('Levels', 'Map_LevelHeaders.lhc')
+
+
+def find_lhc_exe(cfg):
+    """MeshParamsGen.exe of the SDK (next to the batch) or None."""
+    p = (cfg or {}).get('lhc_bat')
+    if p and os.path.basename(p).lower() == LHC_EXE.lower() \
+            and os.path.isfile(p):
+        return p
+    bat = find_lhc_bat(cfg)
+    folders = [os.path.dirname(bat)] if bat else []
+    if p:
+        folders.append(os.path.dirname(p))
+    sdk = (cfg or {}).get('sdk_dir')
+    folders += ([os.path.join(sdk, 'Tools'), sdk] if sdk else [])
+    folders += list(LHC_GUESSES)
+    for d in folders:
+        c = os.path.join(d, LHC_EXE)
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def build_lhc(exe, game_dir, timeout=300):
+    """Rebuild the level header cache of ``game_dir``. Returns (ok, number
+    of maps or None, text): ok means exit code 0, the "Finished" line and a
+    cache file written just now."""
+    import time
+    target = os.path.join(game_dir, LHC_FILE)
+    before = time.time() - 2
+    try:
+        r = subprocess.run(
+            [exe, game_dir.rstrip('/' + BS) + '/>', '-levelheaderscache',
+             'Levels' + BS + 'Map_*.lnd', 'Levels' + BS + 'Map_LevelHeaders.lhc'],
+            cwd=os.path.dirname(exe), capture_output=True, timeout=timeout,
+            stdin=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, None, str(e)
+    out = (r.stdout or b'').decode('mbcs', 'replace') if os.name == 'nt' \
+        else (r.stdout or b'').decode('latin-1')
+    m = re.search(r'(\d+) levels added', out)
+    fresh = os.path.isfile(target) and os.path.getmtime(target) >= before
+    ok = r.returncode == 0 and m is not None and fresh
+    tail = [ln for ln in out.replace(chr(13), '').split(chr(10))
+            if ln.strip() and not ln.startswith('Levels' + BS)]
+    return ok, (int(m.group(1)) if m else None), chr(10).join(tail[-4:])
 
 
 def run_lhc_bat(path):

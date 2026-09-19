@@ -889,15 +889,17 @@ class App:
                             + NL + NL + t('em.lhc'), parent=self.root)
 
     def run_lhc(self):
-        """Start the SDK's LevelHeadersCacheGen.bat (asks for it once)."""
+        """Rebuild the level header cache with the SDK's MeshParamsGen.exe
+        (asks for the SDK once); only the batch there: start that."""
         from . import editormaps
-        path = editormaps.find_lhc_bat(self.cfg)
+        path = editormaps.find_lhc_exe(self.cfg) or             editormaps.find_lhc_bat(self.cfg)
         if not path:
             messagebox.showinfo(t('em.title'), t('em.lhc.where'),
                                 parent=self.root)
             path = filedialog.askopenfilename(
                 title=t('em.lhc.pick'), parent=self.root,
-                filetypes=[('LevelHeadersCacheGen.bat', '*.bat')])
+                filetypes=[('LevelHeadersCacheGen.bat, MeshParamsGen.exe',
+                            '*.bat *.exe')])
             if not path:
                 return
             self.cfg.set('lhc_bat', path)
@@ -906,7 +908,26 @@ class App:
             messagebox.showwarning(t('em.title'), t('em.lhc.running'),
                                    parent=self.root)
             return
-        try:
+        exe = editormaps.find_lhc_exe(self.cfg)
+        if exe:
+            self.root.configure(cursor='watch')
+            self.root.update_idletasks()
+            try:
+                ok, n, text = editormaps.build_lhc(exe,
+                                                   self.cfg.get('game_dir'))
+            finally:
+                self.root.configure(cursor='')
+            if ok:
+                self.set_info(t('em.lhc.built', n=n), 'StatusOk.TLabel')
+                messagebox.showinfo(t('em.title'), t('em.lhc.built', n=n)
+                                    + NL + NL + t('em.lhc.note'),
+                                    parent=self.root)
+            else:
+                messagebox.showerror(t('em.title'), t('em.lhc.failed',
+                                                      err=text or '-'),
+                                     parent=self.root)
+            return
+        try:                      # only the batch is there: its own window
             editormaps.run_lhc_bat(path)
         except OSError as e:
             messagebox.showerror(t('em.title'), t('em.error', err=e),
@@ -1636,6 +1657,14 @@ class App:
         win = ExportWindow(self)
         result = {}
         logq = queue.Queue()
+        # 3.9.1: projects with map tiles get the level header cache rebuilt
+        # right after the export (the game does not know new markers
+        # without it)
+        from . import editormaps
+        has_maps = bool(editormaps.present(editormaps.levels_dir(p)))
+        lhc_exe = (editormaps.find_lhc_exe(self.cfg)
+                   if has_maps and not target
+                   and self.cfg.get('lhc_auto', True) else None)
 
         def work():
             try:
@@ -1643,6 +1672,10 @@ class App:
                 result['res'] = export.export_mod(
                     p, game, data.base_dir(), self.index, logq.put,
                     files_only=target, entries=entries)
+                if lhc_exe:
+                    logq.put('')
+                    logq.put(t('em.lhc.auto.run'))
+                    result['lhc'] = editormaps.build_lhc(lhc_exe, game)
             except Exception as e:          # shown in the log window
                 result['err'] = e
 
@@ -1660,11 +1693,17 @@ class App:
             elif target:
                 win.finish(t('export.done.files', path=target))
             else:
-                from . import editormaps
-                extra = ('\n\n' + t('em.lhc')) if editormaps.present(
-                    editormaps.levels_dir(p)) else ''
+                extra, good = '', True
+                if 'lhc' in result:
+                    ok, n, text = result['lhc']
+                    good = ok
+                    extra = NL + NL + (
+                        t('em.lhc.built', n=n) + NL + t('em.lhc.note') if ok
+                        else t('em.lhc.failed', err=text or '-'))
+                elif has_maps:
+                    extra = NL + NL + t('em.lhc')
                 win.finish(t('export.done', path=result['res']['archive'])
-                           + '\n\n' + t('export.next') + extra)
+                           + NL + NL + t('export.next') + extra, ok=good)
             if 'err' not in result and self.coach.tutorial.quest in p.quests:
                 self.coach.tutorial.exported = True
 
@@ -3402,7 +3441,7 @@ class SettingsWindow:
         self.win = tk.Toplevel(app.root)
         self.win.title(t('settings.title'))
         self.win.transient(app.root)
-        self.win.geometry('600x470')
+        self.win.geometry('600x560')
         theme.dark_titlebar(self.win)
         self.win.protocol('WM_DELETE_WINDOW', self.close)
         self.win.bind('<Escape>', lambda e: self.close())
@@ -3448,6 +3487,16 @@ class SettingsWindow:
         ttk.Button(f, text=t('update.menu'),
                    command=lambda: app.check_updates(manual=True)
                    ).pack(anchor='w', pady=(4, 0))
+        # -- export -----------------------------------------------------------
+        ttk.Label(f, text=t('settings.export'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(14, 2))
+        self.lhc = tk.BooleanVar(value=bool(app.cfg.get('lhc_auto', True)))
+        ttk.Checkbutton(f, text=t('settings.lhc'), variable=self.lhc,
+                        command=self._save_lhc).pack(anchor='w')
+        from . import editormaps
+        ttk.Label(f, text=t('settings.lhc.exe', path=editormaps.find_lhc_exe(
+            app.cfg) or t('settings.lhc.none')), style='Muted.TLabel',
+            wraplength=480, justify='left').pack(anchor='w')
         # -- game -------------------------------------------------------------
         ttk.Label(f, text=t('settings.game'), style='Brand.TLabel'
                   ).pack(anchor='w', pady=(14, 2))
@@ -3468,6 +3517,10 @@ class SettingsWindow:
     def _save_mic(self):
         v = self.mic.get()
         self.app.cfg.set('voice_device', v if v in self.names else None)
+        self.app.cfg.save()
+
+    def _save_lhc(self):
+        self.app.cfg.set('lhc_auto', bool(self.lhc.get()))
         self.app.cfg.save()
 
     def _save_updates(self):
