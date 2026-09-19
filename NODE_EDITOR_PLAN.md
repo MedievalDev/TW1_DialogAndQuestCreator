@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1708,6 +1708,52 @@ Offen:
     gescheitert. Selbst geschriebene Marker (8 Nullbytes = leerer Text + 0)
     bleiben gueltig. `MOD_FORMAT` 2, damit alte Scans verfallen. Tests
     `MarkerText` in `test_placed.py` (3).
+80. Community-Tests, Bug-Meldungen, bekannte Probleme (Version 4.0.0, Marco
+    2026-09-19: Testfenster fuer Ungetestetes, Knopf "Ich teste das" bei den
+    Neuigkeiten, genaue Anweisungen, Ergebnis mit Protokoll auf den Server,
+    bestandene Tests uebernimmt das Tool von dort; Fehlermeldungen verweisen
+    auf die Guide-Stelle; "Bug melden"; Spiel aus dem Testbereich starten,
+    damit ein Protokoll mitgeht).
+    - Server: `https://alchemy-fox.de/game/_feedback/` nach
+      `Desktop\FEEDBACK_ENDPUNKT_SPEZIFIKATION.md` (vom Webseiten-Chat gebaut
+      und abgenommen). `submit` und `summary.json` ohne Schluessel - in der
+      Exe steckt keiner -, `admin/*` mit dem Seiten-Schluessel.
+    - `foxfeedback.py` (Repo-Wurzel, nur Standardbibliothek, fuer alle
+      Python-Tools): `scrub` (Benutzername -> `<user>`), `clip` (Ende
+      bleibt), `fingerprint` (gleicher Bug = gleiche 40 Hex), Payloads,
+      `preview`, `submit`, `fetch_summary`, `SessionLog`. Test-Payloads
+      tragen keine Bug-Felder und umgekehrt (der Server lehnt das ab).
+    - `untested.json`: Tests mit id, since, Titel, Warum, Schritten, Soll in
+      DE/EN; die ids muessen auf dem Server angelegt sein (`fbadmin.py
+      sync-tests`). Erste fuenf: placed-giver-ingame,
+      placed-object-enemy-ingame, red-tile-fix, lhc-without-sdk,
+      lhc-auto-after-export.
+    - `feedbackwin.py`: `Feedback` am App-Objekt (Sitzungsprotokoll aus
+      `set_info`, Problemfenster, Export; zufaellige `client_id` in der
+      Konfiguration; Zusammenfassung im Thread beim Start). `TestWindow`
+      (Hilfe > Ungetestetes testen), `BugWindow`, `IssuesWindow` (Hilfe >
+      Bekannte Probleme), `WhatsNewWindow` (erster Start einer neuen
+      Version mit Ungetestetem: "Ich teste das"); das Update-Fenster nennt
+      die Zahl ungetesteter Neuerungen der neuen Version. Vor jedem Senden
+      zeigt ein Fenster genau, was gesendet wird.
+    - Uebernahme vom Server: Status `confirmed` nimmt den Test aus der Liste
+      und das Etikett "experimentell" weg (`Feedback.experimental('lhc')`),
+      ohne neues Release.
+    - `gamesession.py`: "Spiel starten" im Testfenster. Vorher: eingeschaltete
+      Mods, Cache (Anzahl, passt zum Installierten?, Sieger je Projektkachel,
+      gesetzte Marker im Cache?), Inhalt des Projektarchivs. Danach:
+      Laufzeit, Rueckgabewert, neue Spielstaende, neue Absturzberichte, neue
+      Zeilen aus .log-Dateien im Spielordner. Wartet per Prozessliste, weil
+      ein Starter sofort enden kann.
+    - Fehlermeldungen: `validate.Msg` merkt sich den Textschluessel,
+      `GUIDE_REFS`/`guide_ref` ordnen ihm ein Guide-Kapitel zu; das
+      Problemfenster hat "Im Guide nachlesen" und "Bug melden", das
+      Export-Fenster bei Fehlschlag "Bug melden". Oeffentlicher Bug-Titel =
+      Schluessel + englische Textvorlage, ohne Projektdaten.
+    - Tests `test_feedback.py` (16) gegen einen Server auf localhost.
+    - Nebenfund: `Yamalin.wd` traegt eine `Levels\Map_LevelHeaders.lhc` IM
+      Archiv. Ob das Spiel die nimmt und wer gegen die lose Datei gewinnt,
+      ist ungemessen.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

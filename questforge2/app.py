@@ -41,6 +41,8 @@ class App:
         self.restart = None            # state handed to the next window
         self._carry = carry
         self.cfg = data.Config()
+        from .feedbackwin import Feedback
+        self.feedback = Feedback(self)    # session log, tests, known issues
         set_lang(self.cfg.get('lang') or detect_lang())
         self.index = None
         self.project = None
@@ -353,6 +355,15 @@ class App:
         for key, url in LINKS:
             m.add_command(label=f'{t(key)}  ({url})',
                           command=lambda u=url: webbrowser.open(u))
+        m.add_separator()
+        from . import feedbackwin
+        n = len(self.feedback.untested())
+        m.add_command(label=t('test.menu') + (f'  ({n})' if n else ''),
+                      command=lambda: feedbackwin.TestWindow.show(self))
+        m.add_command(label=t('issues.menu'),
+                      command=lambda: feedbackwin.IssuesWindow(self))
+        m.add_command(label=t('bug.button'),
+                      command=lambda: feedbackwin.BugWindow(self))
         m.add_separator()
         m.add_command(label=t('update.menu'),
                       command=lambda: self.check_updates(manual=True))
@@ -888,6 +899,11 @@ class App:
                                               ticked=ticked, open=open_n)
                             + NL + NL + t('em.lhc'), parent=self.root)
 
+    def _lhc_how(self, res):
+        if res['how'] == 'tool' and not self.feedback.experimental('lhc'):
+            return t('em.lhc.how.tool.ok')
+        return t('em.lhc.how.' + res['how'])
+
     def run_lhc(self):
         """Rebuild the level header cache: with the SDK's MeshParamsGen.exe
         when it is there, else the tool writes the file itself (3.9.2,
@@ -909,8 +925,7 @@ class App:
         finally:
             self.root.configure(cursor='')
         if res['ok']:
-            text = t('em.lhc.built', n=res['n']) + ' ' + t('em.lhc.how.'
-                                                           + res['how'])
+            text = t('em.lhc.built', n=res['n']) + ' ' + self._lhc_how(res)
             self.set_info(text, 'StatusOk.TLabel')
             messagebox.showinfo(t('em.title'), text + NL + NL
                                 + t('em.lhc.note'), parent=self.root)
@@ -1685,7 +1700,7 @@ class App:
                     good = res['ok']
                     extra = NL + NL + (
                         t('em.lhc.built', n=res['n']) + ' '
-                        + t('em.lhc.how.' + res['how']) + NL
+                        + self._lhc_how(res) + NL
                         + t('em.lhc.note') if good
                         else t('em.lhc.failed', err=res['text'] or '-'))
                     # a map of ours that another source beats never reaches
@@ -2112,6 +2127,9 @@ class App:
 
     def set_info(self, text, style='Status.TLabel'):
         self.status['info'].configure(text=text, style=style)
+        if text:
+            self.feedback.log.add(('ERROR ' if 'Err' in style else '')
+                                  + str(text))
 
     def set_hint(self, text):
         self.status['hint'].configure(text=text[:140])
@@ -2345,6 +2363,8 @@ class App:
                             f'mapzoom={self._selftest_mapzoom()} '
                             f'placed={self._selftest_placed()} '
                             f'lhc={self._selftest_lhc()} '
+                            f'feedback={len(self.feedback.tests)}tests/'
+                            f'{"server" if __import__("foxfeedback").fetch_summary("questcreator", VERSION) else "offline"} '
                             f'frozen={getattr(sys, "frozen", False)}\n')
                     deep = os.environ.get('QF2_SELFTEST_EXPORT')
                     if deep:
@@ -2359,6 +2379,12 @@ class App:
                                                           False):
             self._tour_done = True
             self.root.after(300, lambda: self.coach.start('tour'))
+            self.feedback.refresh()
+        else:
+            # tests the community confirmed are taken over from the server;
+            # a new version with untested news asks for testers once
+            from .feedbackwin import WhatsNewWindow
+            self.feedback.refresh(lambda: WhatsNewWindow.maybe(self))
 
     def _selftest_lhc(self):
         """3.9.2: the tool's own level header cache against the file in
@@ -2751,6 +2777,16 @@ class ProblemWindow:
         bar.pack(fill='x', pady=(8, 0))
         ttk.Button(bar, text=t('close'), command=win.destroy
                    ).pack(side='right')
+        ttk.Button(bar, text=t('bug.button'), command=self._bug
+                   ).pack(side='right', padx=6)
+        ttk.Button(bar, text=t('problem.guide'), command=self._guide
+                   ).pack(side='right')
+        self.msgs = []                    # parallel to the list lines
+        for items in (errors, warnings):
+            if items:
+                self.msgs += [None] + [m for _q, m, _n in items]
+        for _q, m, _n in list(errors) + list(warnings):
+            app.feedback.log.add(f'problem {getattr(m, "key", "")}: {m}')
         if self.fill:
             ttk.Button(bar, text=t('fill.button', tiles=', '.join(self.fill)),
                        style='Accent.TButton', command=self._fix
@@ -2759,6 +2795,29 @@ class ProblemWindow:
                       wraplength=380, justify='left'
                       ).pack(side='left', padx=8)
         self.win = win
+
+    def _selected_msg(self):
+        """The message of the selected line, else the first error."""
+        sel = self.lst.curselection()
+        msgs = [m for m in self.msgs if m is not None]
+        if sel and sel[0] < len(self.msgs) and self.msgs[sel[0]] is not None:
+            return self.msgs[sel[0]]
+        return msgs[0] if msgs else None
+
+    def _guide(self):
+        m = self._selected_msg()
+        self.app.show_guide(validate.guide_ref(getattr(m, 'key', '')))
+
+    def _bug(self):
+        from . import feedbackwin, i18n
+        m = self._selected_msg()
+        key = getattr(m, 'key', '') if m is not None else ''
+        # public title: the key and the ENGLISH template, no project data
+        title = (f'{key}: {i18n._EN.get(key, "")}' if key
+                 else 'Problem window')
+        feedbackwin.BugWindow(self.app, self.win, error_text=str(m or ''),
+                              error_key=key,
+                              guide=validate.guide_ref(key), title=title)
 
     def _fix(self):
         from . import placed, placewin
@@ -3188,6 +3247,13 @@ class UpdateWindow:
         self.status = ttk.Label(f, text='', style='Muted.TLabel',
                                 wraplength=580, justify='left')
         self.status.pack(anchor='w', pady=(8, 0))
+        tests = ((app.feedback.summary or {}).get('tests') or {})
+        n = sum(1 for v in tests.values() if v.get('status') == 'open'
+                and v.get('since') == info['version'])
+        if n:
+            tk.Label(f, text=t('update.untested', n=n), bg=theme.BG,
+                     fg=theme.GOLD, wraplength=580, justify='left',
+                     anchor='w').pack(anchor='w', pady=(6, 0))
         self.bar = ttk.Progressbar(f, maximum=100)
         btns = ttk.Frame(f)
         btns.pack(fill='x', side='bottom', pady=(10, 0))
@@ -3774,6 +3840,7 @@ class ExportWindow:
     """Log of a running export (plan 2.2: build in a thread with log)."""
 
     def __init__(self, app):
+        self.app = app
         self.win = tk.Toplevel(app.root)
         self.win.title(t('export.title'))
         self.win.transient(app.root)
@@ -3823,6 +3890,20 @@ class ExportWindow:
     def finish(self, text, ok=True):
         self._put('')
         self._put(text, 'ok' if ok else 'err')
+        self.app.feedback.log.add(('ERROR export: ' if not ok else 'export: ')
+                                  + str(text)[:400])
+        if not ok:
+            try:
+                from . import feedbackwin
+                ttk.Button(self.btn.master, text=t('bug.button'),
+                           command=lambda: feedbackwin.BugWindow(
+                               self.app, self.win, error_text=str(text),
+                               error_key='export.failed', guide='build',
+                               title='export.failed: '
+                                     + str(text).split(NL)[0][:80])
+                           ).pack(anchor='e', pady=(4, 0), before=self.btn)
+            except tk.TclError:
+                pass
         try:
             self.btn.state(['!disabled'])
         except tk.TclError:

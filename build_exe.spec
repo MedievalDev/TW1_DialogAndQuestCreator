@@ -16,8 +16,10 @@ a = Analysis(
         ('questforge2/assets/icon64.png', 'questforge2/assets'),
         ('questforge2/assets/icon.ico', 'questforge2/assets'),
         ('questforge2/templates/*.json', 'questforge2/templates'),
+        ('questforge2/untested.json', 'questforge2'),
     ],
-    hiddenimports=['tw1_lan', 'tw1_qtx', 'tw1_wd', 'wdio', 'winreg'],
+    hiddenimports=['tw1_lan', 'tw1_qtx', 'tw1_wd', 'wdio', 'winreg',
+                   'foxfeedback'],
     hookspath=[],
     runtime_hooks=[],
     # PIL scales the map tiles smoothly (mapwin.scaled_image)

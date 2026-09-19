@@ -1046,7 +1046,43 @@ def ch_trouble():
             'Quelle: README Abschnitte 3 und 9 (gemessene Fallen) und die '
             'Spieltests des Projekts (NODE_EDITOR_PLAN.md, Abschnitt 12).',
             'Source: README sections 3 and 9 (measured pitfalls) and the game '
-            'tests of the project (NODE_EDITOR_PLAN.md, section 12).')
+            'tests of the project (NODE_EDITOR_PLAN.md, section 12).') + '\n\n' + _l(
+            '## Testen helfen, Bugs melden\n'
+            'Hilfe > **Ungetestetes testen** listet Neuerungen, die gemessen, '
+            'aber noch nicht im Spiel bestaetigt sind. Jeder Test hat Schritte '
+            'zum Abhaken und sagt, wie es am Ende aussehen muss. **Spiel '
+            'starten** im Testfenster startet Two Worlds und schreibt mit, was '
+            'von aussen sichtbar ist (eingeschaltete Mods, Level-Header-Cache '
+            'und ob deine gesetzten Marker darin stehen, Laufzeit, Absturz, '
+            'neue Spielstaende). Am Ende **Funktioniert** oder **Funktioniert '
+            'nicht** waehlen. Bestaetigen zwei Nutzer einen Test, gilt er fuer '
+            'alle als bestanden; das Tool uebernimmt das beim Start vom Server '
+            'und nimmt das Etikett "experimentell" weg.\n\n'
+            'Fehlerfenster haben **Im Guide nachlesen** (springt in das '
+            'Kapitel, in dem die Loesung stehen koennte) und **Bug melden**. '
+            'Hilfe > **Bekannte Probleme** zeigt, was schon gemeldet ist.\n\n'
+            'Vor jedem Senden zeigt das Tool genau, was gesendet wird: keine '
+            'Namen, keine E-Mail, kein Projektinhalt, Benutzernamen in Pfaden '
+            'sind ersetzt. Oeffentlich wird nur eine Kurzzeile aus der '
+            'Fehlermeldung, dein Text bleibt beim Entwickler.',
+            '## Helping to test, reporting bugs\n'
+            'Help > **Test untested features** lists news that are measured '
+            'but not yet confirmed in the game. Every test has steps to tick '
+            'off and says what it must look like at the end. **Start game** '
+            'in the test window starts Two Worlds and writes down what can be '
+            'seen from outside (enabled mods, the level header cache and '
+            'whether your placed markers are in it, run time, crash, new '
+            'saves). At the end pick **Works** or **Does not work**. Once two '
+            'users confirm a test it counts as passed for everybody; the tool '
+            'takes that over from the server at start and drops the '
+            '"experimental" label.\n\n'
+            'Error windows have **Read in the guide** (jumps to the chapter '
+            'where the solution may stand) and **Report a bug**. Help > '
+            '**Known issues** shows what has been reported already.\n\n'
+            'Before anything is sent the tool shows exactly what goes out: no '
+            'names, no e-mail, no project content, user names in paths are '
+            'replaced. Only a short line made from the error becomes public, '
+            'your text stays with the developer.')
 
 
 def ch_build():

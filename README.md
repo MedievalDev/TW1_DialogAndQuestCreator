@@ -597,6 +597,16 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **Testbereich und Bug-Meldungen (4.0.0):** Hilfe > **Ungetestetes testen**
+  listet Neuerungen, die gemessen, aber noch nicht im Spiel bestätigt sind:
+  Schritte zum Abhaken, **Spiel starten** (das Tool schreibt mit, was von außen
+  sichtbar ist: Mods, Level-Header-Cache, Laufzeit, Absturz, neue Spielstände),
+  am Ende "Funktioniert" oder "Funktioniert nicht". Bestätigen zwei Nutzer
+  einen Test, gilt er für alle als bestanden; das Tool übernimmt das vom
+  Server. Fehlerfenster haben **Im Guide nachlesen** und **Bug melden**;
+  Hilfe > **Bekannte Probleme** zeigt, was gemeldet ist. Vor jedem Senden
+  sieht man genau, was gesendet wird: keine Namen, kein Projektinhalt,
+  Benutzernamen in Pfaden ersetzt.
 - **Rote Kacheln reparieren:** Meldet der Export eine Mod-Karte ohne
   Originalmarker, bietet das Fehlerfenster **Reparieren** an: Kopie der
   Mod-Kachel mit den fehlenden Spielmarkern im Projektordner, dann erneut

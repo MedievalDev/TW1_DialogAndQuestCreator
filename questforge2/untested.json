@@ -1,0 +1,165 @@
+{
+  "format": 1,
+  "tests": [
+    {
+      "id": "placed-giver-ingame",
+      "since": "3.9.0",
+      "needs_game": true,
+      "title": {
+        "de": "Im Tool gesetzter Q_Giver: der NPC erscheint im Spiel",
+        "en": "Q_Giver placed in the tool: the NPC appears in the game"
+      },
+      "why": {
+        "de": "Marker lassen sich seit 3.9.0 direkt auf der Karte setzen, ohne den Two Worlds Editor. Gemessen ist, dass die Karte richtig geschrieben wird. Ob das Spiel den NPC dort wirklich erscheinen laesst, hat noch niemand bestaetigt.",
+        "en": "Since 3.9.0 markers can be placed right on the map, without the Two Worlds editor. Measured: the map is written correctly. Nobody has confirmed yet that the game really makes the NPC appear there."
+      },
+      "steps": {
+        "de": [
+          "Neues Projekt anlegen und speichern.",
+          "Quest > Multiplayer-Quest uebernehmen, eine Quest waehlen (z. B. Q_700), als Kachel eine nehmen, die du im Spiel schnell erreichst.",
+          "In Schritt 3 auf \"Marker auf der Karte setzen\" klicken. Den Q_Giver links anklicken und an eine freie, begehbare Stelle setzen, die du wiederfindest (z. B. neben einer Strasse). Die uebrigen Marker ebenfalls setzen. Bestaetigen, dann Uebernehmen.",
+          "Datei > Exportieren. Im Export-Fenster muss am Ende stehen, dass der Level-Header-Cache neu gebaut wurde.",
+          "Unten auf \"Spiel starten\" klicken, ein NEUES Spiel beginnen oder einen Spielstand laden, in dem die Bedingung der Quest erfuellt ist, und zu der Stelle gehen.",
+          "Pruefen: Steht der NPC dort? Laesst er sich ansprechen? Kommt sein Dialog?",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Create a new project and save it.",
+          "Quest > Take over multiplayer quest, pick a quest (e.g. Q_700), as tile take one you reach quickly in the game.",
+          "In step 3 click \"Place markers on the map\". Click the Q_Giver on the left and put it on a free, walkable spot you will find again (e.g. next to a road). Place the other markers too. Confirm, then take over.",
+          "File > Export. At the end the export window must say that the level header cache was rebuilt.",
+          "Click \"Start game\" below, begin a NEW game or load a save where the quest's condition is met, and walk to the spot.",
+          "Check: is the NPC standing there? Can you talk to him? Does his dialog come up?",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Der NPC steht an der gesetzten Stelle auf dem Boden (nicht darunter, nicht in der Luft), ist ansprechbar und fuehrt seinen Dialog.",
+        "en": "The NPC stands on the ground at the chosen spot (not below it, not in the air), can be talked to and runs his dialog."
+      }
+    },
+    {
+      "id": "placed-object-enemy-ingame",
+      "since": "3.9.0",
+      "needs_game": true,
+      "title": {
+        "de": "Im Tool gesetzte Objekt- und Gegnermarker wirken im Spiel",
+        "en": "Object and enemy markers placed in the tool work in the game"
+      },
+      "why": {
+        "de": "Wie beim Q_Giver: geschrieben wird die Karte richtig, im Spiel bestaetigt ist es noch nicht.",
+        "en": "As with the Q_Giver: the map is written correctly, it is not confirmed in the game yet."
+      },
+      "steps": {
+        "de": [
+          "Eine Quest mit OBJECT_CREATE oder ENEMY_CREATE nehmen (viele Multiplayer-Quests haben beides) und deren Marker im Tool auf die Karte setzen.",
+          "Exportieren, \"Spiel starten\", die Quest annehmen.",
+          "Zur gesetzten Stelle gehen und pruefen, ob der Gegenstand bzw. die Gegner dort erscheinen.",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Take a quest with OBJECT_CREATE or ENEMY_CREATE (many multiplayer quests have both) and place its markers on the map in the tool.",
+          "Export, \"Start game\", accept the quest.",
+          "Walk to the spot and check whether the item or the enemies appear there.",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Gegenstand liegt auf dem Boden und laesst sich aufheben; Gegner stehen an der Stelle und zaehlen fuer die Quest.",
+        "en": "The item lies on the ground and can be picked up; the enemies stand at the spot and count for the quest."
+      }
+    },
+    {
+      "id": "red-tile-fix",
+      "since": "3.9.0",
+      "needs_game": true,
+      "title": {
+        "de": "\"Reparieren\" bei roten Kacheln: Originalquests der Kachel laufen weiter",
+        "en": "\"Fix\" for red tiles: the game's own quests on that tile keep working"
+      },
+      "why": {
+        "de": "Fehlen einer Mod-Karte Marker des Spiels, ergaenzt das Tool sie in einer eigenen Kopie. Im Spiel geprueft hat das noch niemand.",
+        "en": "When a mod map lacks markers of the game, the tool adds them in its own copy. Nobody has checked that in the game yet."
+      },
+      "steps": {
+        "de": [
+          "Ein Projekt mit einer Mod, deren Karte im Tool rot ist, und eine Quest, die einen Marker dieser Mod-Karte benutzt.",
+          "Exportieren. Im Fehlerfenster auf \"Reparieren\" klicken und danach erneut exportieren.",
+          "\"Spiel starten\" und auf der Kachel eine Originalquest des Spiels spielen sowie die eigene Quest.",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "A project with a mod whose map is red in the tool, and a quest that uses a marker of that mod map.",
+          "Export. Click \"Fix\" in the error window, then export again.",
+          "\"Start game\" and play one of the game's own quests on that tile as well as your own quest.",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Beide Quests funktionieren: die eigene (Marker der Mod-Karte) und die Originalquest (ergaenzte Spielmarker).",
+        "en": "Both quests work: your own (marker of the mod map) and the game's quest (game markers put back)."
+      }
+    },
+    {
+      "id": "lhc-without-sdk",
+      "since": "3.9.2",
+      "needs_game": true,
+      "experimental": "lhc",
+      "title": {
+        "de": "Level-Header-Cache ohne SDK: das Spiel nimmt die vom Tool geschriebene Datei",
+        "en": "Level header cache without the SDK: the game accepts the file the tool writes"
+      },
+      "why": {
+        "de": "Die Datei ist byte-gleich zu der des SDK-Programms gemessen (echter Spielordner und sechs Konfliktfaelle). Bestaetigt werden soll, dass es auf einem Rechner OHNE SDK im Spiel klappt.",
+        "en": "The file was measured byte for byte against the SDK program (real game folder and six conflict layouts). To confirm: it works in the game on a PC WITHOUT the SDK."
+      },
+      "steps": {
+        "de": [
+          "Nur fuer Rechner ohne Two Worlds SDK. Unter Datei > Einstellungen muss bei Export stehen: \"vom Tool selbst\".",
+          "Ein Projekt mit mindestens einem im Tool gesetzten Marker exportieren. Das Export-Fenster meldet den neu gebauten Cache.",
+          "\"Spiel starten\". Startet das Spiel normal? Laden Spielstaende?",
+          "Zur Stelle des gesetzten Markers gehen und pruefen, ob dort passiert, was die Quest vorsieht.",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Only for PCs without the Two Worlds SDK. File > Settings must say under Export: \"by the tool itself\".",
+          "Export a project with at least one marker placed in the tool. The export window reports the rebuilt cache.",
+          "\"Start game\". Does the game start normally? Do saves load?",
+          "Walk to the spot of the placed marker and check that what the quest wants happens there.",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Spiel startet und laedt wie immer, der neue Marker wirkt. Falls etwas nicht stimmt: Im Spielordner unter Levels liegt die alte Datei als Map_LevelHeaders.lhc.qf2backup.",
+        "en": "The game starts and loads as always, the new marker works. If something is wrong: the old file is kept in the game folder under Levels as Map_LevelHeaders.lhc.qf2backup."
+      }
+    },
+    {
+      "id": "lhc-auto-after-export",
+      "since": "3.9.1",
+      "needs_game": false,
+      "title": {
+        "de": "Level-Header-Cache wird nach dem Export automatisch neu gebaut",
+        "en": "The level header cache is rebuilt automatically after the export"
+      },
+      "why": {
+        "de": "Der Aufruf ist einzeln geprueft, im echten Export eines Nutzers aber noch nicht gesehen worden.",
+        "en": "The call was checked on its own but has not been seen in a user's real export yet."
+      },
+      "steps": {
+        "de": [
+          "Ein Projekt mit Kartenkacheln (gesetzte Marker oder Karten aus dem Editor) exportieren.",
+          "Im Export-Fenster die letzten Zeilen lesen."
+        ],
+        "en": [
+          "Export a project with map tiles (placed markers or maps from the editor).",
+          "Read the last lines in the export window."
+        ]
+      },
+      "expect": {
+        "de": "Am Ende steht \"Level-Header-Cache neu gebaut: <Zahl> Karten\" und keine rote Meldung. Im Spielordner unter Levels hat Map_LevelHeaders.lhc die Uhrzeit des Exports.",
+        "en": "At the end it says \"Level header cache rebuilt: <number> maps\" and no red message. In the game folder under Levels, Map_LevelHeaders.lhc carries the time of the export."
+      }
+    }
+  ]
+}

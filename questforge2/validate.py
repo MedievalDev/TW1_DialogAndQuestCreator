@@ -65,9 +65,59 @@ def _talk_target(index, project, qid):
     return None
 
 
+class Msg(str):
+    """A message that remembers its text key (4.0.0): the error window
+    points to the guide chapter where the solution may stand and a bug
+    report names the error without the user's data."""
+    key = ''
+
+
+def keyed(t):
+    if getattr(t, '_keyed', False):
+        return t
+
+    def wrapped(key, **fmt):
+        m = Msg(t(key, **fmt))
+        m.key = key
+        return m
+    wrapped._keyed = True
+    return wrapped
+
+
+# longest prefix wins; everything else goes to the trouble shooting chapter
+GUIDE_REFS = (
+    ('val.mod', 'mods'), ('warn.mod', 'mods'),
+    ('val.tile', 'markers'), ('warn.marker', 'markers'),
+    ('warn.giver', 'markers'), ('val.location', 'markers'),
+    ('warn.location', 'markers'), ('warn.walk', 'markers'),
+    ('warn.teleport', 'markers'), ('warn.cleararea', 'markers'),
+    ('warn.kill', 'markers'), ('warn.showloc', 'markers'),
+    ('warn.todo', 'quests'),
+    ('val.npc', 'npcs'), ('warn.npc', 'npcs'), ('val.giver', 'npcs'),
+    ('val.speaker', 'npcs'), ('warn.talk', 'npcs'),
+    ('val.link', 'links'), ('val.enable', 'links'), ('warn.enable', 'links'),
+    ('val.after', 'conditions'), ('warn.level', 'conditions'),
+    ('val.task', 'tasks'), ('val.action', 'actions'),
+    ('val.opcode', 'actions'),
+    ('val.id', 'quests'), ('warn.id', 'quests'), ('warn.group', 'quests'),
+    ('val.offer', 'quests'), ('val.cr', 'quests'),
+    ('warn.question', 'quests'), ('val.journal', 'quests'),
+)
+
+
+def guide_ref(key):
+    """Guide chapter for a message key ('' -> trouble shooting)."""
+    best = ''
+    chapter = 'trouble'
+    for prefix, ch in GUIDE_REFS:
+        if str(key or '').startswith(prefix) and len(prefix) > len(best):
+            best, chapter = prefix, ch
+    return chapter
+
+
 def validate_quest(quest, index=None, project=None, archive=None, t=None,
                    modset=None):
-    t = t or _t_default
+    t = keyed(t or _t_default)
     E, W = [], []
     g = quest.graph
     nodes = g['nodes']
@@ -530,7 +580,7 @@ def validate_mods(quest, project, modset, t=None, deps=None):
     """Checks against the mods of the project (update 5b): quest numbers a
     mod uses too, marker dependencies on red or contested tiles."""
     from . import mods
-    t = t or (lambda k, **f: k)
+    t = keyed(t or (lambda k, **f: k))
     errors, warnings = [], []
     if quest.extra.get('mod'):
         return errors, warnings
