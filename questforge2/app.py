@@ -2842,7 +2842,10 @@ class ProblemWindow:
         ttk.Label(f, text=title, style='Brand.TLabel').pack(anchor='w')
         ttk.Label(f, text=t('export.gotonode'), style='Muted.TLabel'
                   ).pack(anchor='w', pady=(0, 6))
-        self.lst = tk.Listbox(f, font=theme.FONT, activestyle='none')
+        # small requested height: the list takes what is left, the rows
+        # below it (full text, fix, buttons) always fit (4.0.3)
+        self.lst = tk.Listbox(f, font=theme.FONT, activestyle='none',
+                              height=5)
         self.lst.pack(fill='both', expand=True)
         if not errors and not warnings:
             self.lst.insert('end', t('val.ok'))
@@ -2860,6 +2863,19 @@ class ProblemWindow:
         if not errors and not warnings:
             self.rows.append(None)
         self.lst.bind('<Double-Button-1>', self._go)
+        # the list cuts long messages at the right edge: the selected one
+        # stands in full below it (4.0.3)
+        self.full = [None if r is None else self.lst.get(i).strip()
+                     for i, r in enumerate(self.rows)]
+        self.detail = None
+        if any(self.full):
+            self.detail = self._wrapping(ttk.Label(f, justify='left'))
+            self.detail.pack(fill='x', pady=(6, 0))
+            first = next(i for i, x in enumerate(self.full) if x)
+            self.lst.selection_set(first)
+            self.lst.activate(first)
+            self.lst.bind('<<ListboxSelect>>', lambda e: self._show())
+            self._show()
         self.retry = retry
         self.fill = sorted({nid[5:] for _q, _m, nid in errors
                             if isinstance(nid, str)
@@ -2886,13 +2902,29 @@ class ProblemWindow:
             ttk.Button(row, text=t('fill.button', tiles=', '.join(self.fill)),
                        style='Accent.TButton', command=self._fix
                        ).pack(anchor='w')
-            hint = ttk.Label(row, text=t('fill.hint'), style='Muted.TLabel',
-                             wraplength=660, justify='left')
+            hint = self._wrapping(ttk.Label(row, text=t('fill.hint'),
+                                            style='Muted.TLabel',
+                                            justify='left'))
             hint.pack(fill='x', pady=(4, 0))
-            hint.bind('<Configure>', lambda e: hint.configure(
-                wraplength=max(200, e.width - 4)))
             self.hint = hint
         self.win = win
+
+    @staticmethod
+    def _wrapping(label):
+        """A label that wraps to its own width."""
+        label.configure(wraplength=660)
+        label.bind('<Configure>', lambda e: label.configure(
+            wraplength=max(200, e.width - 4)))
+        return label
+
+    def _show(self):
+        """Full text of the selected line (a heading shows the first)."""
+        sel = self.lst.curselection()
+        i = sel[0] if sel else -1
+        text = self.full[i] if 0 <= i < len(self.full) else None
+        if text is None:
+            text = next((x for x in self.full if x), '')
+        self.detail.configure(text=text)
 
     def _selected_msg(self):
         """The message of the selected line, else the first error."""

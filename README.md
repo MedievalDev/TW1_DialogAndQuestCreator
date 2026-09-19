@@ -597,6 +597,8 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.0.3:** Unter der Fehlerliste steht die gewählte Meldung in voller
+  Länge (die Liste schneidet lange Meldungen rechts ab).
 - **4.0.2:** Fehlerfenster sagt "1 error" statt "1 errors" (auch bei
   Warnungen, offenen Markern und Testschritten), der Hinweis zu
   **Reparieren** steht in einer eigenen Zeile und wird nicht mehr
