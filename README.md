@@ -597,6 +597,12 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.2.0: Geister und richtige Namen.** Quest > **Gegnerstufen** listet
+  jetzt alle 119 Arten: die 90 des Gegnerskripts und die 29 Geister aus
+  dem eigenen Geisterskript (Tiergeister, Grom-Geist, Zwergengeist und
+  mehr). Jede Zeile zeigt den Namen aus dem Spiel, dahinter grau den
+  SDK-Namen: Der SDK-"Gray Wolf" ist im Spiel der **Silberwolf**, der
+  "Goblin" ein **Grom**.
 - **4.1.0: Marker frei setzen.** Quest > **Marker auf der Karte setzen** (oder
   Knopf unter der Karte) setzt Marker für eine neue Quest, ohne Editor: links
   die Marker-Arten, Klick auf die Karte, dann die ID eingeben. Vorbelegt ist

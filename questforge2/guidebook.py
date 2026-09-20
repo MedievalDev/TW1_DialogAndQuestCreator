@@ -679,7 +679,12 @@ Aktion "Gegner erzeugen": Typ, Anzahl, Stufe, Marker (Sorte
 Typ, Anzahl, Stufe und Partei aus.
 
 Die Stufe herumlaufender Gegner stellst du fuer die ganze Welt unter
-Quest > Gegnerstufen ein.
+Quest > Gegnerstufen ein. Dort stehen seit 4.2.0 alle 119 Arten: die 90
+Gegner des Gegnerskripts und die 29 Geister, die ein eigenes Skript
+erzeugt (Baer, Keiler, Wolf, Raptor, Mantis, Spinne, Yeti, Grom, Daemon,
+Skelett, Zwerg und mehr). Jede Zeile traegt den Namen, den das Spiel
+zeigt, und dahinter grau den Namen aus dem SDK: `MO_WOLF_04` heisst dort
+"Gray Wolf", im Spiel aber Silberwolf.
 
 ## Parteien
 """, """# Creating and spawning enemies
@@ -689,7 +694,12 @@ Action "Create enemies": type, count, level, marker (kind
 fill in type, count, level and party.
 
 The level of wandering enemies for the whole world is set under
-Quest > Enemy levels.
+Quest > Enemy levels. Since 4.2.0 all 119 kinds are in there: the 90 of
+the enemy script and the 29 ghosts, which have a script of their own
+(bear, boar, wolf, raptor, mantis, spider, yeti, grom, daemon, skeleton,
+dwarf and more). Every row carries the name the game shows, with the SDK
+name behind it in grey: `MO_WOLF_04` is a "Gray Wolf" there but a Silver
+Wolf in the game.
 
 ## Parties
 """) + _table(['Nr.', _l('Name', 'Name'), _l('Verhalten', 'Behaviour')],

@@ -19,7 +19,16 @@ def fake_script(values=None):
     every IL call pushes its arguments right to left as 32 bit immediates."""
     values = values or enemylevel.retail_values()
     out = bytearray(b'ECO\x00' + b'\x90' * 40)
-    for num, _name, mark, lo, hi, _grp in enemylevel.ENTRIES:
+    # the ghosts come first in the script: a string pointer, then
+    # max, min and what is added to the hero level
+    for num, _name, add, lo, hi, _grp, _units in enemylevel.GHOSTS:
+        cur = values.get(num, (lo, hi))
+        for a in (900 + abs(num), cur[1], cur[0], add):
+            out += b'\xb8' + struct.pack('<I', a)
+            out += b'\x90' * 3
+        out += b'\xe8' + b'\x00' * 4
+    out += b'\x90' * 20
+    for num, _name, mark, lo, hi, _grp, _units in enemylevel.ENTRIES:
         cur = values.get(num, (lo, hi))
         args = [cur[1], cur[0], mark, num] if mark else [cur[1], cur[0], num]
         for a in args:
@@ -36,8 +45,59 @@ class Table(unittest.TestCase):
         self.assertEqual(enemylevel.entry(11)[1], 'Bandit')
         self.assertEqual(enemylevel.retail_values()[1], (6, 10))   # grey wolf
         self.assertEqual(enemylevel.retail_values()[31], (40, 100))  # dragon
-        groups = {e[5] for e in enemylevel.ENTRIES}
+        groups = {e[5] for e in enemylevel.all_entries()}
         self.assertTrue(groups <= set(enemylevel.GROUPS))
+        # every row knows the units it creates, so it can carry the name
+        # the game shows
+        no_units = [e[1] for e in enemylevel.all_entries() if not e[6]]
+        self.assertLessEqual(len(no_units), 3, no_units)
+
+    def test_ghosts(self):
+        self.assertEqual(len(enemylevel.GHOSTS), 29)
+        self.assertEqual(len(enemylevel.all_entries()), 119)
+        ids = [g[0] for g in enemylevel.GHOSTS]
+        self.assertEqual(ids, sorted(ids, reverse=True))
+        self.assertTrue(all(i < 0 for i in ids))          # never an enemy id
+        self.assertEqual(enemylevel.entry(-3)[1], 'Ghost Wolf')
+        self.assertEqual(enemylevel.retail_values()[-3], (1, 4))
+        self.assertEqual(enemylevel.retail_values()[-1], (7, 12))
+
+    def test_game_names(self):
+        tr = {'translateMO_WOLF_04': 'Silver Wolf',
+              'translateMO_WOLF_01': 'Wolf',
+              'translateMO_WOLF_02': 'Grey Wolf',
+              'translateG_MO_WOLF_01': 'Animal ghost'}
+        self.assertEqual(enemylevel.game_name(1, tr), 'Silver Wolf')
+        self.assertEqual(enemylevel.game_name(2, tr), 'Wolf, Grey Wolf')
+        self.assertEqual(enemylevel.game_name(-3, tr), 'Animal ghost')
+        self.assertEqual(enemylevel.game_name(3, tr), '')    # not in there
+        self.assertEqual(enemylevel.game_name(999, tr), '')
+
+    def test_locate_ghosts(self):
+        body = fake_script()
+        found = enemylevel.locate_ghosts(body)
+        self.assertEqual(len(found), 29)
+        self.assertEqual([f[0] for f in found],
+                         [g[0] for g in enemylevel.GHOSTS])
+        levels = enemylevel.read_levels(body)
+        self.assertEqual(len(levels), 119)
+        self.assertEqual(levels[-1], (7, 12))
+
+    def test_patch_ghost(self):
+        body = fake_script()
+        values = dict(enemylevel.retail_values())
+        values[-3] = (30, 40)
+        patched, n = enemylevel.patch_body(body, values)
+        self.assertEqual(n, 119)
+        self.assertEqual(len(patched), len(body))
+        read = enemylevel.read_levels(patched)
+        self.assertEqual(read[-3], (30, 40))
+        self.assertEqual(read[-1], (7, 12))
+        self.assertEqual(read[1], enemylevel.retail_values()[1])
+        # a file that was patched once can be patched again
+        again, n2 = enemylevel.patch_body(patched, {-3: (5, 6)})
+        self.assertEqual(enemylevel.read_levels(again)[-3], (5, 6))
+        self.assertEqual(n2, 1)              # only the one that was given
 
     def test_locate_and_read(self):
         body = fake_script()
@@ -53,7 +113,7 @@ class Table(unittest.TestCase):
         values = dict(enemylevel.retail_values())
         values[1] = (20, 60)            # grey wolf
         patched, n = enemylevel.patch_body(body, values)
-        self.assertEqual(n, 90)
+        self.assertEqual(n, 119)
         self.assertEqual(len(patched), len(body))
         self.assertEqual(enemylevel.read_levels(patched)[1], (20, 60))
         # everything else untouched

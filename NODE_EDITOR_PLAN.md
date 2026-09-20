@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1926,6 +1926,33 @@ Offen:
       geholt und die Seite neu aufgebaut.
     - Gleicher Aufbau wie `foxfeedback_ui` 3 (WD Packer, Mod Manager,
       Dungeon Editor, Extended Settings).
+88. Geister und die Namen aus dem Spiel im Gegnerstufen-Fenster
+    (Version 4.2.0, Marco 2026-09-20). Anlass: Orion fand den Silberwolf
+    nicht und fragte nach mehr Geistern.
+    - Gemessen im SDK (`Common/Enemies.ech`, `Common/Ghosts.ech`) und in
+      den Spieldateien: Der SDK-Typ `eGrayWolf` erzeugt `MO_WOLF_04`, und
+      das ist im Spiel der **Silberwolf**; `eBrownWolf` erzeugt Wolf oder
+      Grauer Wolf, `eWhiteWolf` den Weissen Wolf. "Goblin" heisst im Spiel
+      **Grom**. Ent = Barkog, Yeti = Gigant, Khan = Kalitari,
+      Spider = Riesenspinne.
+    - Jede Zeile traegt jetzt den Namen aus der Sprachdatei des
+      installierten Spiels (`game_name`, Einheit -> `translate<EINHEIT>`),
+      dahinter grau den SDK-Namen. 107 der 119 Zeilen haben einen
+      Spielnamen, die uebrigen zeigen nur den SDK-Namen - ein Rueckgriff
+      auf eine Geschwistereinheit (MO_WOLF_03 -> MO_WOLF_01) haette
+      falsche Namen erzeugt und faellt deshalb weg.
+    - Die 29 Geister kommen aus `Ghosts.ech` (`GetGhostCreateString`):
+      eigene Marker `MARKER_ENEMY_G_*`, Stufe = clamp(Heldenschnitt + x,
+      min, max), Werte als Unmittelbare im selben `.eco`. Sie stehen im
+      Fenster als Gruppe "Geister" und tragen negative Nummern, damit ein
+      Dict beide Tabellen haelt.
+    - `locate_ghosts` ankert auf dem Zuschlag je Geist (2 beim Baeren,
+      1 beim Keiler, 0 sonst) und der Reihenfolge, nie auf den Stufen
+      selbst: ein schon gepatchtes Skript wird wieder gefunden (gemessen
+      an Update16, Update11-15 und Scripts.wd, je 29 Spuren, 119 Werte
+      gleich den SDK-Werten).
+    - Test `ghost-levels-ingame` (ungetestet), 12 Unit-Tests in
+      `test_enemylevel.py`, GUI-Probe EN/DE.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

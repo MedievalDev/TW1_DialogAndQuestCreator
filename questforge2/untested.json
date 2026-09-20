@@ -231,6 +231,43 @@
         "de": "Der Gegenstand liegt an der gesetzten Stelle auf dem Boden (nicht darunter, nicht in der Luft) und laesst sich aufheben.",
         "en": "The item lies on the ground at the chosen spot (not below it, not in the air) and can be picked up."
       }
+    },
+    {
+      "id": "ghost-levels-ingame",
+      "since": "4.2.0",
+      "needs_game": true,
+      "title": {
+        "de": "Stufen der Geister wirken im Spiel",
+        "en": "The levels of the ghosts work in the game"
+      },
+      "why": {
+        "de": "Die 29 Geister stehen in einem eigenen Skript (Ghosts.ech) mit eigenen Stufenbereichen. Seit 4.2.0 schreibt das Tool auch diese Werte. Gemessen ist, dass die Zahlen an der richtigen Stelle landen und das Skript danach noch lesbar ist. Im Spiel hat das noch niemand bestaetigt.",
+        "en": "The 29 ghosts live in a script of their own (Ghosts.ech) with their own level ranges. Since 4.2.0 the tool writes those values too. Measured: the numbers land in the right place and the script still reads back. Nobody has confirmed it in the game yet."
+      },
+      "steps": {
+        "de": [
+          "Quest > Gegnerstufen oeffnen, oben rechts die Gruppe \"Geister\" waehlen.",
+          "Einen Geist nehmen, den du findest, zum Beispiel \"Tiergeist (Ghost Wolf)\", und Minimum und Maximum weit hochsetzen, etwa 40 und 45.",
+          "\"Uebernehmen und einschalten\" klicken.",
+          "Im Tool Ansicht > Karte oeffnen und im Suchfeld MARKER_ENEMY_G_MO_WOLF_01 eingeben. Dort erscheinen die Geisterwoelfe im Spiel. Eine Stelle merken.",
+          "Unten auf \"Spiel starten\" klicken und ein NEUES Spiel beginnen (schon erzeugte Gegner behalten ihre alte Stufe).",
+          "Zu der Stelle gehen und einen Geisterwolf ansehen: Welche Stufe steht ueber ihm?",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Open Quest > Enemy levels and pick the group \"Ghosts\" at the top.",
+          "Take a ghost you can find, for example \"Ghost Wolf\", and set minimum and maximum high, say 40 and 45.",
+          "Click \"Apply and switch on\".",
+          "In the tool open View > Map and search for MARKER_ENEMY_G_MO_WOLF_01. That is where ghost wolves appear in the game. Remember a spot.",
+          "Click \"Start game\" below and begin a NEW game (enemies that already exist keep their old level).",
+          "Walk to the spot and look at a ghost wolf: which level does it show?",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Der Geisterwolf hat die eingestellte Stufe (40 bis 45) statt der urspruenglichen 1 bis 4.",
+        "en": "The ghost wolf has the level you set (40 to 45) instead of the original 1 to 4."
+      }
     }
   ]
 }

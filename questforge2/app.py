@@ -3167,10 +3167,13 @@ class EnemyLevelWindow:
         group = self.group_keys[gi]
         retail = enemylevel.retail_values()
         out = []
-        for num, name, _mark, lo, hi, grp in enemylevel.ENTRIES:
+        for num, name, _mark, lo, hi, grp, _units in \
+                enemylevel.all_entries():
             if group and grp != group:
                 continue
-            if needle and needle not in name.lower():
+            shown = self.game_names.get(num) or ''
+            if needle and needle not in name.lower() \
+                    and needle not in shown.lower():
                 continue
             if self.only_changed.get() and self.values.get(num) == retail[num]:
                 continue
@@ -3180,7 +3183,21 @@ class EnemyLevelWindow:
         return out
 
     # -- state ------------------------------------------------------------
+    def load_names(self):
+        """The name every type has in the game, from its language file."""
+        self.game_names = {}
+        try:
+            tr = data.load_translations(self.game)
+        except Exception:
+            return
+        for e in enemylevel.all_entries():
+            name = enemylevel.game_name(e[0], tr)
+            if name:
+                self.game_names[e[0]] = name
+
     def refresh(self):
+        if not hasattr(self, 'game_names'):
+            self.load_names()
         try:
             self.state = enemylevel.State(self.game)
             err = self.state.error
@@ -3240,9 +3257,13 @@ class EnemyLevelWindow:
             row.pack(fill='x')
             lo, hi = self.values.get(num, retail[num])
             changed = (lo, hi) != retail[num]
-            ttk.Label(row, text=name, style='Panel.TLabel', width=26,
+            # the name the game shows, the one of the SDK behind it
+            shown = self.game_names.get(num) or name
+            ttk.Label(row, text=shown, style='Panel.TLabel', width=22,
                       foreground=theme.GOLD if changed else theme.INK
                       ).pack(side='left')
+            ttk.Label(row, text=name if shown != name else '',
+                      style='PanelMuted.TLabel', width=18).pack(side='left')
             widgets = {}
             for which in ('min', 'max'):
                 var = tk.StringVar(value=str(lo if which == 'min' else hi))
@@ -3266,7 +3287,7 @@ class EnemyLevelWindow:
                       style='PanelMuted.TLabel').pack(side='left')
             self.rows[num] = widgets
         self.count_lbl.configure(text=t('enemy.count', n=len(rows),
-                                        all=len(enemylevel.ENTRIES)))
+                                        all=len(enemylevel.all_entries())))
         self.canvas.yview_moveto(0)
 
     # -- editing ----------------------------------------------------------
