@@ -81,6 +81,38 @@ def resource_path(*parts):
     return os.path.join(base, *parts)
 
 
+def documents_dir():
+    """The user's Documents folder (also when Windows moved it, e.g. to
+    OneDrive), else the home folder."""
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(260)
+            # CSIDL_PERSONAL = 5
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0,
+                                                      buf) == 0 and buf.value:
+                return buf.value
+        except (AttributeError, OSError):
+            pass
+    return os.path.expanduser('~')
+
+
+def default_project_path(name, folder=None):
+    """A free file name for a project the tool saves on its own (4.3.0:
+    taking over a multiplayer quest needs no save dialog):
+    Documents/TW1 Quest Creator/<name>.tw1proj, <name> 2 ... when taken."""
+    folder = folder or os.path.join(documents_dir(), 'TW1 Quest Creator')
+    os.makedirs(folder, exist_ok=True)
+    base = re.sub(r'[\\/:*?"<>|]+', '', name).strip() or 'Quest'
+    path = os.path.join(folder, base + '.tw1proj')
+    n = 2
+    while os.path.exists(path) or os.path.exists(
+            os.path.splitext(path)[0] + '_levels'):
+        path = os.path.join(folder, f'{base} {n}.tw1proj')
+        n += 1
+    return path
+
+
 def config_path():
     return os.path.join(ROOT, 'questforge_config.json')
 

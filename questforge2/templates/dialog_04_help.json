@@ -1,0 +1,311 @@
+{
+  "template": {
+    "kind": "dialog",
+    "title": {
+      "de": "Hilferuf: aufgeregter NPC",
+      "en": "Call for help: an upset NPC"
+    },
+    "note": {
+      "de": "Der NPC ruft um Hilfe, der Held fragt nach, der NPC erzaehlt kurz, dann Annehmen oder Ablehnen.",
+      "en": "The NPC calls for help, the hero asks, the NPC tells him in short, then accept or decline."
+    }
+  },
+  "graph": {
+    "nodes": {
+      "entry:first": {
+        "type": "entry",
+        "state": "first",
+        "x": 40,
+        "y": 40
+      },
+      "n1": {
+        "type": "npc",
+        "state": "first",
+        "x": 270,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Hilfe! Bitte, du musst mir helfen!",
+              "en": "Help! Please, you have to help me!"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n2": {
+        "type": "player",
+        "state": "first",
+        "x": 550,
+        "y": 40,
+        "speaker": "player",
+        "lines": [
+          {
+            "text": {
+              "de": "Beruhige dich. Was ist passiert?",
+              "en": "Calm down. What happened?"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ],
+        "kind": "answer"
+      },
+      "n3": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich wurde überfallen... Sie haben mir alles genommen!",
+              "en": "I was robbed... They took everything I had!"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n4": {
+        "type": "player",
+        "state": "first",
+        "x": 1110,
+        "y": 40,
+        "speaker": "player",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich kümmere mich darum.",
+              "en": "I will take care of it."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Das ist nicht mein Problem.",
+              "en": "That is not my problem."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ],
+        "kind": "question"
+      },
+      "n5": {
+        "type": "npc",
+        "state": "first",
+        "x": 1390,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Danke! Ich wusste, dass ich dir trauen kann!",
+              "en": "Thank you! I knew I could trust you!"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n6": {
+        "type": "npc",
+        "state": "first",
+        "x": 1390,
+        "y": 170,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Dann muss ich wohl allein sehen, wie ich zurechtkomme...",
+              "en": "Then I will have to manage on my own..."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:running": {
+        "type": "entry",
+        "state": "running",
+        "x": 40,
+        "y": 320
+      },
+      "n7": {
+        "type": "npc",
+        "state": "running",
+        "x": 270,
+        "y": 320,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Bitte beeil dich!",
+              "en": "Please hurry!"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:solved": {
+        "type": "entry",
+        "state": "solved",
+        "x": 40,
+        "y": 450
+      },
+      "n8": {
+        "type": "npc",
+        "state": "solved",
+        "x": 270,
+        "y": 450,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Du hast es wirklich geschafft! Ich danke dir!",
+              "en": "You really did it! Thank you!"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": true,
+            "fight": false
+          }
+        ]
+      },
+      "entry:closed": {
+        "type": "entry",
+        "state": "closed",
+        "x": 40,
+        "y": 580
+      },
+      "n9": {
+        "type": "npc",
+        "state": "closed",
+        "x": 270,
+        "y": 580,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich werde nie vergessen, was du für mich getan hast.",
+              "en": "I will never forget what you did for me."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      }
+    },
+    "edges": [
+      [
+        "entry:first",
+        0,
+        "n1"
+      ],
+      [
+        "n1",
+        0,
+        "n2"
+      ],
+      [
+        "n2",
+        0,
+        "n3"
+      ],
+      [
+        "n3",
+        0,
+        "n4"
+      ],
+      [
+        "n4",
+        0,
+        "n5"
+      ],
+      [
+        "n4",
+        1,
+        "n6"
+      ],
+      [
+        "entry:running",
+        0,
+        "n7"
+      ],
+      [
+        "entry:solved",
+        0,
+        "n8"
+      ],
+      [
+        "entry:closed",
+        0,
+        "n9"
+      ]
+    ]
+  },
+  "quest": {
+    "title": {
+      "de": "Ein Hilferuf",
+      "en": "A call for help"
+    },
+    "journal": {
+      "take": {
+        "de": "Jemand wurde überfallen und bittet Dich um Hilfe.",
+        "en": "Someone was robbed and asks you for help."
+      },
+      "solve": {
+        "de": "Du hast geholfen. Kehre zurück und sag es ihm.",
+        "en": "You have helped. Go back and tell him."
+      },
+      "close": {
+        "de": "Mission erfolgreich beendet.",
+        "en": "Mission completed successfully."
+      }
+    }
+  }
+}

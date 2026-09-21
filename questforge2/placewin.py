@@ -314,6 +314,7 @@ class PlaceWindow(MapWindow):
         if self.free and not self.targets:
             ttk.Label(self.rows_box, text=t('free.none'), style='Muted.TLabel'
                       ).pack(anchor='w')
+        self.row_of = {}                 # the guided tour points at rows
         for tg in self.targets:
             done = tg.get('placed') is not None
             hanging = self.held is tg
@@ -322,6 +323,7 @@ class PlaceWindow(MapWindow):
                            highlightbackground=theme.GOLD_HI if hanging
                            else theme.LINE)
             row.pack(fill='x', pady=2)
+            self.row_of[id(tg)] = row
             mark = tk.Label(row, text='✓' if done else '○',
                             width=2, bg=theme.OK if done else theme.PANEL,
                             fg='#0b1a0f' if done else theme.INK,

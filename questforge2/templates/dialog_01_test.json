@@ -1,0 +1,437 @@
+{
+  "template": {
+    "kind": "dialog",
+    "title": {
+      "de": "Test-Dialog: Wortwechsel und zwei Fragen",
+      "en": "Test dialog: exchange and two questions"
+    },
+    "note": {
+      "de": "Zum Ausprobieren: Der Questgeber spricht dich an, der Held antwortet, dann kannst du zwei Fragen stellen. Die gerade gestellte Frage fehlt danach im Menue (wie im Original). Danach Annehmen oder Ablehnen, dazu je ein Satz fuer laeuft, erfuellt und abgeschlossen. Alles ist ausgefuellt: sofort exportieren und im Spiel testen.",
+      "en": "For trying things out: the quest giver talks to you, the hero answers, then you can ask two questions. The question just asked is left out of the menu (as in the original game). Then accept or decline, plus one line each for running, solved and closed. Everything is filled in: export and test it in the game right away."
+    }
+  },
+  "graph": {
+    "nodes": {
+      "entry:first": {
+        "type": "entry",
+        "state": "first",
+        "x": 40,
+        "y": 40
+      },
+      "n1": {
+        "type": "npc",
+        "state": "first",
+        "x": 270,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Hey, du da! Hast du einen Moment Zeit?",
+              "en": "Hey, you there! Do you have a moment?"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n2": {
+        "type": "player",
+        "state": "first",
+        "x": 550,
+        "y": 40,
+        "speaker": "player",
+        "lines": [
+          {
+            "text": {
+              "de": "Kommt darauf an. Was willst du?",
+              "en": "That depends. What do you want?"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ],
+        "kind": "answer"
+      },
+      "n3": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich brauche Hilfe bei einer Sache. Frag ruhig, bevor du dich entscheidest.",
+              "en": "I need help with something. Ask away before you decide."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n4": {
+        "type": "player",
+        "state": "first",
+        "x": 1110,
+        "y": 40,
+        "speaker": "player",
+        "lines": [
+          {
+            "text": {
+              "de": "Worum geht es genau?",
+              "en": "What is it about?"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Was bekomme ich dafür?",
+              "en": "What do I get for it?"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Gut, ich helfe dir.",
+              "en": "All right, I will help you."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Nein, dafür habe ich keine Zeit.",
+              "en": "No, I have no time for that."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ],
+        "kind": "question"
+      },
+      "n5": {
+        "type": "npc",
+        "state": "first",
+        "x": 1390,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Mir fehlen zehn Goldstücke für neues Werkzeug. Bring sie mir, dann kann ich wieder arbeiten.",
+              "en": "I am ten gold pieces short for new tools. Bring them to me, then I can work again."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false,
+            "next_ref": {
+              "to": "n4",
+              "sel": [
+                0,
+                1,
+                2,
+                3
+              ],
+              "neg": [
+                0
+              ]
+            }
+          }
+        ]
+      },
+      "n6": {
+        "type": "npc",
+        "state": "first",
+        "x": 1390,
+        "y": 170,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich zahle dir das Doppelte zurück, sobald ich das Gold habe.",
+              "en": "I will pay you back double as soon as I have the gold."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false,
+            "next_ref": {
+              "to": "n4",
+              "sel": [
+                0,
+                1,
+                2,
+                3
+              ],
+              "neg": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      "n7": {
+        "type": "npc",
+        "state": "first",
+        "x": 1390,
+        "y": 300,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Danke! Komm zu mir zurück, wenn du das Gold hast.",
+              "en": "Thank you! Come back to me when you have the gold."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n8": {
+        "type": "npc",
+        "state": "first",
+        "x": 1390,
+        "y": 430,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Schade. Wenn du es dir anders überlegst, weißt du, wo du mich findest.",
+              "en": "Too bad. If you change your mind, you know where to find me."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:running": {
+        "type": "entry",
+        "state": "running",
+        "x": 40,
+        "y": 600
+      },
+      "n9": {
+        "type": "npc",
+        "state": "running",
+        "x": 270,
+        "y": 600,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Hast du die zehn Goldstücke? Ich warte noch.",
+              "en": "Do you have the ten gold pieces? I am still waiting."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:solved": {
+        "type": "entry",
+        "state": "solved",
+        "x": 40,
+        "y": 730
+      },
+      "n10": {
+        "type": "npc",
+        "state": "solved",
+        "x": 270,
+        "y": 730,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Genau das habe ich gebraucht! Hier, das Doppelte zurück.",
+              "en": "That is exactly what I needed! Here, double back."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": true,
+            "fight": false
+          }
+        ]
+      },
+      "entry:closed": {
+        "type": "entry",
+        "state": "closed",
+        "x": 40,
+        "y": 860
+      },
+      "n11": {
+        "type": "npc",
+        "state": "closed",
+        "x": 270,
+        "y": 860,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Danke noch einmal für deine Hilfe.",
+              "en": "Thanks again for your help."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      }
+    },
+    "edges": [
+      [
+        "entry:first",
+        0,
+        "n1"
+      ],
+      [
+        "n1",
+        0,
+        "n2"
+      ],
+      [
+        "n2",
+        0,
+        "n3"
+      ],
+      [
+        "n3",
+        0,
+        "n4"
+      ],
+      [
+        "n4",
+        0,
+        "n5"
+      ],
+      [
+        "n4",
+        1,
+        "n6"
+      ],
+      [
+        "n4",
+        2,
+        "n7"
+      ],
+      [
+        "n4",
+        3,
+        "n8"
+      ],
+      [
+        "n5",
+        0,
+        "n4"
+      ],
+      [
+        "n6",
+        0,
+        "n4"
+      ],
+      [
+        "entry:running",
+        0,
+        "n9"
+      ],
+      [
+        "entry:solved",
+        0,
+        "n10"
+      ],
+      [
+        "entry:closed",
+        0,
+        "n11"
+      ]
+    ]
+  },
+  "quest": {
+    "title": {
+      "de": "Zehn Goldstücke",
+      "en": "Ten gold pieces"
+    },
+    "journal": {
+      "take": {
+        "de": "Tago braucht zehn Goldstücke für neues Werkzeug. Bring sie ihm.",
+        "en": "Tago needs ten gold pieces for new tools. Bring them to him."
+      },
+      "solve": {
+        "de": "Du hast die zehn Goldstücke. Bring sie Tago.",
+        "en": "You have the ten gold pieces. Take them to Tago."
+      },
+      "close": {
+        "de": "Tago hat das Gold bekommen und dir das Doppelte zurückgezahlt.",
+        "en": "Tago got the gold and paid you back double."
+      }
+    },
+    "task": {
+      "fc": "BRING_GOLD",
+      "args": {
+        "gold": 10
+      }
+    },
+    "actions": [
+      {
+        "kind": "REWARD",
+        "verb": "GLD",
+        "args": {
+          "amount": "20"
+        },
+        "when": "CLOSE"
+      }
+    ]
+  }
+}

@@ -1,0 +1,312 @@
+{
+  "template": {
+    "kind": "dialog",
+    "title": {
+      "de": "Auftrag mit Frage nach dem Lohn",
+      "en": "Job with a question about the pay"
+    },
+    "note": {
+      "de": "Angebot, der Held fragt nach dem Lohn (die Frage verschwindet danach), dann Annehmen oder Ablehnen.",
+      "en": "Offer, the hero asks about the pay (the question goes away afterwards), then accept or decline."
+    }
+  },
+  "graph": {
+    "nodes": {
+      "entry:first": {
+        "type": "entry",
+        "state": "first",
+        "x": 40,
+        "y": 40
+      },
+      "n1": {
+        "type": "npc",
+        "state": "first",
+        "x": 270,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Du siehst aus, als könntest du mit einem Schwert umgehen. Ich hätte eine Aufgabe für dich.",
+              "en": "You look like you can handle a sword. I have a task for you."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n2": {
+        "type": "player",
+        "state": "first",
+        "x": 550,
+        "y": 40,
+        "speaker": "player",
+        "lines": [
+          {
+            "text": {
+              "de": "Was springt für mich dabei raus?",
+              "en": "What is in it for me?"
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Einverstanden.",
+              "en": "Agreed."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Such dir jemand anderen.",
+              "en": "Find someone else."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ],
+        "kind": "question"
+      },
+      "n3": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich zahle gut, das verspreche ich dir.",
+              "en": "I pay well, I promise you that."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false,
+            "next_ref": {
+              "to": "n2",
+              "sel": [
+                0,
+                1,
+                2
+              ],
+              "neg": [
+                0
+              ]
+            }
+          }
+        ]
+      },
+      "n4": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 170,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Abgemacht! Komm wieder, wenn es erledigt ist.",
+              "en": "It is a deal! Come back when it is done."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n5": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 300,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Dann eben nicht. Es gibt genug andere Söldner.",
+              "en": "Suit yourself. There are enough other mercenaries."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:running": {
+        "type": "entry",
+        "state": "running",
+        "x": 40,
+        "y": 450
+      },
+      "n6": {
+        "type": "npc",
+        "state": "running",
+        "x": 270,
+        "y": 450,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Die Aufgabe ist noch nicht erledigt. Mein Angebot steht.",
+              "en": "The task is not done yet. My offer stands."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:solved": {
+        "type": "entry",
+        "state": "solved",
+        "x": 40,
+        "y": 580
+      },
+      "n7": {
+        "type": "npc",
+        "state": "solved",
+        "x": 270,
+        "y": 580,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Gute Arbeit! Hier ist dein Lohn, wie versprochen.",
+              "en": "Good work! Here is your pay, as promised."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": true,
+            "fight": false
+          }
+        ]
+      },
+      "entry:closed": {
+        "type": "entry",
+        "state": "closed",
+        "x": 40,
+        "y": 710
+      },
+      "n8": {
+        "type": "npc",
+        "state": "closed",
+        "x": 270,
+        "y": 710,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Wenn ich wieder Arbeit habe, sage ich dir Bescheid.",
+              "en": "When I have work again, I will let you know."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      }
+    },
+    "edges": [
+      [
+        "entry:first",
+        0,
+        "n1"
+      ],
+      [
+        "n1",
+        0,
+        "n2"
+      ],
+      [
+        "n2",
+        0,
+        "n3"
+      ],
+      [
+        "n2",
+        1,
+        "n4"
+      ],
+      [
+        "n2",
+        2,
+        "n5"
+      ],
+      [
+        "n3",
+        0,
+        "n2"
+      ],
+      [
+        "entry:running",
+        0,
+        "n6"
+      ],
+      [
+        "entry:solved",
+        0,
+        "n7"
+      ],
+      [
+        "entry:closed",
+        0,
+        "n8"
+      ]
+    ]
+  },
+  "quest": {
+    "title": {
+      "de": "Arbeit gegen Lohn",
+      "en": "Work for pay"
+    },
+    "journal": {
+      "take": {
+        "de": "Du hast eine Aufgabe gegen guten Lohn angenommen.",
+        "en": "You have taken a task for good pay."
+      },
+      "solve": {
+        "de": "Die Aufgabe ist erledigt. Hol Dir Deinen Lohn ab.",
+        "en": "The task is done. Go and collect your pay."
+      },
+      "close": {
+        "de": "Du hast Deinen Lohn bekommen.",
+        "en": "You got your pay."
+      }
+    }
+  }
+}

@@ -622,12 +622,14 @@ def make_condition(cond='after', **values):
     return n
 
 
-def insert_dialog(quest, template_graph, speaker):
+def insert_dialog(quest, template_graph, speaker, lang=None):
     """Put the dialog of a dialog template (kind ``dialog``) into a quest.
     NPC nodes get ``speaker``; an entry of the quest without an outgoing edge
     is connected, an occupied one is left alone. New nodes go to the right
-    of the existing dialog. Returns (new node ids, connected states,
-    skipped states)."""
+    of the existing dialog. A line text may be {"de": ..., "en": ...}
+    (4.3.0): ``lang`` picks one. A line that leads back into a question
+    menu keeps its ``next_ref`` (used questions hidden, as in DQ_15).
+    Returns (new node ids, connected states, skipped states)."""
     g = quest.graph
     tnodes = template_graph['nodes']
     dialog = [n for n in g['nodes'].values()
@@ -646,7 +648,19 @@ def insert_dialog(quest, template_graph, speaker):
         if c['type'] == 'npc':
             c['speaker'] = speaker
         c['x'] = c.get('x', 0) + shift
+        for ln in c.get('lines') or []:
+            if isinstance(ln.get('text'), dict):
+                texts = ln['text']
+                ln['text'] = (texts.get(lang) or texts.get('en')
+                              or texts.get('de') or '')
         mapping[tid] = add_node(g, c)
+    for nid in mapping.values():
+        for ln in g['nodes'][nid].get('lines') or []:
+            ref = ln.get('next_ref')
+            if ref and ref.get('to') in mapping:
+                ref['to'] = mapping[ref['to']]
+            elif ref:
+                ln.pop('next_ref')
     connected, skipped = [], []
     for frm, port, to in template_graph['edges']:
         if to not in mapping:
@@ -662,6 +676,27 @@ def insert_dialog(quest, template_graph, speaker):
         elif frm in mapping:
             connect(g, mapping[frm], port, mapping[to])
     return list(mapping.values()), connected, skipped
+
+
+def apply_template_quest(quest, qd, lang=None):
+    """What a dialog template brings for an empty quest (4.3.0): title,
+    journal and, when the quest has no task yet, task and actions. Texts
+    may be {"de": ..., "en": ...}; filled fields stay."""
+    def pick(v):
+        if isinstance(v, dict):
+            return v.get(lang) or v.get('en') or v.get('de') or ''
+        return v or ''
+    if qd.get('title') and not (quest.title or '').strip():
+        quest.title = pick(qd['title'])
+    for key, v in (qd.get('journal') or {}).items():
+        if not (quest.journal.get(key) or '').strip():
+            quest.journal[key] = pick(v)
+    task = qd.get('task')
+    if task and not quest.task().get('fc'):
+        set_task(quest.graph, task['fc'])
+        quest.task()['args'].update(copy.deepcopy(task.get('args') or {}))
+        for a in qd.get('actions') or []:
+            quest.actions.append(copy.deepcopy(a))
 
 
 def copy_references(quest, old_id, new_id):

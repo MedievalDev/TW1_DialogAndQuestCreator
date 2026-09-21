@@ -597,6 +597,16 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.3.0: Multiplayer-Quest in einem Fenster.** Quest waehlen, Namen
+  eintragen, Marker auf der Karte setzen, "Uebernehmen", fertig: Das Tool
+  legt die Quest an, schreibt die Marker und speichert, danach nur noch
+  exportieren. Rot = fehlt, gruen = fertig. Der Questgeber spricht den
+  Helden von selbst an, die Quest ist ab Spielbeginn da (beides
+  umstellbar). Der Export fragt nur noch einmal. Dazu **fuenf
+  Dialogvorlagen** ohne TODO (Test-Dialog mit Wortwechsel und zwei Fragen,
+  kurzer Auftrag, Frage nach dem Lohn, Hilferuf, Botengang) unter Neue
+  Quest > Leer anfangen, und die **gefuehrte Tour** Hilfe > Tour:
+  Multiplayer-Quest uebernehmen mit gruenen und roten Rahmen.
 - **4.2.1: Neue Questgeber erscheinen im Spiel.** Das Tool schrieb den
   Block eines neuen NPC hinter die Quests ans Dateiende. Dort liest das
   Spiel ihn nie (sein qtx-Leser schließt einen Questblock erst mit der

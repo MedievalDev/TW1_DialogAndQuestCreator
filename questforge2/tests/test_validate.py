@@ -144,7 +144,7 @@ class Rules(unittest.TestCase):
         set_level(q, 0)
         E, W = validate.validate_quest(q, self.idx)
         self.assertNotIn('val.after', keys(E))
-        self.assertIn('warn.after.start', keys(W))
+        self.assertNotIn('warn.after', keys(W))
         set_level(q, 1)
         E, W = validate.validate_quest(q, self.idx)
         self.assertIn('val.after', keys(E))

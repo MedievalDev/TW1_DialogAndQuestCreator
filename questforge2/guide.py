@@ -1,7 +1,9 @@
-"""The two guides in the coach panel (plan section 9) and the docs window.
+"""The guides in the coach panel (plan section 9) and the docs window.
 
-Both guides run inside the coach panel, not as modal dialogs, so the tool
-stays usable. A step has a heading, a short text and a gold frame around the
+The guides run inside the coach panel, not as modal dialogs, so the tool
+stays usable. The third one (4.3.0) leads through taking a multiplayer quest
+over, across the windows it opens, with green frames on what to click and
+red ones on what is missing (Marks). A step has a heading, a short text and a gold frame around the
 element it talks about. The tour only explains. The tutorial checks the
 state after every step: "Next" stays disabled until the step is done and
 the coach moves on by itself once it is; every step also offers a button
@@ -20,6 +22,8 @@ from .model import entry_id
 
 POLL_MS = 700
 BORDER = 3
+MARK_BORDER = 4
+GREEN, RED = theme.OK, theme.ERR
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +324,230 @@ class Tutorial:
         self.app.export_ui()
 
 
+# ---------------------------------------------------------------------------
+# guided tour: a multiplayer quest into the single player (4.3.0)
+
+def mp_steps(app, coach):
+    """Step by step through the one-page window, the map and the export.
+    Every step says with green frames where to click and with red ones
+    what is still missing; the coach finds the current step from the state
+    of the windows (Coach._mp_current), so closing a window goes back."""
+    from .app import ExportConfirm, NewQuestDialog
+    from .mpmerge import MpMergeWindow, target_ready
+
+    def alive(obj):
+        try:
+            return obj is not None and bool(obj.win.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def dlg():
+        d = NewQuestDialog._open
+        return d if alive(d) else None
+
+    def mpw():
+        w = MpMergeWindow._open
+        return w if alive(w) else None
+
+    def pw():
+        w = mpw()
+        p = getattr(w, 'place_win', None) if w else None
+        return p if alive(p) else None
+
+    def exp():
+        d = ExportConfirm._open
+        return d if alive(d) else None
+
+    def markers_ok():
+        w = mpw()
+        return bool(w and w.src is not None and
+                    all(target_ready(tg) for tg in w.targets))
+
+    def fill_ok():
+        w = mpw()
+        return bool(w and w.src is not None and
+                    not [k for k, _w in w.missing() if k != 'markers'])
+
+    def map_ok():
+        p = pw()
+        if p is not None:
+            return all(tg.get('placed') for tg in p.targets)
+        return markers_ok()
+
+    def taken():
+        return MpMergeWindow._open is None and any(
+            q.extra.get('mp_source') and id(q) not in coach.mp_before
+            for q in (app.project.quests if app.project else []))
+
+    def new_btn():
+        return [(app.timeline.new_btn, GREEN, t('mpt.c.click'))]
+
+    def m_mode():
+        d = dlg()
+        if d is None:
+            return new_btn()
+        if d.how.get() != 'mp':
+            return [(d.radios['mp'], GREEN, t('mpt.c.click'))]
+        return [(d.ok_btn, GREEN, t('mpt.c.click'))]
+
+    def m_pick():
+        w = mpw()
+        return [(w.tree, GREEN, t('mpt.c.pick'))] if w else []
+
+    def m_fill():
+        w = mpw()
+        if not w:
+            return []
+        miss = [(wid, RED, None) for k, wid in w.missing() if k != 'markers']
+        if miss:
+            miss[0] = (miss[0][0], RED, t('mpt.c.missing'))
+        return miss
+
+    def m_place():
+        w = mpw()
+        return [(w.place_btn, GREEN, t('mpt.c.click'))] if w else []
+
+    def m_map():
+        p = pw()
+        if p is None:
+            return []
+        if p.held is None:
+            for tg in p.targets:
+                if not tg.get('placed'):
+                    row = getattr(p, 'row_of', {}).get(id(tg))
+                    return [(row, GREEN, t('mpt.c.take'))]
+            return []
+        return [(p.c, GREEN, t('mpt.c.drop'))]
+
+    def m_confirm():
+        p = pw()
+        return [(p.ok_btn, GREEN, t('mpt.c.confirm'))] if p else []
+
+    def m_take():
+        w = mpw()
+        if not w:
+            return []
+        out = [(w.take_btn, GREEN, t('mpt.c.take2'))]
+        out += [(wid, RED, None) for _k, wid in w.missing()]
+        return out
+
+    def m_export():
+        return [(app.menu_items.get('menu.file'), GREEN, t('mpt.c.export'))]
+
+    def m_exportok():
+        d = exp()
+        return [(d.ok_btn, GREEN, t('mpt.c.click'))] if d else m_export()
+
+    return [
+        {'key': 'mpt.new', 'marks': new_btn,
+         'check': lambda: dlg() is not None or mpw() is not None},
+        {'key': 'mpt.mode', 'marks': m_mode,
+         'check': lambda: mpw() is not None},
+        {'key': 'mpt.pick', 'marks': m_pick,
+         'check': lambda: bool(mpw() and mpw().src is not None)},
+        {'key': 'mpt.fill', 'marks': m_fill, 'check': fill_ok},
+        {'key': 'mpt.place', 'marks': m_place,
+         'check': lambda: pw() is not None or markers_ok()},
+        {'key': 'mpt.map', 'marks': m_map, 'check': map_ok},
+        {'key': 'mpt.confirm', 'marks': m_confirm,
+         'check': lambda: pw() is None and markers_ok()},
+        {'key': 'mpt.take', 'marks': m_take, 'check': taken,
+         'milestone': True},
+        {'key': 'mpt.export', 'marks': m_export,
+         'check': lambda: exp() is not None or bool(
+             getattr(app, 'exported_ok', False))},
+        {'key': 'mpt.exportok', 'marks': m_exportok,
+         'check': lambda: bool(getattr(app, 'exported_ok', False)),
+         'milestone': True},
+        {'key': 'mpt.done', 'final': True},
+    ]
+
+
+class Marks:
+    """Frames around widgets in whatever window they sit in (4.3.0, Marco:
+    green = click here, red = still missing) and a small label next to a
+    green one that says what to do. They pulse, so the eye finds them."""
+
+    def __init__(self):
+        self.items = []             # (frames, label, colour)
+        self.sig = None
+        self.phase = False
+
+    def clear(self):
+        for frames, label, _c in self.items:
+            for w in frames + ([label] if label is not None else []):
+                try:
+                    w.destroy()
+                except tk.TclError:
+                    pass
+        self.items = []
+        self.sig = None
+
+    @staticmethod
+    def _geo(widget):
+        top = widget.winfo_toplevel()
+        return (top, widget.winfo_rootx() - top.winfo_rootx(),
+                widget.winfo_rooty() - top.winfo_rooty(),
+                widget.winfo_width(), widget.winfo_height())
+
+    def show(self, marks):
+        """``marks``: [(widget, colour, text or None)]. Built again only
+        when something moved; otherwise the frames just pulse."""
+        todo, sig = [], []
+        for widget, colour, text in marks:
+            try:
+                if widget is None or not widget.winfo_exists() or \
+                        not widget.winfo_ismapped():
+                    continue
+                geo = self._geo(widget)
+            except tk.TclError:
+                continue
+            todo.append((geo, colour, text))
+            sig.append((str(geo[0]), geo[1:], colour, text))
+        if sig == self.sig:
+            self.pulse()
+            return
+        self.clear()
+        self.sig = sig
+        b = MARK_BORDER
+        for (top, x, y, w, h), colour, text in todo:
+            frames = []
+            for fx, fy, fw, fh in ((x - b, y - b, w + 2 * b, b),
+                                   (x - b, y + h, w + 2 * b, b),
+                                   (x - b, y, b, h), (x + w, y, b, h)):
+                f = tk.Frame(top, bg=colour)
+                f.place(x=fx, y=fy, width=fw, height=fh)
+                f.lift()
+                frames.append(f)
+            label = None
+            if text:
+                label = tk.Label(top, text=text, bg=colour, fg='#0b1a0f',
+                                 font=theme.FONT_BOLD, padx=8, pady=3)
+                lw, lh = label.winfo_reqwidth(), label.winfo_reqheight()
+                tw, th = top.winfo_width(), top.winfo_height()
+                # right of the widget, else below, else above, else inside
+                lx, ly = x + w + b + 8, y + max(0, (h - lh) // 2)
+                if lx + lw > tw - 4:
+                    lx, ly = max(4, min(x, tw - lw - 4)), y + h + b + 6
+                    if ly + lh > th - 4:
+                        ly = y - b - lh - 6
+                        if ly < 4:
+                            lx, ly = x + 10, y + 10
+                label.place(x=lx, y=ly)
+                label.lift()
+            self.items.append((frames, label, colour))
+
+    def pulse(self):
+        self.phase = not self.phase
+        for frames, label, colour in self.items:
+            c = theme.mix(colour, '#ffffff', 0.45) if self.phase else colour
+            for w in frames + ([label] if label is not None else []):
+                try:
+                    w.configure(bg=c)
+                except tk.TclError:
+                    pass
+
+
 def tutorial_steps(app, tut):
     s = []
     for key in ('new', 'texts', 'speaker', 'offer', 'question', 'answer',
@@ -355,6 +583,8 @@ class Coach(ttk.Frame):
         self.steps = []
         self.i = 0
         self.tutorial = Tutorial(app)
+        self.marks = Marks()
+        self.mp_before = set()
         self._frames = []
         self._job = None
         self._advance_job = None
@@ -383,6 +613,7 @@ class Coach(ttk.Frame):
         self.mode = None
         self._stop_poll()
         self._highlight(None)
+        self.marks.clear()
         self._clear()
         self.title.configure(text=t('panel.coach'))
         ttk.Label(self.body, text=t('coach.idle'), style='PanelMuted.TLabel',
@@ -393,6 +624,9 @@ class Coach(ttk.Frame):
                    ).pack(side='left', padx=(0, 6))
         ttk.Button(row, text=t('coach.tutorial'),
                    command=lambda: self.start('tutorial')).pack(side='left')
+        ttk.Button(self.body, text=t('coach.mptour'),
+                   command=lambda: self.start('mp')).pack(anchor='w',
+                                                          pady=(6, 0))
         self._wrap()
 
     def start(self, mode):
@@ -400,6 +634,16 @@ class Coach(ttk.Frame):
         self.i = 0
         if mode == 'tour':
             self.steps = tour_steps(self.app)
+        elif mode == 'mp':
+            app = self.app
+            self.mp_before = {id(q) for q in (app.project.quests
+                                              if app.project else [])}
+            app.exported_ok = False
+            self.steps = mp_steps(app, self)
+            self.i = self._mp_current()
+            if not app.vars['coach'].get():
+                app.vars['coach'].set(True)
+                app._apply_panels()
         else:
             self.tutorial = Tutorial(self.app)
             self.steps = tutorial_steps(self.app, self.tutorial)
@@ -413,7 +657,8 @@ class Coach(ttk.Frame):
         step = self.steps[self.i]
         key = step['key']
         self._clear()
-        head = t('coach.tour') if self.mode == 'tour' else t('coach.tutorial')
+        head = {'tour': t('coach.tour'), 'mp': t('coach.mptour')}.get(
+            self.mode, t('coach.tutorial'))
         self.title.configure(text=f'{head}  ·  ' + t(
             'coach.step', i=self.i + 1, n=len(self.steps)))
         ttk.Label(self.body, text=t(key + '.title'), foreground=theme.GOLD,
@@ -431,7 +676,12 @@ class Coach(ttk.Frame):
                        command=self._do).pack(anchor='w', pady=(6, 0))
         nav = ttk.Frame(self.body, style='Panel.TFrame')
         nav.pack(fill='x', pady=(10, 0))
-        if step.get('final') and self.mode == 'tour':
+        if self.mode == 'mp':
+            ttk.Button(nav, text=t('coach.finish') if step.get('final')
+                       else t('coach.end'), command=self.finish,
+                       style='Accent.TButton' if step.get('final')
+                       else 'TButton').pack(side='right')
+        elif step.get('final') and self.mode == 'tour':
             ttk.Button(nav, text=t('coach.tut.yes'), style='Accent.TButton',
                        command=self._tour_to_tutorial).pack(side='left',
                                                             padx=(0, 6))
@@ -459,6 +709,8 @@ class Coach(ttk.Frame):
         self._wrap()
         target = step.get('target')
         self._highlight(target() if target else None)
+        if not step.get('marks'):
+            self.marks.clear()
         self._poll()
 
     def _do(self):
@@ -502,9 +754,45 @@ class Coach(ttk.Frame):
                     pass
         self._job = self._advance_job = None
 
+    def _mp_current(self):
+        """The step the state of the windows asks for: after the last
+        milestone reached (quest taken, export done), the first step whose
+        check fails."""
+        def ok(st):
+            try:
+                return bool(st['check']())
+            except Exception:
+                return False
+        start = 0
+        for k, st in enumerate(self.steps):
+            if st.get('milestone') and ok(st):
+                start = k + 1
+        for k in range(start, len(self.steps)):
+            st = self.steps[k]
+            if st.get('final') or not ok(st):
+                return k
+        return len(self.steps) - 1
+
     def _poll(self):
         self._job = None
         if not self.mode or not self.steps:
+            return
+        if self.mode == 'mp':
+            j = self._mp_current()
+            if j != self.i:
+                self.i = j
+                self.show()
+                return
+            step = self.steps[self.i]
+            try:
+                marks = step['marks']() if step.get('marks') else []
+            except Exception:
+                marks = []
+            self.marks.show(marks)
+            if self.state_lbl is not None:
+                self.state_lbl.configure(text=t('coach.open'),
+                                         foreground=theme.MUT)
+            self._job = self.after(POLL_MS // 2, self._poll)
             return
         step = self.steps[self.i]
         target = step.get('target')

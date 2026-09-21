@@ -1,0 +1,258 @@
+{
+  "template": {
+    "kind": "dialog",
+    "title": {
+      "de": "Kurzer Auftrag: Angebot, Annehmen, Ablehnen",
+      "en": "Short job: offer, accept, decline"
+    },
+    "note": {
+      "de": "Das Noetigste: ein Angebot, zwei Antworten, dazu je ein Satz fuer laeuft, erfuellt und abgeschlossen.",
+      "en": "The bare minimum: an offer, two answers, plus one line each for running, solved and closed."
+    }
+  },
+  "graph": {
+    "nodes": {
+      "entry:first": {
+        "type": "entry",
+        "state": "first",
+        "x": 40,
+        "y": 40
+      },
+      "n1": {
+        "type": "npc",
+        "state": "first",
+        "x": 270,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich habe Arbeit für dich, wenn du willst. Es wird gut bezahlt.",
+              "en": "I have work for you, if you want it. It pays well."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n2": {
+        "type": "player",
+        "state": "first",
+        "x": 550,
+        "y": 40,
+        "speaker": "player",
+        "lines": [
+          {
+            "text": {
+              "de": "Ich mache es.",
+              "en": "I will do it."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          },
+          {
+            "text": {
+              "de": "Heute nicht.",
+              "en": "Not today."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ],
+        "kind": "question"
+      },
+      "n3": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 40,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Gut! Ich warte hier auf dich.",
+              "en": "Good! I will wait here for you."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": true,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "n4": {
+        "type": "npc",
+        "state": "first",
+        "x": 830,
+        "y": 170,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Wie du willst.",
+              "en": "As you wish."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:running": {
+        "type": "entry",
+        "state": "running",
+        "x": 40,
+        "y": 320
+      },
+      "n5": {
+        "type": "npc",
+        "state": "running",
+        "x": 270,
+        "y": 320,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Noch nicht fertig? Beeil dich bitte.",
+              "en": "Not done yet? Please hurry."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      },
+      "entry:solved": {
+        "type": "entry",
+        "state": "solved",
+        "x": 40,
+        "y": 450
+      },
+      "n6": {
+        "type": "npc",
+        "state": "solved",
+        "x": 270,
+        "y": 450,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Genau das habe ich gebraucht! Hier, nimm das.",
+              "en": "That is exactly what I needed! Here, take this."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": true,
+            "fight": false
+          }
+        ]
+      },
+      "entry:closed": {
+        "type": "entry",
+        "state": "closed",
+        "x": 40,
+        "y": 580
+      },
+      "n7": {
+        "type": "npc",
+        "state": "closed",
+        "x": 270,
+        "y": 580,
+        "speaker": "giver",
+        "lines": [
+          {
+            "text": {
+              "de": "Schön, dich wiederzusehen.",
+              "en": "Good to see you again."
+            },
+            "cue": "",
+            "cam": null,
+            "anim": 0,
+            "take": false,
+            "close": false,
+            "fight": false
+          }
+        ]
+      }
+    },
+    "edges": [
+      [
+        "entry:first",
+        0,
+        "n1"
+      ],
+      [
+        "n1",
+        0,
+        "n2"
+      ],
+      [
+        "n2",
+        0,
+        "n3"
+      ],
+      [
+        "n2",
+        1,
+        "n4"
+      ],
+      [
+        "entry:running",
+        0,
+        "n5"
+      ],
+      [
+        "entry:solved",
+        0,
+        "n6"
+      ],
+      [
+        "entry:closed",
+        0,
+        "n7"
+      ]
+    ]
+  },
+  "quest": {
+    "title": {
+      "de": "Ein kurzer Auftrag",
+      "en": "A short job"
+    },
+    "journal": {
+      "take": {
+        "de": "Du hast einen Auftrag angenommen.",
+        "en": "You have taken a job."
+      },
+      "solve": {
+        "de": "Der Auftrag ist erledigt. Kehre zu Deinem Auftraggeber zurück.",
+        "en": "The job is done. Return to your employer."
+      },
+      "close": {
+        "de": "Mission erfolgreich beendet.",
+        "en": "Mission completed successfully."
+      }
+    }
+  }
+}

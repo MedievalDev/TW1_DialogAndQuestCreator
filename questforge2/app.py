@@ -105,6 +105,7 @@ class App:
         bar = ttk.Frame(self.root, style='Menubar.TFrame')
         bar.pack(fill='x')
         self.menubar = bar
+        self.menu_items = {}
         for key, filler in (('menu.file', self._fill_file),
                             ('menu.edit', self._fill_edit),
                             ('menu.view', self._fill_view),
@@ -113,6 +114,7 @@ class App:
                             ('menu.help', self._fill_help)):
             item = ttk.Label(bar, text=t(key), style='Menubar.TLabel')
             item.pack(side='left')
+            self.menu_items[key] = item
             item.bind('<Button-1>',
                       lambda ev, f=filler, w=item: self._popup(f, w))
             item.bind('<Enter>', lambda ev, w=item: w.state(['active']))
@@ -358,6 +360,8 @@ class App:
                       command=lambda: self.coach.start('tour'))
         m.add_command(label=t('help.tutorial'),
                       command=lambda: self.coach.start('tutorial'))
+        m.add_command(label=t('help.mptour'),
+                      command=lambda: self.coach.start('mp'))
         m.add_command(label=t('help.docs'), command=lambda: show_docs(self))
         m.add_separator()
         for key, url in LINKS:
@@ -604,6 +608,12 @@ class App:
         how, what = dlg.result
         if how == 'empty':
             self.new_quest()
+            if what is not None:
+                # 4.3.0: an empty quest with a dialog template, spoken by
+                # Tago like the tutorial's quest, so it runs right away
+                self._default_giver()
+                self.insert_dialog_template(what)
+                self._template_quest(what)
         elif how == 'template':
             self.new_from_template_data(what)
         elif how == 'copy':
@@ -642,6 +652,30 @@ class App:
                 self.goto_problem(q, nid)
                 return
 
+    def _template_quest(self, tpl):
+        """Title, journal and (the test dialog) task and reward a dialog
+        template brings for an empty quest; filled fields stay."""
+        q = self.quest
+        qd = (tpl.get('data') or {}).get('quest') or {}
+        if q is None or not qd:
+            return
+        model.apply_template_quest(q, qd, get_lang())
+        self.mark_dirty()
+        self.open_quest(q)
+
+    def _default_giver(self, nid=3):
+        """Tago as giver of the open quest when it has no NPC speaker yet
+        (he stands where the game starts)."""
+        q = self.quest
+        if q is None or any(isinstance(s.get('id'), int) for s in q.speakers):
+            return
+        npc = self.index.npc(nid) if self.index else None
+        self.add_speaker({'id': nid, 'name': npc['name'] if npc else 'Tago',
+                          'lector': npc['lector'] if npc else 123,
+                          'tile': npc['tile'] if npc else 'E1',
+                          'new': False})
+        q.giver = nid
+
     def insert_dialog_template(self, tpl):
         """Dialog template into the open quest, spoken by its giver (or the
         first NPC speaker)."""
@@ -656,7 +690,7 @@ class App:
             return
         self.push_undo('dialog template')
         new, connected, skipped = model.insert_dialog(
-            q, tpl['data']['graph'], speaker)
+            q, tpl['data']['graph'], speaker, get_lang())
         self.graph.set_graph(q.graph)
         self.changed()
         self._build_tabs()
@@ -1682,28 +1716,15 @@ class App:
                 messagebox.showerror(t('export.title'), t('export.running'),
                                      parent=self.root)
                 return
-            conf = export.conflicts(game, name)
-            if conf:
-                if not messagebox.askyesno(t('export.title'), t(
-                        'export.conflict', target=name,
-                        mods=', '.join(c[0] for c in conf)),
-                        icon='warning', parent=self.root):
-                    return
-            elif not messagebox.askyesno(t('export.title'),
-                                         t('export.target', name=name),
-                                         parent=self.root):
-                return
-            if deps and not messagebox.askyesno(t('export.title'), t(
-                    'export.deps', n=len(deps), tiles=NL.join(
-                        f"  {d['tile']}  {d['inner']}  ({d['mod']})"
-                        for d in deps)), parent=self.root):
-                return
-        if warnings:
-            text = t('export.warnings', n=len(warnings)) + '\n\n' + '\n'.join(
-                f'Q_{q.id}: {m}' for q, m, _ in warnings[:12])
-            if not messagebox.askyesno(t('export.title'), text, icon='warning',
-                                       parent=self.root):
-                return
+        # one question with everything instead of up to three (4.3.0)
+        conf = [] if files_only else export.conflicts(game, name)
+        dlg = ExportConfirm(
+            self, target if files_only else t('export.confirm.target',
+                                              name=name),
+            conf, [] if files_only else deps, warnings)
+        self.root.wait_window(dlg.win)
+        if not dlg.result:
+            return
         win = ExportWindow(self)
         result = {}
         entries_box = {}                  # map files packed by this export
@@ -1774,6 +1795,11 @@ class App:
                            + NL + NL + t('export.next') + extra, ok=good)
             if 'err' not in result and p is self.project:
                 self.mark_dirty()            # exported_maps changed
+                if self.project.path:
+                    # saved right away: no "save changes?" afterwards (4.3.0)
+                    self._write_project(self.project.path)
+            if 'err' not in result:
+                self.exported_ok = True      # the guided tours look at it
             if 'err' not in result and self.coach.tutorial.quest in p.quests:
                 self.coach.tutorial.exported = True
 
@@ -3512,11 +3538,15 @@ class UpdateWindow:
 
 
 class NewQuestDialog:
-    """Start empty, from a shipped template or as a copy of any quest."""
+    """Start empty (4.3.0: with a dialog template if wanted), from a
+    shipped template, as a copy of any quest or as a multiplayer quest
+    taken over (its own window has the list)."""
+    _open = None
 
     def __init__(self, app):
         self.app = app
         self.result = None
+        NewQuestDialog._open = self
         self.win = tk.Toplevel(app.root)
         self.win.title(t('newq.title'))
         self.win.transient(app.root)
@@ -3527,10 +3557,13 @@ class NewQuestDialog:
         f.pack(fill='both', expand=True)
         ttk.Label(f, text=t('newq.head'), style='Brand.TLabel').pack(anchor='w')
         self.how = tk.StringVar(value='empty')
+        self.radios = {}
         for key in ('empty', 'template', 'copy', 'mp'):
-            ttk.Radiobutton(f, text=t('newq.' + key), value=key,
-                            variable=self.how, command=self._switch
-                            ).pack(anchor='w', pady=(8 if key == 'empty' else 2, 0))
+            self.radios[key] = ttk.Radiobutton(
+                f, text=t('newq.' + key), value=key, variable=self.how,
+                command=self._switch)
+            self.radios[key].pack(anchor='w',
+                                  pady=(8 if key == 'empty' else 2, 0))
         self.search = tk.StringVar()
         self.ent = ttk.Entry(f, textvariable=self.search)
         self.ent.pack(fill='x', pady=(10, 4))
@@ -3554,23 +3587,32 @@ class NewQuestDialog:
         btns.pack(fill='x', pady=(10, 0))
         ttk.Button(btns, text=t('cancel'), command=self.win.destroy
                    ).pack(side='right')
-        ttk.Button(btns, text=t('ok'), style='Accent.TButton',
-                   command=self._ok).pack(side='right', padx=6)
+        self.ok_btn = ttk.Button(btns, text=t('ok'), style='Accent.TButton',
+                                 command=self._ok)
+        self.ok_btn.pack(side='right', padx=6)
+        self.win.bind('<Destroy>', self._gone)
         self.items = []
         self.templates = data.builtin_templates('quest')
+        self.dialogs = data.builtin_templates('dialog')
         self._switch()
         self.win.grab_set()
 
+    def _gone(self, ev):
+        if ev.widget is self.win and NewQuestDialog._open is self:
+            NewQuestDialog._open = None
+
     def _switch(self):
         mode = self.how.get()
-        if mode == 'empty':
+        if mode in ('empty', 'mp'):
             self.ent.pack_forget()
-            self.box.pack_forget()
         else:
             self.ent.pack(fill='x', pady=(10, 4), before=self.note)
+        if mode == 'mp':
+            self.box.pack_forget()
+        else:
             self.box.pack(fill='both', expand=True, before=self.note)
         self._fill()
-        if mode != 'empty' and self.lst.size() and not self.lst.curselection():
+        if mode != 'mp' and self.lst.size() and not self.lst.curselection():
             self.lst.selection_set(0)
             self._note()
 
@@ -3583,7 +3625,16 @@ class NewQuestDialog:
         if getattr(self.ent, '_placeholder', False):
             needle = ''
         lang = get_lang()
-        if mode == 'template':
+        if mode == 'empty':
+            # 4.3.0: an empty quest, with one of the dialog templates if
+            # wanted (the test dialog first)
+            self.items.append(('empty', None))
+            self.lst.insert('end', t('newq.nodialog'))
+            for tp in self.dialogs:
+                self.items.append(('empty', tp))
+                self.lst.insert('end', t('newq.withdialog', title=tp[
+                    'title'].get(lang) or tp['name']))
+        elif mode == 'template':
             for tp in self.templates:
                 title = tp['title'].get(lang) or tp['name']
                 if needle and needle not in title.lower():
@@ -3623,37 +3674,23 @@ class NewQuestDialog:
                 self.items.append(('modcopy', (info['path'], qid)))
                 self.lst.insert('end', label)
                 self.lst.itemconfigure('end', foreground=theme.MOD)
-        elif mode == 'mp':
-            from .mpmerge import is_mp_quest
-            idx = self.app.index
-            for k in sorted(idx.quests, key=int) if idx else []:
-                qid = int(k)
-                if not is_mp_quest(qid):
-                    continue
-                info = idx.quests[k]
-                label = (f"Q_{qid}  {info.get('title') or '-'}   "
-                         f"{' '.join(info.get('fc') or [])}")
-                if needle and needle not in label.lower():
-                    continue
-                self.items.append(('mp', qid))
-                self.lst.insert('end', label)
-        if mode == 'empty':
-            self.lst.configure(state='disabled')
-            self.note.configure(text=t('newq.empty.note'))
-        else:
-            self.note.configure(text=t('newq.' + mode + '.note'))
+        self.note.configure(text=t('newq.' + mode + '.note'))
 
     def _note(self):
         sel = self.lst.curselection()
-        if not sel or self.how.get() != 'template':
+        if not sel or self.how.get() not in ('template', 'empty'):
             return
         tp = self.items[sel[0]][1]
-        self.note.configure(text=tp['note'].get(get_lang()) or '')
+        self.note.configure(text=(tp['note'].get(get_lang()) or '') if tp
+                            else t('newq.empty.note'))
 
     def _ok(self):
         mode = self.how.get()
-        if mode == 'empty':
-            self.result = ('empty', None)
+        if mode == 'mp':
+            self.result = ('mp', None)     # the window has the list
+        elif mode == 'empty':
+            sel = self.lst.curselection()
+            self.result = self.items[sel[0]] if sel else ('empty', None)
         else:
             sel = self.lst.curselection()
             if not sel:
@@ -4004,6 +4041,84 @@ class QuestLimitWindow:
             os.startfile(d)
         except OSError:
             pass
+
+
+class ExportConfirm:
+    """One question before the export (4.3.0, Marco: no extra clicks): the
+    target, other mods that ship the full quest or text file, the map tiles
+    taken from mods and the warnings - with one "Export" button instead of
+    up to three questions in a row."""
+    _open = None
+
+    def __init__(self, app, target, conflicts=(), deps=(), warnings=()):
+        self.result = False
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('export.title'))
+        self.win.transient(app.root)
+        self.win.geometry('760x480')
+        self.win.minsize(560, 300)
+        theme.dark_titlebar(self.win)
+        self.win.protocol('WM_DELETE_WINDOW', self.cancel)
+        self.win.bind('<Escape>', lambda e: self.cancel())
+        style = ttk.Style(self.win)
+        style.configure('Confirm.TButton', background=theme.OK,
+                        foreground='#0b1a0f', font=theme.FONT_BOLD)
+        style.map('Confirm.TButton',
+                  background=[('active', theme.mix(theme.OK, '#ffffff', 0.2)),
+                              ('disabled', theme.MUT)])
+        f = ttk.Frame(self.win, padding=16)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('export.confirm.head'), style='Brand.TLabel'
+                  ).pack(anchor='w')
+        ttk.Label(f, text=target, font=theme.FONT_BOLD).pack(anchor='w',
+                                                             pady=(4, 8))
+        btns = ttk.Frame(f)
+        btns.pack(fill='x', side='bottom', pady=(10, 0))
+        txt = tk.Text(f, wrap='word', height=12, bd=0, padx=8, pady=6,
+                      font=theme.FONT)
+        txt.pack(fill='both', expand=True)
+        txt.tag_configure('head', foreground=theme.GOLD, font=theme.FONT_BOLD)
+        txt.tag_configure('warn', foreground='#e0a050')
+        txt.tag_configure('ok', foreground=theme.OK)
+        txt.tag_configure('mut', foreground=theme.MUT)
+        if conflicts:
+            txt.insert('end', t('export.confirm.conflict', mods=', '.join(
+                c[0] for c in conflicts)) + NL + NL, 'warn')
+        if deps:
+            txt.insert('end', t('export.confirm.maps') + NL, 'head')
+            for d in deps:
+                txt.insert('end', f"  {d['tile']}  {d['inner']}  ({d['mod']})"
+                           + NL, 'mut')
+            txt.insert('end', NL)
+        if warnings:
+            txt.insert('end', t('export.confirm.warn', n=len(warnings)) + NL,
+                       'head')
+            for q, m, _ in warnings[:30]:
+                txt.insert('end', f'  Q_{q.id}: {m}' + NL, 'warn')
+            txt.insert('end', NL)
+        if not (conflicts or deps or warnings):
+            txt.insert('end', t('export.confirm.clean') + NL, 'ok')
+        txt.configure(state='disabled')
+        ttk.Button(btns, text=t('cancel'), command=self.cancel
+                   ).pack(side='right')
+        self.ok_btn = ttk.Button(btns, text='✓ ' + t('export.confirm.ok'),
+                                 style='Confirm.TButton', command=self.ok)
+        self.ok_btn.pack(side='right', padx=6)
+        self.ok_btn.focus_set()
+        self.win.bind('<Return>', lambda e: self.ok())
+        ExportConfirm._open = self
+        self.win.grab_set()
+
+    def ok(self):
+        self.result = True
+        self._close()
+
+    def cancel(self):
+        self._close()
+
+    def _close(self):
+        ExportConfirm._open = None
+        self.win.destroy()
 
 
 class ExportWindow:

@@ -279,10 +279,10 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None,
         except (TypeError, ValueError):
             level = 1
         if not afters:
-            if level <= 0:
-                W.append((t('warn.after.start'), entry_id('first')))
-            else:
+            if level > 0:
                 E.append((t('val.after'), entry_id('first')))
+            # level 0 without a condition: there from the start, chosen on
+            # purpose (the multiplayer window's default), no warning
         elif level <= 0:
             W.append((t('warn.after.level0'), afters[0][0]))
         elif level > len(afters):

@@ -180,15 +180,24 @@ verwirft Questnummern ab 400 **und NPC-Nummern ab 698** beim Laden; Q_700 mit
 NPC_700 kann im Einzelspieler nie erscheinen. Dazu fehlen den MP-Zeilen die
 Kacheln (`(null)`), ihre Marker erzeugt das MP-Skript zur Laufzeit.
 
-Quest > **Multiplayer-Quest uebernehmen** fuehrt durch: MP-Quest waehlen, freie
-Questnummer und freie NPC-Nummer (ab 507, unter 698), Kachel fuer den Geber und
-jede Zeile, Markernummern (bleiben, wenn die Kachel sie noch nicht hat). Am
-Ende steht die **Marker-Checkliste**: welche Marker mit welchem Namen, welcher
-Nummer und auf welcher Kachel du im Two Worlds Editor setzen musst, zum
-Beispiel `MARKER_QUEST_START 507 auf E1` fuer den Geber. Das Tool setzt keine
-Marker. Die Liste steht danach im Quest-Panel mit Haken; offene Punkte meldet
-die Pruefung als Warnung. Der Geber bekommt Partei 25 (Menschen), die
-MP-Bloecke haben keine.
+Seit 4.3.0 geht alles in **einem Fenster** (Neue Quest > "Eine
+Multiplayer-Quest uebernehmen" oder Quest > Multiplayer-Quest uebernehmen):
+links die MP-Quest waehlen, rechts den Namen des Questgebers eintragen, die
+Tagebuchtexte pruefen (fehlt einer, steht ein gelb markierter Standardtext
+da), dann **Marker auf der Karte setzen**: Das Kartenfenster geht alle noetigen
+Marker durch, die Kachel jeder Zeile ergibt sich aus dem Klick. Rot heisst
+"fehlt noch", gruen "fertig". Sind alle Punkte gruen, legt **Uebernehmen** die
+Quest an, schreibt die Marker in die Karte und speichert das Projekt (ein
+neues Projekt landet dabei von selbst unter Dokumente\TW1 Quest Creator).
+Danach nur noch Datei > Exportieren als Mod.
+
+Voreingestellt: Der Questgeber spricht den Helden von selbst an, wenn er
+nahe kommt (wie Tago), und die Quest ist ab Spielbeginn da (Stufe 0; das
+Spiel zaehlt beim Start jede Quest einmal hoch). Wer sie erst nach einer
+anderen Quest will, waehlt "Erst nach Quest". Der Geber bekommt Partei 25
+(Menschen), die MP-Bloecke haben keine. Hilfe > **Tour: Multiplayer-Quest
+uebernehmen** fuehrt mit gruenen (hier klicken) und roten (fehlt) Rahmen
+Schritt fuer Schritt durch alle Fenster.
 
 **Karten aus dem Editor zurueck ins Tool:** Der Editor speichert die Kachel
 unter `Saved Games\\Two Worlds Saves\\Levels` als `Map_<Kachel>s.lnd`, die
@@ -278,15 +287,23 @@ quest ids from 400 **and NPC ids from 698** while loading; Q_700 with NPC_700
 can never appear in single player. The MP lines also lack tiles (`(null)`),
 their markers are made by the MP script at run time.
 
-Quest > **Take over multiplayer quest** walks you through: pick the MP quest,
-a free quest id and a free NPC id (from 507, below 698), a tile for the giver
-and for every line, marker numbers (kept when the tile does not have them
-yet). At the end stands the **marker checklist**: which markers, with which
-name, number and tile, you have to place in the Two Worlds editor, for
-example `MARKER_QUEST_START 507 on E1` for the giver. The tool places no
-markers. The list then lives in the quest panel with check boxes; open items
-are reported as warnings. The giver gets party 25 (humans), the MP blocks
-have none.
+Since 4.3.0 it all happens in **one window** (New quest > "Take a
+multiplayer quest over" or Quest > Take over multiplayer quest): pick the MP
+quest on the left, enter the quest giver's name on the right, check the
+journal texts (a missing one gets a standard text marked yellow), then
+**Place markers on the map**: the map window goes through every marker
+needed, the tile of each line comes from the click. Red means "still
+missing", green "done". When everything is green, **Take over** creates the
+quest, writes the markers into the map and saves the project (a new project
+goes to Documents\TW1 Quest Creator on its own). After that only File >
+Export as mod.
+
+Preset: the giver talks to the hero on his own when he comes near (like
+Tago), and the quest is there from the start of the game (level 0; the game
+counts every quest up once at the start). Pick "Only after quest" to have it
+come later. The giver gets party 25 (humans), the MP blocks have none.
+Help > **Tour: take over a multiplayer quest** leads through every window
+step by step with green (click here) and red (missing) frames.
 
 **Maps from the editor back into the tool:** the editor saves the tile under
 `Saved Games\\Two Worlds Saves\\Levels` as `Map_<tile>s.lnd`, the physics as

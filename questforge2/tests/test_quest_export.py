@@ -374,9 +374,10 @@ class Packing(unittest.TestCase):
         """The standard giver dialog goes into an empty quest connected and
         into a quest with dialog beside it; the result builds a tree."""
         from questforge2 import data
-        tpls = data.builtin_templates('dialog')
-        self.assertEqual(len(tpls), 1)
-        graph = tpls[0]['data']['graph']
+        tpls = {tp['name']: tp for tp in data.builtin_templates('dialog')}
+        # 4.3.0: five templates without TODO next to the standard giver
+        self.assertEqual(len(tpls), 6)
+        graph = tpls['dialog_standard_giver']['data']['graph']
         q = Quest(390, 'Leer')
         q.add_speaker({'id': 3, 'name': 'Tago', 'lector': 123, 'tile': 'E1',
                        'new': False})
@@ -400,6 +401,69 @@ class Packing(unittest.TestCase):
                          ['closed', 'first', 'running', 'solved'])
         self.assertTrue(all(full.graph['nodes'][n]['x'] > before
                             for n in new2))
+
+    def test_dialog_templates_430(self):
+        """The five dialog templates of 4.3.0: every line filled in (no
+        TODO) in both languages, the quest validates, and a question menu
+        comes back with only the question just asked negative - the pattern
+        of every retail menu (DQ_4 entry 24, DQ_15 entry 47)."""
+        from questforge2 import data, validate
+        tpls = [tp for tp in data.builtin_templates('dialog')
+                if tp['name'] != 'dialog_standard_giver']
+        self.assertEqual(len(tpls), 5)
+        for tp in tpls:
+            for lang in ('de', 'en'):
+                q = make_quest()
+                g = q.graph
+                model.remove_nodes(g, [n for n, v in g['nodes'].items()
+                                       if v.get('type') in ('npc', 'player',
+                                                            'action')])
+                g['edges'] = [e for e in g['edges'] if e[0] in g['nodes']
+                              and e[2] in g['nodes']]
+                new, connected, _skipped = model.insert_dialog(
+                    q, tp['data']['graph'], 3, lang)
+                self.assertEqual(sorted(connected),
+                                 ['closed', 'first', 'running', 'solved'])
+                texts = [ln['text'] for n in new
+                         for ln in g['nodes'][n]['lines']]
+                self.assertTrue(all(isinstance(x, str) and x.strip()
+                                    for x in texts), tp['name'])
+                self.assertFalse(any('TODO' in x for x in texts))
+                E, _W = validate.validate_quest(q, _Index())
+                self.assertEqual(E, [], (tp['name'], lang))
+                tree, _texts = export.graph_to_tree(q)
+                for e in tree.entries:
+                    self.assertLessEqual(sum(1 for x in e.next if x < 0), 1)
+                if tp['name'] == 'dialog_01_test':
+                    backs = [e.next for e in tree.entries
+                             if any(x < 0 for x in e.next)]
+                    self.assertEqual(len(backs), 2)       # two questions
+                    self.assertEqual(len(tree.entries), 14)
+
+    def test_test_dialog_quest_exports_at_once(self):
+        """4.3.0: an empty quest with the test dialog (Tago, as the tool
+        does it) has no error: title, journal, task and reward come with
+        the template."""
+        from questforge2 import data, validate
+        tp = next(x for x in data.builtin_templates('dialog')
+                  if x['name'] == 'dialog_01_test')
+        for lang in ('de', 'en'):
+            q = Quest(390)
+            model.add_default_conditions(q)
+            q.add_speaker({'id': 3, 'name': 'Tago', 'lector': 123,
+                           'tile': 'E1', 'new': False})
+            q.giver = 3
+            model.insert_dialog(q, tp['data']['graph'], 3, lang)
+            model.apply_template_quest(q, tp['data']['quest'], lang)
+            E, _W = validate.validate_quest(q, _Index())
+            self.assertEqual(E, [], lang)
+            self.assertEqual(q.task()['fc'], 'BRING_GOLD')
+            self.assertIn('REWARD GLD CLOSE 20',
+                          export.build_quest_block(q).emit())
+            # a filled title stays
+            q.title = 'Mein Titel'
+            model.apply_template_quest(q, tp['data']['quest'], lang)
+            self.assertEqual(q.title, 'Mein Titel')
 
     def test_shipped_templates_build(self):
         """Every quest template validates, builds its block and packs into

@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -2017,6 +2017,47 @@ Offen:
       Start, Stufe 1 = braucht genau ein `AOQ PROMOTE` (143 Retail-Quests
       so). Der Held startet auf E1 bei (70*256, 52*256)
       (TwoWorldsCampaign.ec).
+90. MP-Uebernahme in einem Fenster, Dialogvorlagen, gefuehrte Tour
+    (Version 4.3.0, Marco 2026-09-21: "alles in dem Convert-Fenster
+    eingeben, Marker setzen, bestaetigen, dann fertig, keine zusaetzlichen
+    Klicks, nur noch Export").
+    - Ein Fenster statt drei Seiten: Quest waehlen, Questgeber (Name, NPC-
+      und Questnummer, "spricht von selbst an" = GIVER ACTIVE, Standard an),
+      "Wann ist die Quest da?" (Standard ab Spielbeginn = Stufe 0 ohne
+      "Nach Quest", sonst Stufe 1 plus eine Bedingung), Tagebuch (fehlender
+      Text -> gelber Standardtext; 30 der 120 MP-Quests haben kein QSD),
+      Marker (rot/gruen). "Uebernehmen" erst, wenn alles gruen ist; es
+      schreibt die Marker (placewin.commit) und speichert. Ein ungespeichertes
+      Projekt speichert das Fenster selbst unter Dokumente\TW1 Quest
+      Creator\<Titel>.tw1proj (Umlaute umgeschrieben, damit der Archivname
+      sie nicht verliert). Die Kachel jeder Zeile kommt aus dem Klick auf
+      der Karte (marker_targets gruppiert Zeilen mit demselben Marker).
+      Reine Funktionen (marker_targets, placement_settings,
+      set_availability, default_journal, take_over, commit_targets) mit
+      Tests in test_mpmerge.OneWindow.
+    - Export: eine Bestaetigung (ExportConfirm) mit Ziel, konkurrierenden
+      Mods, Karten aus Mods und Warnungen statt bis zu drei Fragen; nach dem
+      Export wird das Projekt gespeichert. Stufe 0 ohne "Nach Quest" ist
+      keine Warnung mehr (bewusst gewaehlt).
+    - Fuenf Dialogvorlagen ohne TODO (Test-Dialog: Wortwechsel und zwei
+      Fragen, kurzer Auftrag, Frage nach dem Lohn, Hilferuf, Botengang), Text
+      DE/EN je Zeile, nach den tw1-dialog-Regeln. Gemessen im Retail: Ein
+      Frage-Menue kommt nach der Antwort mit genau EINEM negativen Index
+      zurueck, dem der gerade gestellten Frage (DQ_4 Eintrag 24, DQ_15
+      Eintrag 47; nie zwei negative, nie negativ beim ersten Zeigen). Die
+      Vorlagen machen es genauso (next_ref, insert_dialog bildet ihn um).
+      Neue Quest > Leer anfangen bietet die Vorlagen an; Tago spricht, Titel
+      und Tagebuch kommen mit, der Test-Dialog auch Aufgabe (10 Gold) und
+      Belohnung (20 Gold): Validierung ok, sofort exportierbar.
+    - Gefuehrte Tour "Multiplayer-Quest uebernehmen" (Hilfe-Menue, Coach,
+      Knopf im Fenster): gruene pulsierende Rahmen mit Hinweis = hier
+      klicken, rote = fehlt; in jedem Fenster (guide.Marks). Der Schritt
+      ergibt sich aus dem Zustand der Fenster (Coach._mp_current), ein
+      geschlossenes Fenster fuehrt zurueck. GIF-Aufnahme per PrintWindow
+      aller Fenster (Scratchpad rec_mptour.py).
+    - Im Spiel noch nicht bestaetigt: das Fragen-Menue mit negativem Index
+      aus dem Tool (Test dialog-template-questions) und die ganze
+      Uebernahme im neuen Fenster (Test mp-one-window).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

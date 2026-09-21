@@ -18,9 +18,14 @@ Measured in the SDK (2026-09-16):
 
 So a multiplayer quest needs: a free single player quest id, a free NPC id
 below 698 for the giver, a tile for the giver and for every line with
-``(null)``, and markers on those tiles the user places in the Two Worlds
-editor. The tool cannot write markers; it lists which ones, with name,
-number and tile, as a checklist the user ticks off.
+``(null)``, and markers on those tiles.
+
+4.3.0 (Marco 2026-09-21): all of it on one page. The markers are set on the
+map (placewin), the tile of every line comes from where its marker went,
+"Take over" builds the quest, writes the markers and saves the project;
+only the export is left. The giver talks to the hero on his own (ACTIVE)
+and the quest is there from the start of the game (level 0) unless another
+quest is picked. A missing journal text gets a standard text.
 """
 
 import re
@@ -269,11 +274,142 @@ def checklist_lines(items, lang=None):
 
 
 # ---------------------------------------------------------------------------
+# one window (4.3.0, Marco 2026-09-21): everything on one page, the markers
+# set on the map, "Take over" - and the quest is done, only the export is
+# left. The pieces below are pure, the window and the tests use them alike.
+
+START, AFTER = 'start', 'after'
+GIVER_KEY = ('giver',)
+EVENTS = ('TAKE', 'SOLVE', 'CLOSE')
+
+
+def marker_targets(quest, npc_id, retail_tiles):
+    """What has to go on the map, one entry per marker: [{'key', 'name',
+    'label', 'num' (fixed number or None), 'refs' (indexes into
+    marker_refs), 'exists' (the game has that marker already), 'tile',
+    'game_num', 'placed'}]. The giver comes first; lines that share a
+    marker (two OBJECT_CREATE on marker 1) share one entry."""
+    out = [{'key': GIVER_KEY, 'name': GIVER_MARKER,
+            'label': t('mp.why.giver', id=npc_id), 'num': npc_id,
+            'refs': [], 'exists': False, 'tile': None, 'game_num': None,
+            'placed': None}]
+    groups = {}
+    for i, ref in enumerate(marker_refs(quest)):
+        tile, num = ref['tile'], ref['num']
+        exists = bool(tile in retail_tiles and num is not None and num in
+                      mods.marker_ids(retail_tiles.get(tile), ref['name']))
+        key = (('game', ref['name'], tile, num) if exists else
+               (ref['name'], num if num is not None else ('line', i)))
+        tg = groups.get(key)
+        if tg is None:
+            tg = {'key': key, 'name': ref['name'], 'label': ref['label'],
+                  'num': None, 'refs': [], 'exists': exists,
+                  'tile': tile if exists else None,
+                  'game_num': num if exists else None, 'placed': None}
+            groups[key] = tg
+            out.append(tg)
+        tg['refs'].append(i)
+    return out
+
+
+def target_ready(tg):
+    return bool(tg.get('exists') or tg.get('placed'))
+
+
+def placement_settings(targets):
+    """(giver tile, {ref index: tile}, {ref index: number}) from the
+    targets: the placed ones and those the game has already."""
+    giver_tile = None
+    tiles, numbers = {}, {}
+    for tg in targets:
+        p = tg.get('placed')
+        if tg['key'] == GIVER_KEY:
+            if p:
+                giver_tile = p['tile']
+            continue
+        if tg.get('exists'):
+            tile, num = tg['tile'], tg['game_num']
+        elif p:
+            tile, num = p['tile'], int(p['num'])
+        else:
+            continue
+        for i in tg['refs']:
+            tiles[i], numbers[i] = tile, num
+    return giver_tile, tiles, numbers
+
+
+def set_availability(quest, mode, pred=4, event='TAKE'):
+    """From the start of the game (level 0, no "after" condition) or after
+    another quest (level 1, one "after" condition). SDK: StartQuests
+    promotes every loaded quest once when the game starts
+    (eQuestInitialLevel -1), so level 0 needs no unlock and level 1 needs
+    exactly one AOQ PROMOTE (measured 2026-09-21, Kunibert)."""
+    g = quest.graph
+    model.remove_nodes(g, [k for k, n in g['nodes'].items()
+                           if n.get('type') == 'condition'
+                           and n.get('cond') == 'after'])
+    level = 0 if mode == START else 1
+    lv = [n for n in g['nodes'].values()
+          if n.get('type') == 'condition' and n.get('cond') == 'level']
+    for n in lv:
+        n['level'] = level
+    if not lv:
+        model.add_node(g, model.make_condition('level', level=level))
+    if mode != START:
+        model.add_node(g, model.make_condition('after', quest=int(pred),
+                                               event=event))
+    quest.enable_level = level
+    model.restack(g)
+
+
+def default_journal(journal):
+    """Journal texts the multiplayer quest lacks get a standard text (30 of
+    the 120 have no "solved" text and the export refuses an empty one).
+    Changes ``journal`` in place, returns the keys filled in."""
+    filled = []
+    for key in ('take', 'solve', 'close'):
+        if not (journal.get(key) or '').strip():
+            journal[key] = t('mp.journal.default.' + key)
+            filled.append(key)
+    return filled
+
+
+def take_over(src, new_id, npc_id, npc_name, targets, retail_tiles,
+              group=None, active=True, availability=START, pred=4,
+              event='TAKE', title=None, journal=None):
+    """The single player quest from the multiplayer quest and the targets
+    of the map."""
+    giver_tile, tiles, numbers = placement_settings(targets)
+    new = apply(src, new_id, npc_id, npc_name, giver_tile or 'E1',
+                retail_tiles, tiles, numbers, group)
+    new.giver_type = 'ACTIVE' if active else 'PASSIVE'
+    if title is not None:
+        new.title = title
+    if journal:
+        new.journal.update(journal)
+    set_availability(new, availability, pred, event)
+    return new
+
+
+def commit_targets(targets):
+    """The placed targets as placewin.commit wants them after take_over:
+    the lines point at the placed markers already."""
+    out = []
+    for tg in targets:
+        p = tg.get('placed')
+        if p and not tg.get('exists'):
+            out.append({'key': (tg['name'], p['tile'], int(p['num'])),
+                        'name': tg['name'], 'placed': p, 'orig': None})
+    return out
+
+
+# ---------------------------------------------------------------------------
 # window
 
 class MpMergeWindow:
-    """Three steps: pick the multiplayer quest, choose ids and tiles, read
-    the marker checklist and take the quest over."""
+    """One page: pick the multiplayer quest, fill in giver, availability
+    and journal, set the markers on the map, take over. Red is still open,
+    green is done; "Take over" waits for all green."""
     _open = None
 
     @classmethod
@@ -294,500 +430,483 @@ class MpMergeWindow:
 
     def __init__(self, app, qid=None):
         self.app = app
-        self.src = None            # quest built from the game
-        self.step = 0
-        self.rows = []             # per marker line: (ref, tile var, num var)
-        self.placements = {}       # (name, tile, num) -> set on the map
+        self.src = None             # quest built from the game
+        self.targets = []           # markers to set (marker_targets)
+        self.filled = []            # journal keys with a standard text
+        self.taken = None           # the new quest after "Take over"
+        self.place_win = None
         game = app.cfg.get('game_dir')
         self.retail_tiles = (app.modset.retail_tiles if app.modset
                              else mods.retail_markers(game))
         self.win = tk.Toplevel(app.root)
         self.win.title(t('mp.title'))
-        self.win.geometry('820x640')
-        self.win.minsize(700, 520)
+        self.win.geometry('1120x800')
+        self.win.minsize(960, 680)
         theme.dark_titlebar(self.win)
         self.win.protocol('WM_DELETE_WINDOW', self.close)
         self.win.bind('<Escape>', lambda e: self.close())
+        style = ttk.Style(self.win)
+        style.configure('Confirm.TButton', background=theme.OK,
+                        foreground='#0b1a0f', font=theme.FONT_BOLD)
+        style.map('Confirm.TButton',
+                  background=[('active', theme.mix(theme.OK, '#ffffff', 0.2)),
+                              ('disabled', theme.MUT)])
         outer = ttk.Frame(self.win, padding=14)
         outer.pack(fill='both', expand=True)
         ttk.Label(outer, text=t('mp.head'), style='Brand.TLabel'
                   ).pack(anchor='w')
-        self.steplbl = ttk.Label(outer, text='', style='Muted.TLabel',
-                                 wraplength=780, justify='left')
-        self.steplbl.pack(anchor='w', pady=(2, 8))
-        self.pages = [ttk.Frame(outer) for _ in range(3)]
-        self._build_page1(self.pages[0])
-        self._build_page2(self.pages[1])
-        self._build_page3(self.pages[2])
-        btns = ttk.Frame(outer)
-        btns.pack(fill='x', side='bottom', pady=(10, 0))
-        ttk.Button(btns, text=t('cancel'), command=self.close
+        ttk.Label(outer, text=t('mp.intro'), style='Muted.TLabel',
+                  wraplength=1080, justify='left').pack(anchor='w',
+                                                        pady=(2, 8))
+        bottom = ttk.Frame(outer)
+        bottom.pack(fill='x', side='bottom', pady=(10, 0))
+        body = ttk.Frame(outer)
+        body.pack(fill='both', expand=True)
+        body.columnconfigure(0, weight=2, uniform='c')
+        body.columnconfigure(1, weight=3, uniform='c')
+        body.rowconfigure(0, weight=1)
+        left = ttk.Frame(body)
+        left.grid(row=0, column=0, sticky='nsew', padx=(0, 14))
+        right = ttk.Frame(body)
+        right.grid(row=0, column=1, sticky='nsew')
+        self.take_btn = None
+        self._build_pick(left)
+        self._build_giver(right)
+        self._build_when(right)
+        self._build_journal(right)
+        self._build_markers(right)
+        self.take_btn = ttk.Button(bottom, text='✓ ' + t('mp.take'),
+                                   style='Confirm.TButton', command=self.take)
+        ttk.Button(bottom, text=t('cancel'), command=self.close
                    ).pack(side='right')
-        self.next_btn = ttk.Button(btns, text=t('mp.next'),
-                                   style='Accent.TButton', command=self.next)
-        self.next_btn.pack(side='right', padx=6)
-        self.back_btn = ttk.Button(btns, text=t('mp.back'), command=self.back)
-        self.back_btn.pack(side='right')
-        self._show_step(0)
+        self.take_btn.pack(side='right', padx=6)
+        ttk.Button(bottom, text=t('mp.tour'),
+                   command=lambda: app.coach.start('mp')
+                   ).pack(side='left', padx=(0, 10))
+        self.status = ttk.Label(bottom, text='', style='Muted.TLabel',
+                                wraplength=760, justify='left')
+        self.status.pack(side='left', fill='x', expand=True)
+        self._refresh()
         if qid is not None:
             self.pick(qid)
 
     def close(self):
         MpMergeWindow._open = None
-        self.win.destroy()
+        try:
+            self.win.destroy()
+        except tk.TclError:
+            pass
 
-    # -- page 1: pick ----------------------------------------------------------
+    @staticmethod
+    def _section(parent, key, n):
+        ttk.Label(parent, text=f'{n}  ' + t(key), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(8, 2))
+        f = ttk.Frame(parent)
+        f.pack(fill='x')
+        return f
 
-    def _build_page1(self, f):
-        top = ttk.Frame(f)
+    # -- 1: the multiplayer quest ------------------------------------------------
+
+    def _build_pick(self, parent):
+        ttk.Label(parent, text='1  ' + t('mp.sec.pick'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(8, 2))
+        top = ttk.Frame(parent)
         top.pack(fill='x')
         ttk.Label(top, text=t('map.search')).pack(side='left')
         self.q = tk.StringVar()
         ent = ttk.Entry(top, textvariable=self.q)
         ent.pack(side='left', fill='x', expand=True, padx=6)
         ent.bind('<KeyRelease>', lambda e: self._fill_list())
-        box = ttk.Frame(f)
+        box = ttk.Frame(parent)
         box.pack(fill='both', expand=True, pady=(6, 0))
-        cols = ('id', 'title', 'task', 'giver')
+        cols = ('id', 'title')
         self.tree = ttk.Treeview(box, columns=cols, show='headings',
                                  selectmode='browse')
-        for c, w in zip(cols, (60, 260, 260, 120)):
+        for c, w in zip(cols, (70, 300)):
             self.tree.heading(c, text=t('mp.col.' + c))
             self.tree.column(c, width=w, anchor='w', stretch=c != 'id')
         sb = ttk.Scrollbar(box, orient='vertical', command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         sb.pack(side='right', fill='y')
         self.tree.pack(fill='both', expand=True)
-        self.tree.bind('<Double-Button-1>', lambda e: self.next())
-        self.mp_ids = []
+        self.tree.bind('<<TreeviewSelect>>', lambda e: self._load())
+        self.preview = ttk.Label(parent, text='', style='Muted.TLabel',
+                                 wraplength=400, justify='left')
+        self.preview.pack(anchor='w', fill='x', pady=(6, 0))
         self._fill_list()
 
     def _fill_list(self):
         idx = self.app.index
         needle = self.q.get().strip().lower()
+        keep = self._selected_qid()
         self.tree.delete(*self.tree.get_children())
-        self.mp_ids = []
         for k in sorted(idx.quests, key=int) if idx else []:
             qid = int(k)
             if not is_mp_quest(qid):
                 continue
             info = idx.quests[k]
-            giver = info.get('giver')
-            gname = idx.npc_label(giver) if giver is not None else '-'
-            row = (f'Q_{qid}', info.get('title') or '-',
-                   ' '.join(info.get('fc') or []) or '-', gname)
-            if needle and needle not in ' '.join(row).lower():
+            row = (f'Q_{qid}', info.get('title') or '-')
+            if needle and needle not in ' '.join(row).lower() and \
+                    needle not in ' '.join(info.get('fc') or []).lower():
                 continue
             self.tree.insert('', 'end', iid=str(qid), values=row)
-            self.mp_ids.append(qid)
+        if keep is not None and self.tree.exists(str(keep)):
+            self.tree.selection_set(str(keep))
 
     def pick(self, qid):
-        self._show_step(0)
         if self.tree.exists(str(qid)):
             self.tree.selection_set(str(qid))
             self.tree.see(str(qid))
-            self.next()
+            self._load()
 
     def _selected_qid(self):
-        sel = self.tree.selection()
+        tree = getattr(self, 'tree', None)
+        sel = tree.selection() if tree is not None else ()
         return int(sel[0]) if sel else None
 
-    # -- page 2: ids and tiles -------------------------------------------------
-
-    def _build_page2(self, f):
-        grid = ttk.Frame(f)
-        grid.pack(fill='x')
-        grid.columnconfigure(1, weight=1)
-        r = 0
-        ttk.Label(grid, text=t('mp.newid')).grid(row=r, column=0, sticky='w',
-                                                 pady=3)
-        self.newid = tk.StringVar()
-        self.newid_cb = ttk.Combobox(grid, textvariable=self.newid, width=12,
-                                     state='readonly')
-        self.newid_cb.grid(row=r, column=1, sticky='w', padx=8)
-        r += 1
-        ttk.Label(grid, text=t('mp.npcid')).grid(row=r, column=0, sticky='w',
-                                                 pady=3)
-        self.npcid = tk.StringVar()
-        ttk.Entry(grid, textvariable=self.npcid, width=12).grid(
-            row=r, column=1, sticky='w', padx=8)
-        # the default name carries the NEW number, so the node headers show
-        # the number the Q_Giver marker needs (2026-09-18: "NPC 700" in the
-        # nodes made a user put the quest number on the marker)
-        self._auto_name = None
-        self.npcid.trace_add('write', lambda *_: self._follow_name())
-        ttk.Label(grid, text=t('mp.npcid.hint', max=MAX_NPC_ID),
-                  style='Muted.TLabel', wraplength=520, justify='left'
-                  ).grid(row=r, column=2, sticky='w')
-        r += 1
-        ttk.Label(grid, text=t('mp.npcname')).grid(row=r, column=0,
-                                                   sticky='w', pady=3)
-        self.npcname = tk.StringVar()
-        ttk.Entry(grid, textvariable=self.npcname, width=30).grid(
-            row=r, column=1, sticky='w', padx=8)
-        r += 1
-        ttk.Label(grid, text=t('mp.tile')).grid(row=r, column=0, sticky='w',
-                                                pady=3)
-        self.tile = tk.StringVar()
-        tiles = sorted(self.retail_tiles, key=data._tile_key)
-        self.tile_cb = ttk.Combobox(grid, textvariable=self.tile, width=12,
-                                    values=tiles)
-        self.tile_cb.grid(row=r, column=1, sticky='w', padx=8)
-        self.tile_cb.bind('<<ComboboxSelected>>', lambda e: self._tile_all())
-        self.tile_cb.bind('<KeyRelease>', lambda e: self._tile_all())
-        tb = ttk.Frame(grid)
-        tb.grid(row=r, column=2, sticky='w')
-        ttk.Button(tb, text='...', width=3, command=self._pick_tile
-                   ).pack(side='left')
-        ttk.Button(tb, text=t('map.button'), command=self._map
-                   ).pack(side='left', padx=4)
-        ttk.Label(tb, text=t('mp.tile.hint'), style='Muted.TLabel',
-                  wraplength=380, justify='left').pack(side='left')
-        r += 1
-        ttk.Label(grid, text=t('mp.group')).grid(row=r, column=0, sticky='w',
-                                                 pady=3)
-        self.group = tk.StringVar()
-        self.group_cb = ttk.Combobox(grid, textvariable=self.group, width=30,
-                                     state='readonly')
-        self.group_cb.grid(row=r, column=1, sticky='w', padx=8)
-        ttk.Label(f, text=t('mp.lines'), style='Brand.TLabel'
-                  ).pack(anchor='w', pady=(12, 2))
-        ttk.Label(f, text=t('mp.lines.hint'), style='Muted.TLabel',
-                  wraplength=780, justify='left').pack(anchor='w')
-        self.lines_box = ttk.Frame(f)
-        self.lines_box.pack(fill='both', expand=True, pady=(6, 0))
-
-    def _fill_page2(self):
+    def _load(self):
+        qid = self._selected_qid()
+        if qid is None or (self.src is not None and self.src.id == qid):
+            return
+        src = self.app.build_game_quest(qid)
+        if src is None:
+            return
+        recover_null_lines(src)
+        self.src = src
         app = self.app
-        q = self.src
         free = app.index.free_ids({x.id for x in app.project.quests}
                                   | (app.modset.quest_ids()
                                      if app.modset else set()))
         self.newid_cb.configure(values=[f'Q_{i}' for i in free])
         self.newid.set(f'Q_{free[0]}' if free else '')
-        self.npcid.set(str(free_npc_id(app.index, app.project) or ''))
         name = ''
-        if q.giver is not None:
-            spk = next((s for s in q.speakers if s['id'] == q.giver), None)
+        if src.giver is not None:
+            spk = next((s for s in src.speakers if s['id'] == src.giver), None)
             name = (spk or {}).get('name') or ''
-            if name in ('', f'NPC_{q.giver}', f'NPC {q.giver}') or                     name.startswith('Lector'):
+            if name in ('', f'NPC_{src.giver}', f'NPC {src.giver}') or \
+                    name.startswith('Lector'):
                 name = ''
-        if name:
-            self._auto_name = None
-            self.npcname.set(name)
-        else:
-            self._auto_name = ''
-            self.npcname.set('')            # page filled again: start over
-            self._follow_name()
-        groups = sorted(((int(k), v) for k, v in app.index.groups.items()),
-                        key=lambda kv: kv[0])
-        self.groups = groups
-        self.group_cb.configure(values=[f'{g}  {n}' for g, n in groups])
-        pred = app.index.quest(4)
+        journal = dict(src.journal)
+        self.filled = default_journal(journal)
+        self.targets = []
+        self.npcid.set(str(free_npc_id(app.index, app.project) or ''))
+        self.targets = marker_targets(src, self._npc(), self.retail_tiles)
+        self.npcname.set(name)
+        self.title_v.set(src.title or '')
+        for key, var in self.jvars.items():
+            var.set(journal.get(key) or '')
+        task = src.task()
+        lines = sum(len(n.get('lines') or []) for n in src.graph['nodes']
+                    .values() if n.get('type') in ('npc', 'player'))
+        self.preview.configure(text=t(
+            'mp.preview', title=src.title or '-',
+            task=' '.join([task.get('fc') or '-'] + [
+                str(v) for v in (task.get('args') or {}).values()]),
+            lines=lines, markers=len(self.targets)))
+        self._refresh()
+
+    # -- 2: the quest giver ----------------------------------------------------
+
+    def _build_giver(self, parent):
+        f = self._section(parent, 'mp.sec.giver', 2)
+        f.columnconfigure(1, weight=1)
+        ttk.Label(f, text=t('mp.npcname')).grid(row=0, column=0, sticky='w',
+                                                pady=2)
+        self.npcname = tk.StringVar()
+        self.name_ent = ttk.Entry(f, textvariable=self.npcname, width=28)
+        self.name_ent.grid(row=0, column=1, sticky='w', padx=8)
+        self.npcname.trace_add('write', lambda *_: self._refresh())
+        ttk.Label(f, text=t('mp.npcid')).grid(row=1, column=0, sticky='w',
+                                              pady=2)
+        sub = ttk.Frame(f)
+        sub.grid(row=1, column=1, sticky='w', padx=8)
+        self.npcid = tk.StringVar()
+        self.npc_ent = ttk.Entry(sub, textvariable=self.npcid, width=8)
+        self.npc_ent.pack(side='left')
+        self.npcid.trace_add('write', lambda *_: self._npc_changed())
+        ttk.Label(sub, text=t('mp.newid')).pack(side='left', padx=(16, 6))
+        self.newid = tk.StringVar()
+        self.newid_cb = ttk.Combobox(sub, textvariable=self.newid, width=9,
+                                     state='readonly')
+        self.newid_cb.pack(side='left')
+        self.active = tk.BooleanVar(value=True)
+        self.active_cb = ttk.Checkbutton(f, text=t('mp.active'),
+                                         variable=self.active)
+        self.active_cb.grid(row=2, column=0, columnspan=2, sticky='w',
+                            pady=(4, 0))
+
+    def _npc(self):
+        try:
+            return int(self.npcid.get().strip())
+        except ValueError:
+            return None
+
+    def _npc_changed(self):
+        """The giver's marker number is the NPC number."""
+        npc = self._npc()
+        for tg in self.targets:
+            if tg['key'] == GIVER_KEY and npc is not None:
+                tg['num'] = npc
+                tg['label'] = t('mp.why.giver', id=npc)
+                if tg.get('placed'):
+                    tg['placed']['num'] = npc
+        self._refresh()
+
+    # -- 3: when the quest is there -----------------------------------------------
+
+    def _build_when(self, parent):
+        f = self._section(parent, 'mp.sec.when', 3)
+        self.when = tk.StringVar(value=START)
+        self.when_start = ttk.Radiobutton(f, text=t('mp.when.start'),
+                                          value=START, variable=self.when,
+                                          command=self._refresh)
+        self.when_start.grid(row=0, column=0, columnspan=3, sticky='w')
+        ttk.Radiobutton(f, text=t('mp.when.after'), value=AFTER,
+                        variable=self.when, command=self._refresh
+                        ).grid(row=1, column=0, sticky='w')
+        self.pred = tk.StringVar()
+        idx = self.app.index
+        preds = []
+        for k in sorted(idx.quests, key=int) if idx else []:
+            qid = int(k)
+            if 0 < qid < MP_FIRST_QUEST and idx.quests[k].get('title'):
+                preds.append(f"Q_{qid}  {idx.quests[k]['title']}")
+        self.pred_cb = ttk.Combobox(f, textvariable=self.pred, width=34,
+                                    values=preds, state='readonly')
+        self.pred_cb.grid(row=1, column=1, sticky='w', padx=6)
+        self.pred.set(next((p for p in preds if p.startswith('Q_4 ')),
+                           preds[0] if preds else ''))
+        self.event = tk.StringVar(value='TAKE')
+        ttk.Combobox(f, textvariable=self.event, width=8, values=EVENTS,
+                     state='readonly').grid(row=1, column=2, sticky='w')
+
+    # -- 4: journal ------------------------------------------------------------
+
+    def _build_journal(self, parent):
+        f = self._section(parent, 'mp.sec.journal', 4)
+        f.columnconfigure(1, weight=1)
+        self.title_v = tk.StringVar()
+        self.jvars, self.jents, self.jnotes = {}, {}, {}
+        rows = [('title', 'mp.j.title', self.title_v)]
+        for key in ('take', 'solve', 'close'):
+            self.jvars[key] = tk.StringVar()
+            rows.append((key, 'mp.j.' + key, self.jvars[key]))
+        for r, (key, label, var) in enumerate(rows):
+            ttk.Label(f, text=t(label)).grid(row=r, column=0, sticky='w',
+                                             pady=2)
+            ent = ttk.Entry(f, textvariable=var)
+            ent.grid(row=r, column=1, sticky='ew', padx=8)
+            note = ttk.Label(f, text='', foreground='#e0a050')
+            note.grid(row=r, column=2, sticky='w')
+            self.jents[key], self.jnotes[key] = ent, note
+            var.trace_add('write', lambda *_: self._refresh())
+        ttk.Label(f, text=t('mp.group')).grid(row=len(rows), column=0,
+                                              sticky='w', pady=2)
+        self.group = tk.StringVar()
+        idx = self.app.index
+        groups = sorted(((int(k), v) for k, v in idx.groups.items()),
+                        key=lambda kv: kv[0]) if idx else []
+        self.group_cb = ttk.Combobox(f, textvariable=self.group, width=30,
+                                     values=[f'{g}  {n}' for g, n in groups],
+                                     state='readonly')
+        self.group_cb.grid(row=len(rows), column=1, sticky='w', padx=8)
+        pred = idx.quest(4) if idx else None
         default = pred['group'] if pred else (groups[0][0] if groups else 0)
         for g, n in groups:
             if g == default:
                 self.group.set(f'{g}  {n}')
-        if not self.tile.get():
-            self.tile.set('')
-        for w in self.lines_box.winfo_children():
+
+    # -- 5: markers ----------------------------------------------------------------
+
+    def _build_markers(self, parent):
+        f = self._section(parent, 'mp.sec.markers', 5)
+        self.place_btn = ttk.Button(f, text=t('mp.place'),
+                                    style='Accent.TButton', command=self.place)
+        self.place_btn.pack(anchor='w')
+        self.marker_box = ttk.Frame(f)
+        self.marker_box.pack(fill='x', pady=(6, 0))
+
+    def _marker_rows(self):
+        for w in self.marker_box.winfo_children():
             w.destroy()
-        self.rows = []
-        self._auto_nums = {}
-        self._last_tile = self.tile.get().strip().upper()
-        refs = marker_refs(q)
-        if not refs:
-            ttk.Label(self.lines_box, text=t('mp.lines.none'),
+        if not self.targets:
+            ttk.Label(self.marker_box, text=t('mp.markers.none'),
                       style='Muted.TLabel').pack(anchor='w')
-        head = ttk.Frame(self.lines_box)
-        head.pack(fill='x')
-        for text, w in ((t('mp.col.line'), 40), (t('mp.col.marker'), 28),
-                        (t('mp.col.tile'), 8), (t('mp.col.num'), 8)):
-            ttk.Label(head, text=text, style='Muted.TLabel', width=w
-                      ).pack(side='left')
-        tiles = sorted(self.retail_tiles, key=data._tile_key)
-        for ref in refs:
-            row = ttk.Frame(self.lines_box)
+            return
+        for tg in self.targets:
+            ok = target_ready(tg)
+            row = tk.Frame(self.marker_box, bg=theme.PANEL)
             row.pack(fill='x', pady=1)
-            vals = ' '.join(str(v) for k, v in ref['args'].items()
-                            if k not in (ref['tile_key'], ref['num_key']))
-            lbl = ttk.Label(row, text=f"{ref['label']} {vals}"[:38], width=40)
-            lbl.pack(side='left')
-            theme.Tooltip(lbl, f"{ref['label']} {vals}")
-            ttk.Label(row, text=ref['name'], width=28).pack(side='left')
-            tv = tk.StringVar(value=ref['tile'] or self.tile.get())
-            tcb = ttk.Combobox(row, textvariable=tv, values=tiles, width=7)
-            tcb.pack(side='left')
-            tcb.bind('<<ComboboxSelected>>', lambda e: self._renumber())
-            tcb.bind('<FocusOut>', lambda e: self._renumber())
-            nv = tk.StringVar(value='' if ref['num'] is None else
-                              str(ref['num']))
-            ttk.Entry(row, textvariable=nv, width=7).pack(side='left',
-                                                          padx=(6, 0))
-            self.rows.append((ref, tv, nv))
-        self._tile_all(only_empty=True)
+            tk.Label(row, text='✓' if ok else '○', width=2,
+                     bg=theme.OK if ok else theme.ERR, fg='#0b1a0f',
+                     font=theme.FONT_BOLD).pack(side='left', fill='y')
+            p = tg.get('placed')
+            if tg['exists']:
+                num = tg['game_num']
+            else:
+                num = (p or {}).get('num', tg.get('num'))
+            name = mods.editor_name(tg['name']) + (
+                f' {num}' if num is not None else '')
+            if tg['exists']:
+                where = t('mp.m.game', tile=tg['tile'])
+            elif p:
+                where = t('place.on', tile=p['tile'])
+            else:
+                where = t('mp.m.open')
+            lines = len(tg['refs'])
+            label = tg['label'] + (f'  ({t("mp.m.lines", n=lines)})'
+                                   if lines > 1 else '')
+            tk.Label(row, text=f'{name}  -  {where}\n{label}', justify='left',
+                     anchor='w', bg=theme.PANEL,
+                     fg=theme.OK if ok else theme.INK, font=theme.FONT
+                     ).pack(side='left', fill='x', expand=True, padx=6)
 
-    def _follow_name(self):
-        """Keep the default name on the NPC number until the user types an
-        own name."""
-        if self._auto_name is None or                 self.npcname.get() not in ('', self._auto_name):
-            self._auto_name = None
-            return
-        n = self.npcid.get().strip()
-        self._auto_name = t('mp.npcname.default', id=n) if n else ''
-        self.npcname.set(self._auto_name)
+    # -- state ------------------------------------------------------------------
 
-    def _tile_all(self, only_empty=False):
-        """Copy the main tile into the lines that are empty or still carry
-        the previous main tile; a tile set per line stays."""
-        tile = self.tile.get().strip().upper()
-        if not tile:
-            return
-        prev = getattr(self, '_last_tile', '')
-        for _ref, tv, _nv in self.rows:
-            cur = tv.get().strip().upper()
-            if not cur or (not only_empty and cur == prev):
-                tv.set(tile)
-        self._last_tile = tile
-        self._renumber()
-
-    def _renumber(self):
-        """Proposed numbers for the chosen tiles (kept unless they clash)."""
-        tiles = {i: tv.get().strip().upper() for i, (_r, tv, _n)
-                 in enumerate(self.rows)}
-        try:
-            npc = int(self.npcid.get())
-        except ValueError:
-            npc = 0
-        _items, mapping = plan(self.src, npc, self.tile.get().strip().upper()
-                               or 'E1', self.retail_tiles, tiles)
-        auto = getattr(self, '_auto_nums', {})
-        for i, (ref, tv, nv) in enumerate(self.rows):
-            if nv.get().strip() and nv.get().strip() != auto.get(i):
-                continue                    # typed by the user: keep it
-            num = mapping.get(('line', i))
-            if num is not None:
-                nv.set(str(num))
-                auto[i] = str(num)
-        self._auto_nums = auto
-
-    def _pick_tile(self):
-        from .mappicker import MapPicker
-        dlg = MapPicker(self.app, 'tile', None, self.tile.get())
-        self.win.wait_window(dlg.win)
-        if dlg.result and dlg.result.get('tile'):
-            self.tile.set(dlg.result['tile'].upper())
-            self._tile_all()
-
-    def _map(self):
-        self.app.show_map(tile=self.tile.get().strip().upper() or None)
-
-    # -- page 3: checklist -----------------------------------------------------
-
-    def _build_page3(self, f):
-        bar = ttk.Frame(f)
-        bar.pack(fill='x', pady=(0, 6))
-        ttk.Button(bar, text=t('mp.place'), style='Accent.TButton',
-                   command=self.place).pack(side='left')
-        ttk.Label(bar, text=t('mp.place.hint'), style='Muted.TLabel',
-                  wraplength=560, justify='left').pack(side='left', padx=8)
-        self.summary = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=18)
-        self.summary.pack(fill='both', expand=True)
-        for tag, colour in (('head', theme.GOLD), ('ok', theme.OK),
-                            ('warn', '#e0a050'), ('mut', theme.MUT)):
-            self.summary.tag_configure(tag, foreground=colour)
-        self.summary.configure(state='disabled')
-
-    def _settings(self):
-        """(new id, npc id, name, tile, group, tiles, numbers) or None with
-        the error shown."""
-        m = re.fullmatch(r'Q_(\d+)', self.newid.get().strip())
-        if not m:
-            messagebox.showwarning(t('mp.title'), t('mp.err.id'),
-                                   parent=self.win)
-            return None
-        new_id = int(m.group(1))
-        try:
-            npc = int(self.npcid.get().strip())
-        except ValueError:
-            npc = 0
-        used = {int(k) for k in self.app.index.npcs}
+    def missing(self):
+        """[(key, widget)] of what is still open (the tour marks them red)."""
+        if self.src is None:
+            return [('quest', self.tree)]
+        out = []
+        if not self.npcname.get().strip():
+            out.append(('name', self.name_ent))
+        npc = self._npc()
+        idx = self.app.index
+        used = {int(k) for k in idx.npcs} if idx else set()
         used |= {s['id'] for q in self.app.project.quests for s in q.speakers
                  if isinstance(s['id'], int)}
-        if not 1 <= npc <= MAX_NPC_ID or npc in used:
-            messagebox.showwarning(t('mp.title'), t('mp.err.npc',
-                                                    max=MAX_NPC_ID),
-                                   parent=self.win)
-            return None
-        tile = self.tile.get().strip().upper()
-        if tile not in self.retail_tiles:
-            messagebox.showwarning(t('mp.title'), t('mp.err.tile'),
-                                   parent=self.win)
-            return None
-        tiles, numbers = {}, {}
-        for i, (_ref, tv, nv) in enumerate(self.rows):
-            tl = tv.get().strip().upper()
-            if tl not in self.retail_tiles:
-                messagebox.showwarning(t('mp.title'), t('mp.err.linetile',
-                                                        line=i + 1),
-                                       parent=self.win)
-                return None
-            tiles[i] = tl
-            try:
-                numbers[i] = int(nv.get().strip())
-            except ValueError:
-                messagebox.showwarning(t('mp.title'), t('mp.err.num',
-                                                        line=i + 1),
-                                       parent=self.win)
-                return None
+        if npc is None or not 1 <= npc <= MAX_NPC_ID or npc in used:
+            out.append(('npc', self.npc_ent))
+        if not self.title_v.get().strip():
+            out.append(('title', self.jents['title']))
+        for key in ('take', 'solve', 'close'):
+            if not self.jvars[key].get().strip():
+                out.append((key, self.jents[key]))
+        if self.when.get() == AFTER and not self.pred.get():
+            out.append(('pred', self.pred_cb))
+        if any(not target_ready(tg) for tg in self.targets):
+            out.append(('markers', self.place_btn))
+        return out
+
+    def _refresh(self):
+        if self.take_btn is None:
+            return
+        for key, note in self.jnotes.items():
+            var = self.title_v if key == 'title' else self.jvars[key]
+            std = key in self.filled and var.get() == t(
+                'mp.journal.default.' + key)
+            note.configure(text=t('mp.j.std') if std else '')
+        self._marker_rows()
+        miss = self.missing()
+        self.take_btn.state(['disabled'] if miss else ['!disabled'])
+        if self.src is None:
+            self.status.configure(text=t('mp.st.pick'), foreground=theme.MUT)
+        elif miss:
+            names = []
+            for key, _w in miss:
+                if key == 'markers':
+                    n = sum(1 for tg in self.targets if not target_ready(tg))
+                    names.append(t('mp.miss.markers', n=n))
+                else:
+                    names.append(t('mp.miss.' + key))
+            self.status.configure(text=t('mp.st.open', items=', '.join(names)),
+                                  foreground=theme.ERR)
+        else:
+            self.status.configure(text=t('mp.st.ready'), foreground=theme.OK)
+
+    # -- map -------------------------------------------------------------------
+
+    def ensure_saved(self):
+        """The markers go into a folder next to the project file: an unsaved
+        project is saved on its own, in Documents, named after the quest
+        (Marco: no extra clicks)."""
+        from . import editormaps
+        app = self.app
+        if editormaps.levels_dir(app.project):
+            return True
+        # the file name becomes the name of the mod archive, which keeps
+        # only A-Z, 0-9, _ and -: "Großer Hunger" -> "Grosser Hunger"
+        title = self.title_v.get() or 'Quest'
+        for a, b in (('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('Ä', 'Ae'),
+                     ('Ö', 'Oe'), ('Ü', 'Ue'), ('ß', 'ss')):
+            title = title.replace(a, b)
+        base = re.sub(r'[^A-Za-z0-9_\- ]+', '', title).strip() or 'Quest'
+        path = data.default_project_path(base)
+        if not app._write_project(path):
+            return False
+        app.set_info(t('mp.saved', path=path), 'StatusOk.TLabel')
+        return True
+
+    def place(self):
+        """The markers still open (and those set before, to move them) on
+        the map; "Confirm" there brings them back here."""
+        from . import placewin
+        if self.src is None:
+            return
+        if not self.ensure_saved():
+            return
+        self._npc_changed()
+        targets = []
+        for tg in self.targets:
+            if tg['exists']:
+                continue
+            p = tg.get('placed')
+            targets.append({
+                'key': tg['key'], 'name': tg['name'], 'label': tg['label'],
+                'num': tg['num'], 'tile': (p or {}).get('tile'),
+                'orig': None, 'placed': dict(p) if p else None,
+                '_prev': dict(p) if p else {}, 'src': tg})
+        if not targets:
+            return
+        self.place_win = placewin.PlaceWindow(self.app, targets, self._placed)
+
+    def _placed(self, targets):
+        for tg in targets:
+            tg['src']['placed'] = tg.get('placed')
+        self.place_win = None
+        self._refresh()
+        try:
+            self.win.lift()
+        except tk.TclError:
+            pass
+
+    # -- take over -----------------------------------------------------------------
+
+    def take(self):
+        if self.missing():
+            self._refresh()
+            return
+        from . import placewin
+        app = self.app
+        m = re.fullmatch(r'Q_(\d+)', self.newid.get().strip())
+        if not m:
+            return
         try:
             group = int(self.group.get().split()[0])
         except (ValueError, IndexError):
             group = None
-        name = self.npcname.get().strip() or t('mp.npcname.default',
-                                                id=npc)
-        return new_id, npc, name, tile, group, tiles, numbers
-
-    def _fill_page3(self, settings):
-        new_id, npc, name, tile, group, tiles, numbers = settings
-        items, _m = plan(self.src, npc, tile, self.retail_tiles, tiles,
-                         numbers)
-        self.items = items
-        s = self.summary
-        s.configure(state='normal')
-        s.delete('1.0', 'end')
-        s.insert('end', t('mp.sum.quest', old=self.src.id, new=new_id) + NL,
-                 'head')
-        s.insert('end', t('mp.sum.npc', old=self.src.giver, new=npc,
-                          name=name, tile=tile, party=DEFAULT_PARTY) + NL)
-        s.insert('end', t('mp.sum.group', group=self.group.get()) + NL)
-        raw = self.src.extra.get('qtx', {}).get('raw') or []
-        if raw:
-            s.insert('end', t('mp.sum.raw', n=len(raw)) + NL, 'warn')
-            for kw, toks in raw[:6]:
-                s.insert('end', '   ' + kw + ' ' + ' '.join(toks) + NL, 'mut')
-        s.insert('end', NL + t('mp.sum.markers') + NL, 'head')
-        s.insert('end', t('mp.sum.markers.hint') + NL + NL, 'mut')
-        for x in items:
-            line = t('mp.item', name=mods.editor_name(x['name']), num=x['num'],
-                   tile=x['tile'])
-            on_map = (x['name'], x['tile'], x['num']) in self.placements
-            if on_map:
-                line += '   ' + t('mp.onmap')
-            s.insert('end', ('  [x] ' if x['exists'] or on_map else '  [ ] ')
-                     + line + NL, 'ok' if x['exists'] or on_map else None)
-            s.insert('end', '        ' + x['why'] + NL, 'mut')
-        s.insert('end', NL + t('mp.sum.after') + NL, 'mut')
-        s.configure(state='disabled')
-
-    def place(self):
-        """Set the open markers on the map (placewin.py); the tiles and
-        numbers chosen there go back into the lines of page 2."""
-        from . import placewin
-        if not placewin.can_place(self.app, self.win):
-            return
-        targets = []
-        for x in self.items:
-            key = (x['name'], x['tile'], x['num'])
-            if x['exists'] and key not in self.placements:
-                continue
-            if placewin.is_interior(x['tile']):
-                continue                 # rooms: the editor's job
-            giver = x['name'] == GIVER_MARKER
-            targets.append({'key': key, 'name': x['name'], 'label': x['why'],
-                            'num': x['num'] if giver else None,
-                            'tile': x['tile'], 'orig': None,
-                            '_prev': {'tile': x['tile'], 'num': x['num']},
-                            'placed': self.placements.get(key)})
-        if targets:
-            placewin.PlaceWindow(self.app, targets, self._placed)
-        else:
-            messagebox.showinfo(t('place.title'), t('place.none'),
-                                parent=self.win)
-
-    def _placed(self, targets):
-        for tg in targets:
-            old = tg['key']
-            self.placements.pop(old, None)
-            p = tg.get('placed')
-            if p is None:
-                continue
-            new = (tg['name'], p['tile'], int(p['num']))
-            self.placements[new] = p
-            if tg['name'] == GIVER_MARKER:
-                self.tile.set(p['tile'])
-                self._last_tile = p['tile']
-                continue
-            for ref, tv, nv in self.rows:
-                if (ref['name'], tv.get().strip().upper(),
-                        int(nv.get() or 0)) == old:
-                    tv.set(p['tile'])
-                    nv.set(str(p['num']))
-        settings = self._settings()
-        if settings is not None:
-            self.settings = settings
-            self._fill_page3(settings)
-        self.win.lift()
-
-    # -- flow ------------------------------------------------------------------
-
-    def _show_step(self, i):
-        self.step = i
-        for k, p in enumerate(self.pages):
-            if k == i:
-                p.pack(fill='both', expand=True)
-            else:
-                p.pack_forget()
-        self.steplbl.configure(text=t(f'mp.step{i + 1}'))
-        self.back_btn.state(['!disabled'] if i else ['disabled'])
-        self.next_btn.configure(text=t('mp.take') if i == 2 else t('mp.next'))
-
-    def back(self):
-        if self.step:
-            self._show_step(self.step - 1)
-
-    def next(self):
-        if self.step == 0:
-            qid = self._selected_qid()
-            if qid is None:
-                return
-            src = self.app.build_game_quest(qid)
-            if src is None:
-                return
-            recover_null_lines(src)
-            self.src = src
-            self._fill_page2()
-            self._show_step(1)
-        elif self.step == 1:
-            settings = self._settings()
-            if settings is None:
-                return
-            self.settings = settings
-            self._fill_page3(settings)
-            self._show_step(2)
-        else:
-            self.take()
-
-    def take(self):
-        new_id, npc, name, tile, group, tiles, numbers = self.settings
-        app = self.app
-        new = apply(self.src, new_id, npc, name, tile, self.retail_tiles,
-                    tiles, numbers, group)
+        try:
+            pred = int(self.pred.get().split()[0][2:])
+        except (ValueError, IndexError):
+            pred = 4
+        new = take_over(
+            self.src, int(m.group(1)), self._npc(),
+            self.npcname.get().strip(), self.targets, self.retail_tiles,
+            group=group, active=self.active.get(),
+            availability=self.when.get(), pred=pred, event=self.event.get(),
+            title=self.title_v.get().strip(),
+            journal={k: v.get().strip() for k, v in self.jvars.items()})
         app.project.quests.append(new)
         app.mark_dirty()
-        # only what the lines use now (page 2 may have changed since)
-        used = {(x['name'], x['tile'], x['num'])
-                for x in new.extra.get('markers_todo') or []}
-        keep = {k: p for k, p in self.placements.items() if k in used}
-        if keep:
-            from . import placewin
-            targets = [{'key': key, 'name': key[0], 'placed': p, 'orig': None}
-                       for key, p in keep.items()]
-            report = placewin.safe_commit(app, new, targets, self.win)
-            if report is not None:
-                placewin._report(app, report)
+        report = placewin.safe_commit(app, new, commit_targets(self.targets),
+                                      self.win)
         app.open_quest(new)
-        open_items = [x for x in new.extra['markers_todo'] if not x['done']]
-        app.set_info(t('mp.done', old=self.src.id, new=new_id,
-                       n=len(open_items)), 'StatusOk.TLabel')
+        if app.project.path:
+            app._write_project(app.project.path)
+        clash = [c for r in (report or {}).values() for c in r['clash']]
+        if report is not None and clash:
+            placewin._report(app, report)
+        app.set_info(t('mp.done2', old=self.src.id, new=new.id),
+                     'StatusOk.TLabel')
+        self.taken = new
         self.close()

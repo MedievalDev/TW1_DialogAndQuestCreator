@@ -268,6 +268,78 @@
         "de": "Der Geisterwolf hat die eingestellte Stufe (40 bis 45) statt der urspruenglichen 1 bis 4.",
         "en": "The ghost wolf has the level you set (40 to 45) instead of the original 1 to 4."
       }
+    },
+    {
+      "id": "mp-one-window",
+      "since": "4.3.0",
+      "needs_game": true,
+      "title": {
+        "de": "Multiplayer-Quest in einem Fenster uebernehmen",
+        "en": "Take a multiplayer quest over in one window"
+      },
+      "why": {
+        "de": "Seit 4.3.0 geht die Uebernahme in einem Fenster: Marker auf der Karte setzen, Uebernehmen, Export. Im Tool ist alles gemessen (Archiv, Marker, Freischaltung). Dass der Questgeber im Spiel steht und dich anspricht, wurde mit dem alten Weg bestaetigt, mit dem neuen Fenster noch nicht.",
+        "en": "Since 4.3.0 the takeover happens in one window: set the markers on the map, take over, export. Everything is measured in the tool (archive, markers, unlock). That the giver stands in the game and talks to you was confirmed with the old way, not yet with the new window."
+      },
+      "steps": {
+        "de": [
+          "Hilfe > Tour: Multiplayer-Quest uebernehmen starten.",
+          "Den gruenen Rahmen folgen: Neue Quest, Multiplayer-Quest, eine Quest waehlen (z. B. Q_700 Grosser Hunger), Namen eintragen.",
+          "\"Marker auf der Karte setzen\": den Questgeber-Marker auf E1 in die Naehe des Startpunkts setzen (bei 70/55), dann die anderen Marker, \"Bestaetigen\".",
+          "\"Uebernehmen\", dann Datei > Exportieren als Mod, \"Exportieren\".",
+          "Unten auf \"Spiel starten\" klicken und ein NEUES Spiel beginnen.",
+          "Zum Questgeber gehen: Spricht er dich von selbst an?",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Start Help > Tour: take over a multiplayer quest.",
+          "Follow the green frames: new quest, multiplayer quest, pick a quest (e.g. Q_700), enter a name.",
+          "\"Place markers on the map\": put the giver marker on E1 near the start (at 70/55), then the other markers, \"Confirm\".",
+          "\"Take over\", then File > Export as mod, \"Export\".",
+          "Click \"Start game\" below and begin a NEW game.",
+          "Walk to the quest giver: does he talk to you on his own?",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Der Questgeber steht an seinem Marker und startet das Angebot von selbst; nach dem Annehmen steht die Quest im Tagebuch.",
+        "en": "The giver stands at his marker and starts the offer on his own; after accepting, the quest is in the journal."
+      }
+    },
+    {
+      "id": "dialog-template-questions",
+      "since": "4.3.0",
+      "needs_game": true,
+      "title": {
+        "de": "Test-Dialog: Fragen verschwinden nach der Antwort",
+        "en": "Test dialog: questions go away after the answer"
+      },
+      "why": {
+        "de": "Der Test-Dialog fuehrt nach einer Antwort zurueck ins Frage-Menue, die gerade gestellte Frage steht dort mit negativem Index, wie in jedem Menue des Originals. Aus dem Tool heraus ist das im Spiel noch nicht gesehen.",
+        "en": "After an answer the test dialog goes back into the question menu, with the question just asked marked negative, as in every menu of the original game. Nobody has seen it from the tool in the game yet."
+      },
+      "steps": {
+        "de": [
+          "Neue Quest > Leer anfangen > \"Mit Dialog: Test-Dialog\" waehlen, OK.",
+          "Datei > Exportieren als Mod, \"Exportieren\".",
+          "Unten auf \"Spiel starten\" klicken, NEUES Spiel beginnen, Tagos erste Quest annehmen.",
+          "Mit Tago sprechen, bis das Menue mit \"Worum geht es genau?\" kommt, die Frage stellen.",
+          "Nach der Antwort: Steht \"Worum geht es genau?\" noch im Menue?",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "New quest > Start empty > pick \"With dialog: Test dialog\", OK.",
+          "File > Export as mod, \"Export\".",
+          "Click \"Start game\" below, begin a NEW game, take Tago's first quest.",
+          "Talk to Tago until the menu with \"What is it about?\" comes, ask it.",
+          "After the answer: is \"What is it about?\" still in the menu?",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Nach der Antwort fehlt die gerade gestellte Frage im Menue, die andere Frage und Annehmen/Ablehnen stehen da.",
+        "en": "After the answer the question just asked is gone from the menu, the other question and accept/decline are there."
+      }
     }
   ]
 }
