@@ -133,17 +133,53 @@ class Terrain:
         return out
 
 
-def add_markers(body, markers):
-    """The uncompressed map body with ``markers`` appended:
-    [(name, ident, x, y, z, angle)]. Everything outside the marker block
-    stays byte for byte."""
+def _marker_entries(body):
+    """(start, end, [(name, id, raw bytes)]) of the marker block."""
     start, end = tw1_lnd._marker_section(body)
-    count = _u32(body, start)
-    extra = b''
+    pos, out = start + 8, []
+    for _ in range(_u32(body, start)):
+        name, p2 = tw1_lnd._ascii(body, pos)
+        stop = tw1_lnd._entry_end(body, p2)
+        out.append((name, _u32(body, p2), body[pos:stop]))
+        pos = stop
+    return start, end, out
+
+
+def _game_order(entries):
+    """The order the game's maps have, measured 2026-09-21 on all 160 maps
+    of Levels.wd without an exception: one block per marker type, the types
+    sorted without case, the numbers ascending inside a block (every
+    editor map as well). Up to 4.2.0 placed markers were appended at the
+    end, a second block of their type. That this alone breaks a marker in
+    the game is NOT measured - Kunibert's missing giver had another cause
+    (export.insert_npc) - the order is kept like the game's as a
+    precaution (4.2.1)."""
+    return sorted(entries, key=lambda e: (e[0].lower(), e[1]))
+
+
+def sort_markers(body):
+    """``body`` with its marker block in the game's order (the same bytes
+    when it already is, as every map of the game and the editor)."""
+    start, end, ents = _marker_entries(body)
+    ordered = _game_order(ents)
+    if ordered == ents:
+        return body
+    return body[:start + 8] + b''.join(e[2] for e in ordered) + body[end:]
+
+
+def add_markers(body, markers):
+    """The uncompressed map body with ``markers`` added:
+    [(name, ident, x, y, z, angle)], each in the block of its type (see
+    _game_order). Everything outside the marker block stays byte for
+    byte."""
+    if not markers:
+        return body
+    start, end, ents = _marker_entries(body)
     for name, ident, x, y, z, angle in markers:
         raw = name.encode('latin-1')
-        extra += (struct.pack('<I', len(raw)) + raw
-                  + struct.pack('<Iiii', int(ident), int(x), int(y), int(z))
-                  + bytes([int(angle) & 0xFF]) + b'\x00' * 8)
-    return (body[:start] + struct.pack('<I', count + len(markers))
-            + body[start + 4:end] + extra + body[end:])
+        ents.append((name, int(ident), struct.pack('<I', len(raw)) + raw
+                     + struct.pack('<Iiii', int(ident), int(x), int(y), int(z))
+                     + bytes([int(angle) & 0xFF]) + b'\x00' * 8))
+    return (body[:start] + struct.pack('<I', len(ents))
+            + body[start + 4:start + 8]
+            + b''.join(e[2] for e in _game_order(ents)) + body[end:])

@@ -315,6 +315,9 @@ _DE = {
     'val.after': 'Keine Bedingung "Nach Quest": die Quest wuerde nie '
                  'angeboten.',
     'val.after.quest': 'Bedingung: Quest Q_{id} gibt es nicht.',
+    'warn.after.start': 'Keine Bedingung "Nach Quest" und Stufe 0: die Quest ist ab Spielbeginn aktiv, der Questgeber steht von Anfang an da.',
+    'warn.after.level0': 'Stufe 0: die Quest ist ab Spielbeginn aktiv, die Bedingung "Nach Quest" wirkt nicht. Fuer "erst danach" Stufe 1 setzen.',
+    'warn.after.few': 'Stufe {level}, aber nur {n} Bedingung(en) "Nach Quest": jede Stufe ueber 0 braucht eine Freischaltung. Ohne weitere wird die Quest nie aktiv.',
     'val.offer.empty': 'Die Ebene Angebot hat keine Zeilen.',
     'val.offer.npc': 'Das Angebot muss mit einer NPC-Zeile beginnen.',
     'val.action.level': 'Aktion in einer Ebene, in der Aktionen nicht erlaubt '
@@ -359,9 +362,12 @@ _DE = {
     'export.log.registry': 'Registry: {name} = 1 (vorher {old})',
     'export.log.overlay': 'Alte Tool-Texte derselben Quest-IDs bereinigt: {inner}',
     'export.log.removed': 'Aus dem Archiv entfernt: {inner}',
+    'export.log.lndsorted': 'Marker in {inner} in die Reihenfolge der Spielkarten gebracht (gesetzte Marker hingen bis 4.2.0 hinten an).',
     'export.done': 'Export fertig: {path}',
     'export.done.files': 'Dateien geschrieben nach {path}',
     'export.failed': 'Export fehlgeschlagen: {err}',
+    'export.hook.missing': 'Freischaltung fehlt im fertigen qtx: {lines}. Die Quest wuerde im Spiel nie erscheinen - Export abgebrochen. Bitte als Bug melden.',
+    'export.npc.unread': 'Das Spiel wuerde diese neuen NPCs nicht lesen: {names}. Ein NPC-Block hinter einer Quest wird vom Spiel verschluckt, der Questgeber erschiene nie - Export abgebrochen. Bitte als Bug melden.',
     'export.next': 'Naechste Schritte: Neues Spiel starten (Questzustand steckt '
                    'in Spielstaenden), die Vorgaengerquest annehmen und den '
                    'Questgeber danach erneut ansprechen. Erscheint nichts, zuerst '
@@ -395,6 +401,7 @@ _DE = {
     'insp.raw.one': '{n} Zeile der Quest bleibt unveraendert (AOQ und seltene Befehle).',
     'ctx.setstart': 'Als Start dieser Ebene setzen',
     'val.speaker.taken': 'Neuer NPC_{id} ist im Spiel schon vergeben ({name}).',
+    'val.speaker.replace': 'NPC_{id} ({name}) steht schon in {src} und wird ersetzt.',
     'val.opcode': 'Unbekannter Befehl: {op}',
     'warn.talk.twice': 'Vorgaengerquest Q_{q} wird beim selben NPC erledigt: beide Gespraeche fallen zu einer Zeile zusammen.',
     'warn.kill.questnpc': 'Kill-Ziel ist ein Quest-NPC: sehr hohe Widerstaende.',
@@ -1529,6 +1536,9 @@ _EN = {
     'val.task.field': 'Task: {err}',
     'val.after': 'No "After quest" condition: the quest would never be offered.',
     'val.after.quest': 'Condition: quest Q_{id} does not exist.',
+    'warn.after.start': 'No "After quest" condition and level 0: the quest is active from the start of the game, its giver stands there from the beginning.',
+    'warn.after.level0': 'Level 0: the quest is active from the start of the game, the "After quest" condition has no effect. For "only after that" set level 1.',
+    'warn.after.few': 'Level {level} but only {n} "After quest" condition(s): every level above 0 needs one unlock. Without more the quest never becomes active.',
     'val.offer.empty': 'The Offer level has no lines.',
     'val.offer.npc': 'The offer must start with an NPC line.',
     'val.action.level': 'Action in a level where actions are not allowed.',
@@ -1568,9 +1578,12 @@ _EN = {
     'export.log.registry': 'Registry: {name} = 1 (before {old})',
     'export.log.overlay': 'Old tool texts of the same quest ids cleaned: {inner}',
     'export.log.removed': 'Removed from the archive: {inner}',
+    'export.log.lndsorted': 'Markers in {inner} put into the order of the game maps (placed markers hung at the end up to 4.2.0).',
     'export.done': 'Export finished: {path}',
     'export.done.files': 'Files written to {path}',
     'export.failed': 'Export failed: {err}',
+    'export.hook.missing': 'Unlock missing in the finished qtx: {lines}. The quest would never appear in the game - export stopped. Please report it as a bug.',
+    'export.npc.unread': 'The game would not read these new NPCs: {names}. An NPC block behind a quest is swallowed by the game, the giver would never appear - export stopped. Please report it as a bug.',
     'export.next': 'Next steps: start a new game (quest state lives in saves), '
                    'take the previous quest and talk to the giver again. If '
                    'nothing appears, first check with the [MOD] marker method '
@@ -1603,6 +1616,7 @@ _EN = {
     'insp.raw.one': '{n} line of the quest stays unchanged (AOQ and rare commands).',
     'ctx.setstart': 'Set as start of this level',
     'val.speaker.taken': 'New NPC_{id} already exists in the game ({name}).',
+    'val.speaker.replace': 'NPC_{id} ({name}) is already in {src} and will be replaced.',
     'val.opcode': 'Unknown command: {op}',
     'warn.talk.twice': 'Previous quest Q_{q} is solved at the same NPC: both conversations collapse into one line.',
     'warn.kill.questnpc': 'Kill target is a quest NPC: very high resistances.',

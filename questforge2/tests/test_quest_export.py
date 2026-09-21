@@ -139,8 +139,12 @@ class QtxBlock(unittest.TestCase):
         b4 = export._find_block(text, 4).group(0)
         self.assertEqual(b4.split('\n')[2], '  FC TALK NPC_5')
         self.assertEqual(b4.split('\n')[3], '  AOQ PROMOTE TAKE Q_390')
-        self.assertIn('NPC NPC_700 700 12 F5 0 123 25 (null) SMALL True '
-                      'CHAR_05(15) 0\n  OBJECTS True\nEND\nQUEST Q_390', text)
+        # 4.2.1: behind the last NPC, in front of the first QUEST - the
+        # game swallows an NPC block that stands behind a quest
+        self.assertIn('OBJECTS True\nEND\nNPC NPC_700 700 12 F5 0 123 25 '
+                      '(null) SMALL True CHAR_05(15) 0\n  OBJECTS True\n'
+                      'END\nQUEST Q_4 ', text)
+        self.assertIn('NPC_700', export.engine_parse(text)[0])
         # re-export: no duplicates, condition change moves the AOQ
         q.offered = False
         c = [n for n in q.conditions_list() if n['cond'] == 'after'][0]
@@ -171,6 +175,104 @@ class QtxBlock(unittest.TestCase):
         otr, _, orest = tw1_lan.read(overlay)
         self.assertEqual(len(tw1_lan.parse_trees(orest)), 1)
         self.assertNotIn('translateQ_4', otr)
+
+
+def _after(q, pred, event='TAKE'):
+    c = [n for n in q.conditions_list() if n['cond'] == 'after'][0]
+    c['quest'], c['event'] = pred, event
+    return q
+
+
+class HookOrder(unittest.TestCase):
+    """The unlock line of an own quest survives any order of the project
+    quests (4.2.1: a changed game quest Q_4 written after Q_385 dropped
+    the AOQ, Q_385 was never enabled and its giver never appeared)."""
+
+    def _retail_q4(self):
+        from questforge2 import retail
+        q4 = Quest()
+        m = export._find_block(QTX, 4)
+        retail.import_block(q4, m.group(0))
+        q4.actions[0]['args']['amount'] = '777'     # Marco changed it
+        return q4
+
+    def test_changed_game_quest_either_order(self):
+        for order in ('own first', 'game quest first'):
+            q, q4 = make_quest(), self._retail_q4()
+            quests = [q, q4] if order == 'own first' else [q4, q]
+            text, _ = export.patch_qtx(QTX, quests, _Index())
+            b4 = export._find_block(text, 4).group(0)
+            self.assertIn('  AOQ PROMOTE TAKE Q_390\n', b4, order)
+            self.assertIn('REWARD GLD TAKE 777', b4, order)
+            self.assertEqual(b4.count('Q_390'), 1, order)
+            # a second export over the first result keeps exactly one
+            text2, _ = export.patch_qtx(text, quests, _Index())
+            self.assertEqual(text2, text, order)
+            self.assertEqual(export.missing_hooks(text2, quests), [])
+
+    def test_chain_of_own_quests_either_order(self):
+        for order in (0, 1):
+            a = make_quest(390)
+            b = _after(make_quest(391), 390, 'CLOSE')
+            quests = [a, b] if order else [b, a]
+            text, _ = export.patch_qtx(QTX, quests, _Index())
+            self.assertIn('  AOQ PROMOTE CLOSE Q_391\n',
+                          export._find_block(text, 390).group(0), order)
+            self.assertIn('  AOQ PROMOTE TAKE Q_390\n',
+                          export._find_block(text, 4).group(0), order)
+            text2, _ = export.patch_qtx(text, quests, _Index())
+            self.assertEqual(text2, text, order)
+
+    def test_own_link_stays(self):
+        # 390 links to 391 itself, 391 has no condition on 390
+        for order in (0, 1):
+            a = make_quest(390)
+            a.links.append({'type': 'PROMOTE', 'event': 'SOLVE',
+                            'quest': 391})
+            b = make_quest(391)
+            quests = [a, b] if order else [b, a]
+            text, _ = export.patch_qtx(QTX, quests, _Index())
+            self.assertIn('  AOQ PROMOTE SOLVE Q_391\n',
+                          export._find_block(text, 390).group(0), order)
+            text2, _ = export.patch_qtx(text, quests, _Index())
+            self.assertIn('  AOQ PROMOTE SOLVE Q_391\n',
+                          export._find_block(text2, 390).group(0), order)
+
+    def test_npc_behind_a_quest_is_moved(self):
+        # what 4.2.0 wrote: the new NPC in front of its quest at the end
+        q = make_quest(385)
+        q.speakers.append({'id': 508, 'name': 'Kunibert', 'lector': None,
+                           'tile': 'E1', 'new': True, 'marker': 508})
+        rec = export.npc_block(q.speakers[-1], _Index())
+        old = QTX + rec + 'QUEST Q_385 1 3 (null) 0 True\nEND\n'
+        self.assertNotIn('NPC_508', export.engine_parse(old)[0])
+        self.assertEqual(export.unread_npcs(old, [q]), ['NPC_508'])
+        text, log = export.patch_qtx(old, [q], _Index())
+        self.assertIn(('npc-update', 508), log)
+        self.assertEqual(text.count('NPC NPC_508 '), 1)
+        self.assertLess(text.index('NPC NPC_508 '), text.index('QUEST '))
+        self.assertEqual(export.unread_npcs(text, [q]), [])
+        again, log2 = export.patch_qtx(text, [q], _Index())
+        self.assertEqual(again, text)
+        self.assertNotIn(('npc-update', 508), log2)
+
+    def test_engine_parse_retail(self):
+        base = os.path.join(ROOT, 'base', 'TwoWorldsQuests.qtx')
+        if not os.path.isfile(base):
+            self.skipTest('base files not extracted')
+        with open(base, 'rb') as f:
+            text = f.read().decode('latin-1')
+        npcs, quests = export.engine_parse(text)
+        # every NPC of the file is read; the game drops 700+ itself
+        self.assertEqual(len(npcs), 347)
+        self.assertEqual(len([q for q in quests if q < 400]), 380)
+
+    def test_missing_hooks(self):
+        q = make_quest()
+        self.assertEqual(export.missing_hooks(QTX, [q]),
+                         ['Q_4: AOQ PROMOTE TAKE Q_390'])
+        text, _ = export.patch_qtx(QTX, [q], _Index())
+        self.assertEqual(export.missing_hooks(text, [q]), [])
 
 
 class Packing(unittest.TestCase):

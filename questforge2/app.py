@@ -4063,6 +4063,8 @@ class ExportWindow:
             tag = 'err'
         elif kind == 'removed':
             text = t('export.log.removed', inner=msg[1])
+        elif kind == 'lnd_sorted':
+            text = t('export.log.lndsorted', inner=msg[1])
         else:
             text = ' '.join(str(x) for x in msg)
         self._put(text, tag)

@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -1953,6 +1953,70 @@ Offen:
       gleich den SDK-Werten).
     - Test `ghost-levels-ingame` (ungetestet), 12 Unit-Tests in
       `test_enemylevel.py`, GUI-Probe EN/DE.
+89. Freischaltung eigener Quests unabhaengig von der Reihenfolge
+    (Version 4.2.1, Marco 2026-09-21). Anlass: Marcos Nachbau der
+    MP-Quest Q_700 als Q_385 ("Grosser Hunger", Geber Kunibert NPC_508 auf
+    E1). Im Spiel stand kein Kunibert.
+    - Gemessen am Archiv: Karte, Marker 508, Level-Header-Cache und
+      NPC-Zeile waren richtig (auch gegen `ParseNPC`/`CreateQuestGiver` im
+      SDK). Es fehlte `AOQ PROMOTE TAKE Q_385` in Q_4. Q_385 wurde also nie
+      freigeschaltet, `EnableQuest` -> `ActivateQuestGiver` lief nie.
+    - Ursache: Marco hatte Q_4 (Tagos "Ein Lichtstreif...") als Spielquest
+      im Projekt geaendert. `patch_qtx` schrieb die Quests in
+      Projektreihenfolge: erst Q_385 samt Haken in Q_4, danach den
+      gespeicherten Block von Q_4 - ohne Haken. Dieselbe Falle hatten
+      Ketten eigener Quests (der Block des Vorgaengers wird spaeter neu
+      geschrieben; beim ersten Export brach es mit "Q_390 not found" ab)
+      und AOQ-Links einer eigenen Quest auf eine andere eigene Quest.
+    - Jetzt: erst alle Bloecke, dann alle Haken (`hook_line`);
+      `remove_aoq_to` laesst die Links stehen, die eine eigene Quest selbst
+      schreibt. Danach Pflichtpruefung `missing_hooks`: fehlt eine
+      Freischaltung im fertigen qtx, bricht der Export mit
+      `export.hook.missing` ab statt still eine tote Quest auszuliefern.
+    - 4 Tests (`HookOrder` in `test_quest_export.py`), die mit dem alten
+      Code fehlschlagen; Marcos Projekt gegen die echte Basis-qtx geprueft.
+    - Zweiter Fund beim erneuten Export: Nach einem Index-Neubau kennt der
+      Index den neuen NPC aus dem eigenen Zielarchiv (Kunibert aus
+      Test381.wd), und `val.speaker.taken` blockierte den Export. Kommt der
+      NPC aus dem Zielarchiv selbst, gibt es jetzt die Warnung
+      `val.speaker.replace` (wie `val.id.replace` bei der Quest-ID); aus
+      dem Spiel oder einer anderen Mod bleibt es ein Fehler.
+    - Eigentliche Ursache (Kunibert fehlte auch mit Haken, im Spiel mit
+      Stufe 0 direkt vor dem Startpunkt nachgesehen): `PQuestLoader.Parse`
+      schaut bei offener Quest nur auf GIVER/FC/AOQ/ACTION/REWARD und nie
+      auf deren END; die Quest bleibt bis zur naechsten QUEST-Zeile offen,
+      ein NPC-Block hinter einer Quest wird verschluckt. Retail: alle 347
+      NPC-Bloecke vor der ersten QUEST. Das Tool schrieb neue NPCs seit
+      jeher vor ihre Quest ans Dateiende -> `GIVER PASSIVE NPC_508` fand
+      keinen NPC, kein Questgeber. Vermutlich auch Orions fehlender Geber.
+      Jetzt `insert_npc` (Ende des NPC-Bereichs, alte Bloecke werden
+      verschoben) und Pflichtpruefung `unread_npcs` mit `engine_parse`,
+      einem Nachbau der Zustandsmaschine (liest am Retail-File alle 347
+      NPCs und 380 Einzelspieler-Quests).
+    - Im Spiel bestaetigt (2026-09-21, neues Spiel, nur Test381.wd und
+      QuestLimit600.wd an): mit dem NPC im NPC-Bereich steht Kunibert
+      direkt nach dem Intro vor dem Helden (Marker 508 bei 70/55, Name aus
+      der lan); mit dem NPC hinter den Quests (Lauf davor) fehlte er an
+      derselben Stelle. `trainer.create CITIZEN_01_01` erzeugte die
+      Einheit auch vorher - Einheit und Erzeugungszeichenkette waren nie
+      das Problem. Als PASSIVE-Geber liess sich das Gespraech im
+      Tutorial-Hof per Klick und E nicht oeffnen (Ursache offen; das
+      Tutorial-Skript Mission_E01 sperrt keine Dialoge, es zeigt nur
+      Hinweise und oeffnet das Tor beim Waffeziehen).
+    - Als ACTIVE-Geber (wie Tago) bestaetigt: Held auf 230 Einheiten
+      heran, das Spiel startet das Angebot von selbst
+      (CheckActiveQuestGivers, eActiveQuestGiverRangeA 300), beide Zeilen
+      laufen, danach "Quest-Tagebuch aktualisiert: Grosser Hunger".
+    - Zur Vorsicht, Wirkung im Spiel NICHT gemessen: In allen 160 Karten
+      von Levels.wd (und jeder Editor-Karte) ein Block je Markertyp, Typen
+      ohne Gross/Klein sortiert, Nummern aufsteigend. Das Tool haengte
+      gesetzte Marker ans Ende. `lndmap.add_markers` sortiert jetzt ein,
+      `lndmap.sort_markers` beim Export (Retail/Editor byte-gleich).
+    - Nebenbei aus dem SDK: `eQuestInitialLevel` = -1, `StartQuests`
+      promotet beim Spielstart jede geladene Quest einmal. Stufe 0 = ab
+      Start, Stufe 1 = braucht genau ein `AOQ PROMOTE` (143 Retail-Quests
+      so). Der Held startet auf E1 bei (70*256, 52*256)
+      (TwoWorldsCampaign.ec).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

@@ -108,6 +108,58 @@ class Rules(unittest.TestCase):
         errors, warnings = validate.validate_project(p, self.idx)
         self.assertTrue(any('val.id.twice' in m for _, m, _ in errors))
 
+    def test_new_npc_from_own_archive(self):
+        # after an export the index knows the new NPC from the target
+        # archive itself: re-exporting replaces it (4.2.1, Kunibert)
+        self.idx.npcs['508'] = {'name': 'Kunibert', 'tile': 'E1',
+                                'lector': None, 'source': 'Test381.wd',
+                                'record': 'NPC NPC_508 508 508 E1 0'}
+        q = make_quest(385)
+        q.speakers.append({'id': 508, 'name': 'Kunibert', 'lector': None,
+                           'tile': 'E1', 'new': True})
+        E, W = validate.validate_quest(q, self.idx, archive='Test381.wd')
+        self.assertNotIn('val.speaker.taken', keys(E))
+        self.assertIn('val.speaker.replace', keys(W))
+        # another mod or the game itself: still an error
+        E, W = validate.validate_quest(q, self.idx, archive='Other.wd')
+        self.assertIn('val.speaker.taken', keys(E))
+        E, W = validate.validate_quest(q, self.idx)
+        self.assertIn('val.speaker.taken', keys(E))
+
+    def test_enable_level_and_after(self):
+        # SDK: every loaded quest is promoted once at the start
+        # (eQuestInitialLevel -1): level 0 = from the start (4.2.1)
+        def set_level(q, lvl):
+            for n in q.graph['nodes'].values():
+                if n.get('cond') == 'level':
+                    n['level'] = lvl
+
+        def drop_after(q):
+            g = q.graph['nodes']
+            for nid in [k for k, n in g.items() if n.get('cond') == 'after']:
+                del g[nid]
+
+        q = make_quest()
+        drop_after(q)
+        set_level(q, 0)
+        E, W = validate.validate_quest(q, self.idx)
+        self.assertNotIn('val.after', keys(E))
+        self.assertIn('warn.after.start', keys(W))
+        set_level(q, 1)
+        E, W = validate.validate_quest(q, self.idx)
+        self.assertIn('val.after', keys(E))
+        q = make_quest()
+        set_level(q, 0)
+        E, W = validate.validate_quest(q, self.idx)
+        self.assertIn('warn.after.level0', keys(W))
+        set_level(q, 2)
+        E, W = validate.validate_quest(q, self.idx)
+        self.assertIn('warn.after.few', keys(W))
+        set_level(q, 1)
+        E, W = validate.validate_quest(q, self.idx)
+        self.assertEqual(E, [])
+        self.assertNotIn('warn.after', keys(W))
+
 
 class Links(unittest.TestCase):
     """AOQ lines of a quest (2.8.0): types and triggers from the SDK."""

@@ -96,7 +96,8 @@ GUIDE_REFS = (
     ('val.npc', 'npcs'), ('warn.npc', 'npcs'), ('val.giver', 'npcs'),
     ('val.speaker', 'npcs'), ('warn.talk', 'npcs'),
     ('val.link', 'links'), ('val.enable', 'links'), ('warn.enable', 'links'),
-    ('val.after', 'conditions'), ('warn.level', 'conditions'),
+    ('val.after', 'conditions'), ('warn.after', 'conditions'),
+    ('warn.level', 'conditions'),
     ('val.task', 'tasks'), ('val.action', 'actions'),
     ('val.opcode', 'actions'),
     ('val.id', 'quests'), ('warn.id', 'quests'), ('warn.group', 'quests'),
@@ -213,8 +214,16 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None,
     for spk in quest.speakers:
         if spk.get('new') and index and isinstance(spk['id'], int) and \
                 index.npc(spk['id']):
-            E.append((t('val.speaker.taken', id=spk['id'],
-                        name=index.npc(spk['id'])['name']), None))
+            npc = index.npc(spk['id'])
+            src = npc.get('source') or 'retail'
+            if archive and src.lower() == archive.lower():
+                # our own earlier export into the same archive: the index
+                # knows the NPC from there after a rebuild (4.2.1)
+                W.append((t('val.speaker.replace', id=spk['id'],
+                            name=npc['name'], src=src), None))
+            else:
+                E.append((t('val.speaker.taken', id=spk['id'],
+                            name=npc['name']), None))
 
     # -- task -----------------------------------------------------------------------
     fc = task.get('fc')
@@ -260,8 +269,25 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None,
         elif c.get('cond') == 'after':
             afters.append((nid, c))
     if own:
+        # the engine promotes every loaded quest once at the start
+        # (PQuests.ec StartQuests, eQuestInitialLevel -1): level 0 is enabled
+        # from the start, each level above needs one AOQ PROMOTE (4.2.1)
+        from .export import header_values
+        level = header_values(quest)[0]
+        try:
+            level = int(level)
+        except (TypeError, ValueError):
+            level = 1
         if not afters:
-            E.append((t('val.after'), entry_id('first')))
+            if level <= 0:
+                W.append((t('warn.after.start'), entry_id('first')))
+            else:
+                E.append((t('val.after'), entry_id('first')))
+        elif level <= 0:
+            W.append((t('warn.after.level0'), afters[0][0]))
+        elif level > len(afters):
+            W.append((t('warn.after.few', level=level, n=len(afters)),
+                      afters[0][0]))
         for nid, c in afters:
             pq = c.get('quest')
             known = (index and index.quest(pq)) or (

@@ -597,6 +597,21 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.2.1: Neue Questgeber erscheinen im Spiel.** Das Tool schrieb den
+  Block eines neuen NPC hinter die Quests ans Dateiende. Dort liest das
+  Spiel ihn nie (sein qtx-Leser schließt einen Questblock erst mit der
+  nächsten QUEST-Zeile), der Questgeber fehlte. Neue NPCs stehen jetzt im
+  NPC-Bereich vor der ersten Quest, alte Blöcke werden dorthin verschoben,
+  und der Export prüft mit einem Nachbau des Spiel-Lesers, dass jeder neue
+  NPC gelesen wird. Im Spiel bestätigt.
+- **4.2.1: Neue Quest wird sicher freigeschaltet.** Lag eine geänderte
+  Spielquest im Projekt (z. B. Tagos Q_4), schrieb der Export ihren Block
+  nach der eigenen Quest neu, und die Zeile `AOQ PROMOTE ...`, die die neue
+  Quest freischaltet, war weg: Quest nie aktiv, Questgeber nie da. Jetzt
+  kommen die Freischaltungen zuletzt, und der Export prüft am Ende, dass
+  jede im fertigen qtx steht - sonst bricht er mit Meldung ab. Außerdem
+  blockiert ein eigener neuer NPC aus einem früheren Export in dasselbe
+  Archiv den nächsten Export nicht mehr ("wird ersetzt" statt Fehler).
 - **4.2.0: Geister und richtige Namen.** Quest > **Gegnerstufen** listet
   jetzt alle 119 Arten: die 90 des Gegnerskripts und die 29 Geister aus
   dem eigenen Geisterskript (Tiergeister, Grom-Geist, Zwergengeist und

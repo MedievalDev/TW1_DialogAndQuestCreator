@@ -270,7 +270,12 @@ class WriteMod(unittest.TestCase):
             e = got['Levels' + BS + 'Map_H06.lnd']
             self.assertEqual((e.flags, e.class_id, e.guid),
                              (0x33, 20044, GUID_A))
-            self.assertEqual(mods.wd_data(target, e), lnd_body(marks))
+            # the markers come in the game's order (4.2.1, lndmap)
+            from questforge2 import lndmap
+            self.assertEqual(mods.wd_data(target, e),
+                             lndmap.sort_markers(lnd_body(marks)))
+            self.assertNotEqual(lnd_body(marks),
+                                lndmap.sort_markers(lnd_body(marks)))
 
 
 class ProjectFile(unittest.TestCase):

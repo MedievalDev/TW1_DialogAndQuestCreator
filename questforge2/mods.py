@@ -729,9 +729,9 @@ def dependency_entries(deps, log=print):
                        None)
             if ent is None:
                 raise model.ModelError(f'{inner} not in {path}')
-            out[inner] = tw1_wd.Entry(inner, wd_data(path, ent), ent.flags,
-                                      ent.res or b'', ent.class_id or 0,
-                                      ent.guid or b'')
+            out[inner] = tw1_wd.Entry(inner, _game_marker_order(
+                wd_data(path, ent), inner, log), ent.flags, ent.res or b'',
+                ent.class_id or 0, ent.guid or b'')
         else:
             full = os.path.join(path, *inner.split(BS))
             with open(full, 'rb') as f:
@@ -742,8 +742,10 @@ def dependency_entries(deps, log=print):
                 flags, res, class_id = 0x33, None, 20044
                 guid = uuid.uuid4().bytes
                 log(('lnd_meta', inner))
-            out[inner] = tw1_wd.Entry(inner, body, flags, res or b'',
-                                      class_id or 0, guid or b'')
+            out[inner] = tw1_wd.Entry(inner, _game_marker_order(body, inner,
+                                                                log),
+                                      flags, res or b'', class_id or 0,
+                                      guid or b'')
         log(('lnd', inner, d['mod']))
         # the physics of the same tile (Levels\physic\Map_<cell>.phx): a tile
         # changed in the editor comes with its own collision; the retail one
@@ -767,6 +769,20 @@ def dependency_entries(deps, log=print):
                                         class_id or 0, guid or b'')
                 log(('lnd', phx, d['mod']))
     return out
+
+
+def _game_marker_order(body, inner, log=print):
+    """A map body with its markers in the game's order (lndmap.sort_markers).
+    Maps the tool wrote before 4.2.1 had placed markers appended at the
+    end; every map of the game and the editor comes back as it was."""
+    from . import lndmap
+    try:
+        new = lndmap.sort_markers(body)
+    except (struct.error, IndexError, UnicodeDecodeError):
+        return body
+    if new != body:
+        log(('lnd_sorted', inner))
+    return new
 
 
 def _phx_inner(lnd_inner):

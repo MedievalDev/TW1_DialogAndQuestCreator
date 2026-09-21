@@ -109,6 +109,59 @@ class AddMarkers(unittest.TestCase):
         self.assertEqual(lndmap.Terrain(new).height(64, 64), 1100)
         self.assertEqual(lndmap.add_markers(base, []), base)
 
+    @staticmethod
+    def _order(d):
+        start, _end = tw1_lnd._marker_section(d)
+        pos, out = start + 8, []
+        for _ in range(struct.unpack_from('<I', d, start)[0]):
+            name, p2 = tw1_lnd._ascii(d, pos)
+            out.append((name, struct.unpack_from('<I', d, p2)[0]))
+            pos = tw1_lnd._entry_end(d, p2)
+        return out
+
+    def test_into_the_block_of_its_type(self):
+        # 4.2.1: the game's maps have one block per type (measured on all
+        # 160); appended markers formed a second block
+        base = body([('MARKER_CHEST', 5, 0, 0, 0, 0), (OBJ, 3, 0, 0, 0, 0),
+                     (START, 3, 0, 0, 0, 0), ('MARKER_SLEEP', 1, 0, 0, 0, 0)])
+        new = lndmap.add_markers(base, [(START, 508, 1, 2, 3, 0),
+                                        (OBJ, 1, 4, 5, 6, 0),
+                                        ('MARKER_Q_KNEEL', 2, 7, 8, 9, 0)])
+        self.assertEqual(self._order(new), [
+            ('MARKER_CHEST', 5), ('MARKER_Q_KNEEL', 2), (OBJ, 1), (OBJ, 3),
+            (START, 3), (START, 508), ('MARKER_SLEEP', 1)])
+        self.assertEqual(tw1_lnd.markers_full(new)[START][1],
+                         (508, (1, 2, 3, 0)))
+        self.assertEqual(lndmap.sort_markers(new), new)
+
+    def test_sort_repairs_an_appended_map(self):
+        # what 3.9.0 to 4.2.0 wrote: the placed markers at the end
+        bad = body([(OBJ, 3, 0, 0, 0, 0), (START, 3, 0, 0, 0, 0),
+                    (START, 508, 1, 2, 3, 0), (OBJ, 1, 4, 5, 6, 0)])
+        good = lndmap.sort_markers(bad)
+        self.assertEqual(self._order(good), [(OBJ, 1), (OBJ, 3), (START, 3),
+                                             (START, 508)])
+        self.assertEqual(len(good), len(bad))
+        self.assertEqual({k: sorted(v) for k, v in tw1_lnd.markers_full(good).items()},
+                         {k: sorted(v) for k, v in tw1_lnd.markers_full(bad).items()})
+        self.assertEqual(lndmap.Terrain(good).height(64, 64), 1100)
+
+    def test_game_maps_already_in_order(self):
+        from questforge2 import data, lhcache
+        try:
+            game = data.find_game_dir()
+        except Exception:
+            game = None
+        wd = os.path.join(game or '', 'WDFiles', 'Levels.wd')
+        if not os.path.isfile(wd):
+            self.skipTest('game not installed')
+        ent = next(e for e in mods.wd_directory(wd)
+                   if e.path.lower().endswith('map_levelheaders.lhc'))
+        heads = lhcache.parse(mods.wd_data(wd, ent))
+        self.assertEqual(len(heads), 160)
+        for path, head in heads.items():
+            self.assertEqual(lndmap.sort_markers(head), head, path)
+
 
 class MarkerText(unittest.TestCase):
     """A marker may carry a text behind its angle (Dream Worlds Map_E03,

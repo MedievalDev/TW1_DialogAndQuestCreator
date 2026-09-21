@@ -505,10 +505,114 @@ def insert_aoq(text, pred, line):
     return text[:m.start()] + '\n'.join(lines) + text[m.end():]
 
 
-def remove_aoq_to(text, qid):
-    """Drop every ``AOQ PROMOTE|TAKE <event> Q_<qid>`` line (re-export)."""
-    return re.sub(r'^  AOQ (?:PROMOTE|TAKE) [A-Z_]+ Q_%d\n' % qid, '', text,
-                  flags=re.M)
+def remove_aoq_to(text, qid, keep=()):
+    """Drop every ``AOQ PROMOTE|TAKE <event> Q_<qid>`` line (re-export).
+    ``keep``: (quest id, line) pairs an own quest writes into its own block
+    as a link - those stay."""
+    pat = re.compile(r'^  (AOQ (?:PROMOTE|TAKE) [A-Z_]+ Q_%d)\n' % qid, re.M)
+    if not keep:
+        return pat.sub('', text)
+
+    def block(m):
+        pred = int(re.match(r'QUEST Q_(\d+)', m.group(0)).group(1))
+        return pat.sub(lambda ln: ln.group(0) if (pred, ln.group(1)) in keep
+                       else '', m.group(0))
+    return re.sub(r'^QUEST Q_\d+ [^\n]*\n.*?^END\n', block, text,
+                  flags=re.M | re.S)
+
+
+_NPC_BLOCK = r'^NPC [^\n]*\n.*?^END\n'
+
+
+def _first_quest(text):
+    m = re.search(r'^QUEST ', text, re.M)
+    return m.start() if m else len(text)
+
+
+def _in_npc_section(text, pos):
+    return pos < _first_quest(text)
+
+
+def insert_npc(text, rec):
+    """Put an NPC block where the game reads it: behind the last NPC block
+    in front of the first QUEST.
+
+    PQuestLoader's Parse looks only at GIVER/FC/AOQ/ACTION/REWARD while a
+    quest is open and never at its END, so the quest stays open until the
+    next QUEST line and an NPC block behind a quest is swallowed. The
+    retail file keeps all 347 NPC blocks in front of the first QUEST. Up to
+    4.2.0 the tool wrote a new NPC in front of its quest at the end of the
+    file: GIVER found no NPC and the giver never appeared (Kunibert,
+    Orion's giver; 4.2.1)."""
+    head = _first_quest(text)
+    last = None
+    for last in re.finditer(_NPC_BLOCK, text[:head], re.M | re.S):
+        pass
+    pos = last.end() if last else head
+    return text[:pos] + rec + text[pos:]
+
+
+def engine_parse(text, limit=600):
+    """({NPC names}, {quest ids}) as PQuestLoader.Parse reads a qtx: same
+    state machine, the END of a quest block included (see insert_npc)."""
+    npcs, quests = set(), set()
+    cur = None
+    for line in text.split('\n'):
+        tok = line.split()
+        cmd = tok[0].upper() if tok else ''
+        if cmd == 'QUEST':
+            m = re.fullmatch(r'Q_(\d+)', tok[1] if len(tok) > 1 else '')
+            cur = int(m.group(1)) if m and 0 < int(m.group(1)) < limit \
+                else None
+            if cur is not None:
+                quests.add(cur)
+        elif cur is not None:
+            continue
+        elif cmd == 'NPC' and len(tok) > 1:
+            npcs.add(tok[1])
+        elif cmd == 'END':
+            cur = None
+    return npcs, quests
+
+
+def unread_npcs(text, quests):
+    """New NPCs of own quests the game would not read from ``text``."""
+    npcs, _q = engine_parse(text)
+    out = []
+    for q in quests:
+        if q.retail:
+            continue
+        for spk in q.speakers:
+            name = f"NPC_{spk.get('id')}"
+            if spk.get('new') and isinstance(spk.get('id'), int) \
+                    and name not in npcs and name not in out:
+                out.append(name)
+    return out
+
+
+def hook_line(quest, cond):
+    """The AOQ an "after" condition of an own quest puts into the quest it
+    waits for."""
+    verb = 'PROMOTE' if quest.offered else 'TAKE'
+    return f"AOQ {verb} {cond.get('event', 'TAKE')} Q_{quest.id}"
+
+
+def missing_hooks(text, quests):
+    """["Q_4: AOQ PROMOTE TAKE Q_385", ...]: unlock lines of own quests that
+    are not in the finished qtx. Such a quest is never enabled, so its
+    giver never appears - and the game says nothing."""
+    out = []
+    for q in quests:
+        if q.retail:
+            continue
+        for c in q.conditions_list():
+            if c.get('cond') != 'after':
+                continue
+            line = hook_line(q, c)
+            m = _find_block(text, c['quest'])
+            if not m or f'  {line}\n' not in m.group(0):
+                out.append(f"Q_{c['quest']}: {line}")
+    return out
 
 
 def npc_block(spk, index):
@@ -544,12 +648,18 @@ def npc_block(spk, index):
 
 
 def patch_qtx(text, quests, index=None):
-    """Apply all project quests to a full .qtx text. Returns (text, log)."""
+    """Apply all project quests to a full .qtx text. Returns (text, log).
+
+    First every block, then the unlock lines ("after" conditions): a block
+    written later would drop the AOQ an own quest had already put into it.
+    That happened with a changed game quest Q_4 in the project - Q_385 was
+    never enabled and its giver never appeared (Marco 2026-09-21)."""
     log = []
     text = text.replace('\r\n', '\n')
     if not text.endswith('\n'):
         text += '\n'
     from . import retail
+    own = []
     for q in quests:
         if q.retail:
             block = retail.block_text(q)
@@ -564,36 +674,53 @@ def patch_qtx(text, quests, index=None):
                 log.append(('append', q.id))
             continue
         block = build_quest_block(q).emit()
-        npc_text = ''
         for spk in q.speakers:
             if not (spk.get('new') and isinstance(spk['id'], int)):
                 continue
             rec = npc_block(spk, index)
             old = re.search(r'^NPC NPC_%d .*?\nEND\n' % spk['id'], text,
                             re.M | re.S)
-            if old:
-                # tile or marker changed since the last export: replace
-                if old.group(0) != rec:
-                    text = text[:old.start()] + rec + text[old.end():]
-                    log.append(('npc-update', spk['id']))
+            if old and old.group(0) == rec and _in_npc_section(text,
+                                                               old.start()):
                 continue
-            npc_text += rec
-            log.append(('npc', spk['id']))
+            if old:
+                # changed since the last export, or standing behind a
+                # quest where the game never reads it (before 4.2.1)
+                text = text[:old.start()] + text[old.end():]
+                log.append(('npc-update', spk['id']))
+            else:
+                log.append(('npc', spk['id']))
+            text = insert_npc(text, rec)
         m = _find_block(text, q.id)
         if m:
-            text = text[:m.start()] + npc_text + block + text[m.end():]
+            text = text[:m.start()] + block + text[m.end():]
             log.append(('replace', q.id))
         else:
-            text = text + npc_text + block
+            text = text + block
             log.append(('append', q.id))
-        text = remove_aoq_to(text, q.id)
-        verb = 'PROMOTE' if q.offered else 'TAKE'
+        own.append(q)
+    # links an own quest writes into its own block are no stale hooks
+    keep = {(q.id, f"AOQ {ln.get('type', 'PROMOTE')} "
+                   f"{ln.get('event', 'TAKE')} Q_{int(ln['quest'])}")
+            for q in own for ln in q.links_list()}
+    for q in own:
+        text = remove_aoq_to(text, q.id, keep)
         for c in q.conditions_list():
             if c.get('cond') != 'after':
                 continue
-            line = f"AOQ {verb} {c.get('event', 'TAKE')} Q_{q.id}"
+            line = hook_line(q, c)
             text = insert_aoq(text, c['quest'], line)
             log.append(('aoq', c['quest'], line))
+    unread = unread_npcs(text, quests)
+    if unread:
+        from .i18n import t
+        raise model.ModelError(t('export.npc.unread',
+                                 names=', '.join(unread)))
+    missing = missing_hooks(text, quests)
+    if missing:
+        from .i18n import t
+        raise model.ModelError(t('export.hook.missing',
+                                 lines=', '.join(missing)))
     if '\r' in text:
         raise model.ModelError('CR in qtx')
     return text, log
