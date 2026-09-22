@@ -234,8 +234,10 @@ def export_order(quest):
     return [(nid, li) for _, nid, li in keyed]
 
 
-def graph_to_tree(quest, propagate_take=True):
-    """(DialogTree, {tid: text}) for the quest's graph."""
+def graph_to_tree(quest, propagate_take=True, voice_cues=None):
+    """(DialogTree, {tid: text}) for the quest's graph. ``voice_cues``:
+    {take file: cue} of the lines built into the sound bank (4.4.0); such a
+    line speaks its own take instead of its cue."""
     g = quest.graph
     nodes = g['nodes']
     qid = quest.id or 0
@@ -310,7 +312,9 @@ def graph_to_tree(quest, propagate_take=True):
                 else 0
         anim1 = ln.get('anim', 0) or 0
         anim2 = ln.get('anim2', anim1)
-        entries.append(model_entry(lector, tid, ln.get('cue') or '', nxt,
+        cue = ((voice_cues or {}).get(ln.get('voice')) if ln.get('voice')
+               else None) or ln.get('cue') or ''
+        entries.append(model_entry(lector, tid, cue, nxt,
                                    flags, cams, anim1, anim2))
     import tw1_lan
     return tw1_lan.DialogTree(dq, entries), texts
@@ -728,9 +732,9 @@ def patch_qtx(text, quests, index=None):
 
 # -- lan ----------------------------------------------------------------------
 
-def quest_texts(quest):
+def quest_texts(quest, voice_cues=None):
     """(tree, {key: text}) with title, journal, dialog and new NPC names."""
-    tree, texts = graph_to_tree(quest)
+    tree, texts = graph_to_tree(quest, voice_cues=voice_cues)
     qid = quest.id
     for key, value in ((f'translateQ_{qid}', quest.title),
                        (f'translateQ_{qid}_QTD', quest.journal.get('take')),
@@ -745,13 +749,13 @@ def quest_texts(quest):
     return tree, texts
 
 
-def build_lan(master, quests):
+def build_lan(master, quests, voice_cues=None):
     """(full master .lan bytes, overlay .lan bytes)."""
     tr, aliases, rest = tw1_lan.read(master)
     trees = tw1_lan.parse_trees(rest)
     over_tr, over_trees = {}, []
     for q in quests:
-        tree, texts = quest_texts(q)
+        tree, texts = quest_texts(q, voice_cues)
         prefix = f'translateDQ_{q.id}_'
         for k in [k for k in tr if k.startswith(prefix) and k not in texts]:
             del tr[k]
@@ -1069,7 +1073,7 @@ def strip_texts(master, ids):
 
 
 def build_files(project, base_qtx, master_lan, index=None, overlay_name=None,
-                gone=(), prev_overlay=None):
+                gone=(), prev_overlay=None, voice_cues=None):
     """{inner path: bytes} for all quests of the project. ``gone``: quest
     ids of earlier exports the project no longer has."""
     quests = list(project.quests)
@@ -1082,10 +1086,10 @@ def build_files(project, base_qtx, master_lan, index=None, overlay_name=None,
     if text != base_text.replace('\r\n', '\n') or any(
             not q.retail for q in quests):
         files[INNER_QTX] = text.encode('latin-1')
-    full, overlay = build_lan(master_lan, quests)
+    full, overlay = build_lan(master_lan, quests, voice_cues)
     if prev_overlay is not None and getattr(project, 'partial', False):
         # "export this quest": the overlay keeps the other quests' texts
-        overlay = build_lan(prev_overlay, quests)[0]
+        overlay = build_lan(prev_overlay, quests, voice_cues)[0]
     files[INNER_LAN] = full
     files[f'Language\\ZZ_{overlay_name or "QuestForge"}.lan'] = overlay
     return files
@@ -1157,7 +1161,7 @@ def _own_record(project, name):
 
 
 def export_mod(project, game_dir, base_dir, index=None, log=print,
-               files_only=None, register=True, entries=None):
+               files_only=None, register=True, entries=None, voice_cues=None):
     """Full export (plan 3.1 "Exportieren als Mod"). Returns a summary.
     ``files_only``: write the files into that folder instead of packing.
     ``entries``: {inner: tw1_wd.Entry} map files of mods the quests depend
@@ -1204,7 +1208,7 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
         for qid in sorted(gone):
             log(('gone', qid))
     files = build_files(project, base_qtx, master_lan, index,
-                        overlay_stem(project), gone, prev_overlay)
+                        overlay_stem(project), gone, prev_overlay, voice_cues)
     for inner, blob in files.items():
         log(('file', inner, len(blob)))
     files.update(entries or {})

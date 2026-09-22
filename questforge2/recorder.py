@@ -7,8 +7,9 @@ to MS-ADPCM when it builds the bank. The recording is stored next to the
 project in ``<project>_voice/Q<id>_<node>_<line>.wav`` and referenced from
 the dialog line as ``line['voice']`` (file name only).
 
-Getting a recording into the game needs the sound bank build (new cue in
-Sounds.xsb, wave in UnitTalk.xwb), which the Quest Creator does not do.
+Since 4.4.0 the export builds the takes into the game's sound bank (new
+cue in Sounds.xsb, wave in UnitTalk.xwb, duration in sounds.xap.cued),
+see voicebuild.py; own sound files come in through audioin.py.
 
 winmm is used without callback: a set of buffers is queued, a thread polls
 their ``WHDR_DONE`` flag in queue order and requeues them.

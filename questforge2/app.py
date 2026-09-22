@@ -191,8 +191,42 @@ class App:
         m.add_command(label=t('file.exportfiles'),
                       command=lambda: self.export_ui(files_only=True),
                       state=can)
+        m.add_command(label=t('file.voices.remove'),
+                      command=self.remove_voices_ui,
+                      state=self._state(bool(self.cfg.get('game_dir'))))
         m.add_separator()
         m.add_command(label=t('file.quit'), command=self.quit)
+
+    def remove_voices_ui(self):
+        """Take the project's own voice lines out of the game's sound bank
+        again (4.4.0): the files go back to how they were before."""
+        from . import voicebuild
+        game = self.cfg.get('game_dir')
+        st = voicebuild.status(game) if game else {'sets': {}}
+        if not st['sets']:
+            messagebox.showinfo(t('voice.remove.title'),
+                                t('voice.remove.none'), parent=self.root)
+            return
+        if export.game_running():
+            messagebox.showerror(t('voice.remove.title'), t('export.running'),
+                                 parent=self.root)
+            return
+        sets = NL.join(f'  {name}: {n}' for name, n in sorted(
+            st['sets'].items()))
+        if not messagebox.askyesno(t('voice.remove.title'),
+                                   t('voice.remove.q', sets=sets),
+                                   parent=self.root):
+            return
+        try:
+            n = voicebuild.remove(game)
+        except voicebuild.VoiceError as e:
+            messagebox.showerror(t('voice.remove.title'),
+                                 t('voice.remove.changed') if str(e) ==
+                                 'changed' else t('voice.log.failed', err=e),
+                                 parent=self.root)
+            return
+        messagebox.showinfo(t('voice.remove.title'),
+                            t('voice.remove.done', n=n), parent=self.root)
 
     def _fill_edit(self, m):
         g = self.graph
@@ -1755,9 +1789,13 @@ class App:
             try:
                 entries = mods.dependency_entries(deps, logq.put)
                 entries_box.update(entries)
+                # 4.4.0: own recordings into the sound bank first, their
+                # cues then go into the dialog lines
+                cues = None if target else build_voices(p, game, name,
+                                                        logq.put)
                 result['res'] = export.export_mod(
                     p, game, data.base_dir(), self.index, logq.put,
-                    files_only=target, entries=entries)
+                    files_only=target, entries=entries, voice_cues=cues)
                 if lhc_auto:
                     logq.put(('text', ''))
                     logq.put(('text', t('em.lhc.auto.run')))
@@ -4134,6 +4172,56 @@ class ExportConfirm:
         self.win.destroy()
 
 
+def build_voices(project, game, archive, log):
+    """Own takes of the project into the game's sound bank (4.4.0).
+    {take: cue}, None without takes or when it cannot be done - the export
+    goes on, the lines then stay without their take."""
+    from . import recorder, voicebuild
+    lines, skipped = voicebuild.project_lines(project, recorder.voice_path)
+    for qid, take in skipped:
+        log(('voice_skipped', qid, take))
+    partial = ({q.id for q in project.quests}
+               if getattr(project, 'partial', False) else None)
+    if not lines and not voicebuild.load_record(game)['sets'].get(archive):
+        return None
+    if not voicebuild.available(game):
+        log(('voice_nobank',))
+        return None
+    try:
+        return voicebuild.build(game, archive, lines, log, partial)
+    except Exception as e:           # the dialogs still go out
+        log(('voice_failed', str(e)))
+        return None
+
+
+def voice_log_text(msg):
+    """(text, tag) of a log message of voicebuild."""
+    kind = msg[0]
+    if kind == 'voice_built':
+        return t('voice.log.built', n=msg[1], all=msg[2]), 'ok'
+    if kind == 'voice_newcue':
+        return t('voice.log.newcue', cue=msg[2], take=msg[3]), None
+    if kind == 'voice_restored':
+        return t('voice.log.restored'), None
+    if kind == 'voice_changed':
+        return t('voice.log.changed'), 'warn'
+    if kind == 'voice_grow':
+        return t('voice.log.grow', n=msg[1], mb=msg[2]), None
+    if kind == 'voice_lost':
+        return t('voice.log.lost', set=msg[1], take=msg[2]), 'warn'
+    if kind == 'voice_noinfo':
+        return t('voice.log.noinfo'), None
+    if kind == 'voice_skipped':
+        return t('voice.log.skipped', qid=msg[1], take=msg[2]), 'warn'
+    if kind == 'voice_nobank':
+        return t('voice.log.nobank'), 'err'
+    if kind == 'voice_failed':
+        return t('voice.log.failed', err=msg[1]), 'err'
+    if kind == 'voice_removed':
+        return t('voice.log.removed', n=msg[1]), 'ok'
+    return ' '.join(str(x) for x in msg), None
+
+
 class ExportWindow:
     """Log of a running export (plan 2.2: build in a thread with log)."""
 
@@ -4150,6 +4238,7 @@ class ExportWindow:
         self.txt.pack(fill='both', expand=True)
         self.txt.tag_configure('ok', foreground=theme.OK)
         self.txt.tag_configure('err', foreground=theme.ERR)
+        self.txt.tag_configure('warn', foreground='#e0a050')
         self.btn = ttk.Button(f, text=t('close'), command=self.win.destroy)
         self.btn.pack(anchor='e', pady=(8, 0))
         self.btn.state(['disabled'])
@@ -4193,6 +4282,8 @@ class ExportWindow:
             text = t('export.log.removed', inner=msg[1])
         elif kind == 'lnd_sorted':
             text = t('export.log.lndsorted', inner=msg[1])
+        elif kind.startswith('voice_'):
+            text, tag = voice_log_text(msg)
         else:
             text = ' '.join(str(x) for x in msg)
         self._put(text, tag)

@@ -1086,6 +1086,13 @@ class Inspector(ttk.Frame):
         rb.pack(side='right', padx=(2, 0))
         theme.Tooltip(rb, t('voice.stop') if recording else (
             t('voice.again') if has_take else t('voice.record.tip')))
+        # 4.4.0: an own sound file instead of the microphone
+        fb = ttk.Button(row, text=t('voice.file.short'), width=6,
+                        command=lambda: self._voice_import(nid, line, index))
+        fb.pack(side='right', padx=(2, 0))
+        if recording:
+            fb.state(['disabled'])
+        theme.Tooltip(fb, t('voice.file.tip'))
         ttk.Button(row, text=t('insp.cue.search'), width=9,
                    command=lambda: self._search_cue(nid, line, node)
                    ).pack(side='right')
@@ -1258,6 +1265,68 @@ class Inspector(ttk.Frame):
             app.mark_dirty()
         app.set_info(t('voice.saved', s=len(pcm) / (recorder.RATE * 2),
                        path=path), 'StatusOk.TLabel')
+
+    def _voice_import(self, nid, line, index):
+        """Load a sound file (WAV, MP3, WMA, M4A, FLAC) as the take of the
+        line: converted to 16 bit mono 44.1 kHz and levelled like the
+        originals (audioin), then it is a take like a recording."""
+        from tkinter import filedialog
+        from . import audioin, recorder
+        app = self.app
+        if getattr(app, 'voice_rec', None):
+            app.set_info(t('voice.busy'), 'StatusErr.TLabel')
+            return
+        if app.is_mod_quest(app.quest):
+            messagebox.showinfo(t('voice.title'), t('voice.modquest'),
+                                parent=app.root)
+            return
+        if not app.project or not app.project.path:
+            if not messagebox.askyesno(t('voice.title'), t('voice.save'),
+                                       parent=app.root)                     or not app.save_project_as():
+                return
+        src = filedialog.askopenfilename(
+            parent=app.root, title=t('voice.file.title'),
+            initialdir=app.cfg.get('voice_import_dir') or None,
+            filetypes=[(t('voice.file.types'),
+                        '*.wav *.mp3 *.wma *.m4a *.aac *.flac'),
+                       (t('voice.file.all'), '*.*')])
+        if not src:
+            return
+        app.cfg.set('voice_import_dir', os.path.dirname(src))
+        recorder.stop_playing()
+        app.root.configure(cursor='watch')
+        app.root.update_idletasks()
+        try:
+            pcm, note = audioin.load(src)
+        except (audioin.AudioError, OSError) as e:
+            messagebox.showerror(t('voice.title'),
+                                 t('voice.file.error', err=e), parent=app.root)
+            return
+        finally:
+            app.root.configure(cursor='')
+        quest, project = app.quest, app.project
+        name = recorder.take_name(project, self._all_quests(project), quest,
+                                  nid, index, line)
+        path = os.path.join(recorder.voice_dir(project), name)
+        try:
+            recorder.write_wav(path, pcm)
+            recorder.drop_original(path)
+        except OSError as e:
+            messagebox.showerror(t('voice.title'), t('voice.error', err=e),
+                                 parent=app.root)
+            return
+        app.push_undo('voice')
+        line['voice'] = name
+        app.changed(from_inspector=True)
+        secs = len(pcm) / (recorder.RATE * 2)
+        if note.get('limited', 0) > 0.01:
+            app.set_info(t('voice.file.loud', s=secs, name=name),
+                         'StatusErr.TLabel')
+        else:
+            app.set_info(t('voice.file.done', s=secs, name=name),
+                         'StatusOk.TLabel')
+        self.refresh()
+        app.voice_library_changed()
 
     def _all_quests(self, project):
         qs = list(project.quests) if project else []

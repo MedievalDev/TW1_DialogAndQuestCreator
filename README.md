@@ -597,6 +597,15 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.4.0: Eigene Stimmen im Spiel.** An jeder Dialogzeile lädt der Knopf
+  **Datei** eine eigene Tondatei (WAV, MP3, WMA, M4A, FLAC): das Tool
+  wandelt sie über Windows in 16 Bit mono 44,1 kHz und gleicht die
+  Lautstärke an die Originalstimmen an. Beim Export kommen Aufnahmen und
+  Dateien in die Sprachbank des Spiels (`XACT\win`: `UnitTalk.xwb`,
+  `Sounds.xsb`, `sounds.xap.cued`), die Zeile spricht dann im Spiel mit
+  ihrer ganzen Länge. Die Stimmen einer Kampagne wie Kira bleiben
+  erhalten. **Datei > Eigene Stimmen aus dem Spiel nehmen** setzt die
+  Dateien auf den Stand vor dem ersten Einbau zurück.
 - **4.3.1: Belohnungen als eigene Gruppe.** Im Menue "+ Neue Aktion"
   stehen die Belohnungen (Gold, Erfahrung, Gegenstand, Ruf, Skillpunkte)
   oben unter eigener Ueberschrift, darunter nach einem Trenner die anderen
@@ -673,8 +682,9 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   (Aufnehmen/Stopp, darunter Zeit und Pegel, danach Abspielen/Löschen).
   Mikrofon mit Probeaufnahme unter Datei > Einstellungen (gemerkt). WAV 16 Bit mono 44,1 kHz
   im Ordner `<Projekt>_voice`, verknüpft als `voice` an der Zeile. Aufnahme
-  über winmm ohne Zusatzbibliothek. Ins Spiel kommt sie erst über den Bau
-  der Sprachbank (Sounds.xsb/UnitTalk.xwb), den das Tool nicht macht.
+  über winmm ohne Zusatzbibliothek. Oder eigene Tondatei über den Knopf
+  **Datei** (seit 4.4.0). Der Export baut beides in die Sprachbank des
+  Spiels (Sounds.xsb/UnitTalk.xwb/sounds.xap.cued).
 - **Voiceline-Finder** (Suchen... beim Voice-Cue): tippen, was gesagt werden
   soll; gleiche und ähnliche Originalzeilen mit Trefferwert, Standard der
   Held, filterbar nach jedem Originalsprecher. Anhören direkt aus

@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90, 4.3.1 mit 12.91); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90, 4.3.1 mit 12.91, 4.4.0 mit 12.92); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -2082,6 +2082,47 @@ Offen:
       mehr offen ist. Live geprueft (echtes Popup, Maus ueber Eintraege,
       Bildschirmfoto, Escape an das Menuefenster): Hinweis sichtbar neben
       Haupt- und Untermenue, nach dem Schliessen weg.
+
+92. Eigene Tondateien und Stimmen im Spiel (Version 4.4.0, Marco
+    2026-09-22: "ob man beim Audio Record auch eigene mp3 oder wave files
+    rein machen kann und die richtig konvertiert werden fuers Game", dann
+    "A und B zusammen": Import und Einbau ins Spiel).
+    - Import (audioin.py): Knopf "Datei" an jeder Dialogzeile. Die Media
+      Foundation von Windows dekodiert per ctypes (Source Reader, gewuenschter
+      Typ PCM 16 Bit mono 44100 ueber MFInitMediaTypeFromWaveFormatEx; der
+      Reader setzt Decoder und Resampler selbst ein): WAV jeder Art, MP3,
+      WMA, M4A, FLAC. Gemessen: Stereo-WAV 22 kHz -> genau 1,5 s mono
+      44,1 kHz; MP3 208,00 s = 3:28, 162,97 s = 2:42, 236,55 s = 3:56, je
+      0,3 bis 0,5 s. Ohne Media Foundation nur PCM-WAV (wave-Modul, linear
+      umgerechnet). Pegel wie build_soundbank.angleichen: RMS 0,30, weiches
+      Knie ab 0,70, Deckel 0,985. Danach ist die Datei eine Aufnahme wie
+      jede andere (abspielen, kuerzen, Bibliothek).
+    - Encoder (adpcm.py): MS-ADPCM in reinem Python, byte-gleich zu
+      QuestForge tw1_adpcm (numpy) an Alarm01.wav gemessen, 0,29 s fuer 5,6 s
+      Ton, Rauschabstand 41 dB. Die Exe bleibt ohne numpy/scipy.
+    - Einbau (voicebuild.py, tw1_xwb/xsb/xap unveraendert aus QuestForge,
+      Round-Trip an den Spieldateien mit Kira-Bank byte-gleich): vor dem
+      Export kodiert, an UnitTalk.xwb angehaengt (Luecke hinter den
+      Metadaten; reicht sie nicht, wird die Bank einmal mit 512 Plaetzen
+      Reserve umgeschrieben, die Wellendaten verschieben sich nur, playOffset
+      ist regionrelativ), Cue CUE_<Lector>_<Nr> in Sounds.xsb (hinter der
+      hoechsten Nummer des Sprechers; Sprecher ohne Lector, z. B. aus MP-
+      Quests, sprechen als 0, wie ihre Dialogzeilen), Dauer in
+      sounds.xap.cued (sonst 1 s), info mitgepflegt. Die Dialogzeile bekommt
+      den Cue (graph_to_tree voice_cues).
+    - Rueckbau ohne 935-MB-Kopie: vor dem ersten Einbau Kopien der kleinen
+      Dateien und von der Wave-Bank nur der Teil vor den Wellendaten plus
+      Groesse (XACT\win\QuestCreator). Jeder Bau setzt diese Basis zurueck
+      und legt alle Saetze neu an: je Ziel-Mod ein Satz, Cue-Namen bleiben.
+      Haben andere Programme die Dateien veraendert (Kira-Installer), gilt
+      der neue Stand als Basis und alle Saetze kommen neu hinein.
+      Datei > Eigene Stimmen aus dem Spiel nehmen stellt den Stand vor dem
+      ersten Einbau byte-gleich her (Test).
+    - Im Spiel bestaetigt (Marco, 2026-09-22): Kunibert (Q_385, NPC ohne
+      Lector) spricht die importierte Datei (Windows-Sprachausgabe, 22 kHz
+      Stereo, 10,2 s), der Untertitel steht bis zum Ende.
+    - Offen: Lippenbewegung (LipSync\data.lipsync bekommt keine Eintraege),
+      Weitergabe an andere Spieler (die Stimmen stecken nicht in der .wd).
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

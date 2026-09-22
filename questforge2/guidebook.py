@@ -561,9 +561,18 @@ unter Datei > **Einstellungen**.
 - Wechselst du waehrend der Aufnahme zu einem anderen Node, wird sie beendet
   und fuer ihre Zeile gespeichert. Rueckgaengig (Strg+Z) nimmt die Zuordnung
   zurueck, die Datei bleibt.
-- **Ins Spiel kommt die Aufnahme so noch nicht:** Dafuer muss sie in die
-  Sprachbank (`Sounds.xsb`, `UnitTalk.xwb`) gebaut und als Cue an die Zeile
-  gehaengt werden. Das macht der Quest Creator nicht.
+- **Eigene Tondatei statt Mikrofon:** Der Knopf **Datei** daneben laedt WAV,
+  MP3, WMA, M4A oder FLAC. Das Tool wandelt sie ueber Windows in 16 Bit mono
+  44,1 kHz und gleicht die Lautstaerke an die Originalstimmen an; danach ist
+  sie eine Aufnahme wie jede andere.
+- **Ins Spiel** kommt die Aufnahme beim Export: Das Tool kodiert sie
+  (MS-ADPCM), haengt sie an die Sprachbank des Spiels (`XACT\win`:
+  `UnitTalk.xwb`, `Sounds.xsb`, `sounds.xap.cued` fuer die Laenge) und gibt
+  der Zeile den neuen Cue (`CUE_<Sprecher>_<Nummer>`). Die Stimmen einer
+  Kampagne wie Kira bleiben erhalten. **Datei > Eigene Stimmen aus dem Spiel
+  nehmen** setzt die Dateien auf den Stand vor dem ersten Einbau zurueck.
+- Die Stimmen stecken nicht in der Mod-Datei: Wer nur die .wd bekommt, sieht
+  den Untertitel ohne Ton.
 
 ## Aufnahmen verwalten und kuerzen
 
@@ -639,9 +648,18 @@ Microphone and test recording are under File > **Settings**.
   `Q<quest>_<node>_<line>.wav`. The project has to be saved for that.
 - Selecting another node while recording ends the take and stores it for
   its line. Undo (Ctrl+Z) removes the link, the file stays.
-- **This does not put the recording into the game yet:** it has to be built
-  into the voice bank (`Sounds.xsb`, `UnitTalk.xwb`) and hung on the line as
-  a cue. The Quest Creator does not do that.
+- **An own sound file instead of the microphone:** the button **File** next
+  to it loads WAV, MP3, WMA, M4A or FLAC. The tool converts it through
+  Windows to 16 bit mono 44.1 kHz and matches the loudness of the original
+  voices; after that it is a take like any other.
+- **Into the game** the take goes with the export: the tool encodes it
+  (MS-ADPCM), appends it to the game's voice bank (`XACT\win`:
+  `UnitTalk.xwb`, `Sounds.xsb`, `sounds.xap.cued` for the length) and gives
+  the line the new cue (`CUE_<speaker>_<number>`). The voices of a campaign
+  like Kira stay. **File > Take own voices out of the game** sets the files
+  back to how they were before the first build.
+- The voices are not in the mod file: whoever gets only the .wd sees the
+  subtitle without sound.
 
 ## Managing and trimming recordings
 
