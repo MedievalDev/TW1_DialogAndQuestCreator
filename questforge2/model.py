@@ -128,15 +128,20 @@ ACTION_SPECS = {
     ('ACTION', 'PLAY_CUTSCENE'): [('number', 'int', 1)],
     ('ACTION', 'SET_WORLD_STATE'): [('number', 'int', 1)],
 }
-ACTION_MAIN = [('REWARD', 'GLD'), ('REWARD', 'EXP'), ('REWARD', 'ITM'),
-               ('REWARD', 'REP'), ('ACTION', 'NPC_CREATE'),
+# the "+ New action" menu: rewards on top, the main actions below a
+# separator, the rest under "More"
+ACTION_REWARDS = [('REWARD', 'GLD'), ('REWARD', 'EXP'), ('REWARD', 'ITM'),
+                  ('REWARD', 'REP'), ('REWARD', 'SKL')]
+ACTION_MAIN = [('ACTION', 'NPC_CREATE'),
                ('ACTION', 'NPC_REMOVE'), ('ACTION', 'NPC_KILL'),
                ('ACTION', 'NPC_TELEPORT'), ('ACTION', 'NPC_GO'),
                ('ACTION', 'HERO_TELEPORT_DELAYED'), ('ACTION', 'ENEMY_CREATE'),
                ('ACTION', 'OBJECT_CREATE'), ('ACTION', 'OPEN'),
                ('ACTION', 'CLOSE'), ('ACTION', 'SHOW_LOCATION'),
                ('ACTION', 'CREATE_EFFECT')]
-ACTION_MORE = [k for k in ACTION_SPECS if k not in ACTION_MAIN]
+ACTION_MORE = [k for k in ACTION_SPECS
+               if k not in ACTION_MAIN and k not in ACTION_REWARDS]
+ACTION_ALL = ACTION_REWARDS + ACTION_MAIN + ACTION_MORE
 REWARD_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'HEAR')
 ACTION_WHEN = ('TAKE', 'SOLVE', 'CLOSE', 'ENABLE', 'HEAR', 'FAIL', 'FIGHT')
 # Party numbers from the SDK (Scripts\Common\Enums.ech). 0 to 17 are the
@@ -168,6 +173,27 @@ def parse_guild(text):
     if head and head[0].isdigit():
         return head[0]
     return str(text).strip()
+
+
+def action_tip(kind, verb, t):
+    """Hover text of an entry in the "+ New action" menu: its fields with an
+    example each. Rewards have their own text (tip.op.REWARD.*) because the
+    words SMALL/MEDIUM/HIGH need explaining."""
+    own = t(f'tip.op.{kind}.{verb}')
+    if own != f'tip.op.{kind}.{verb}':
+        return own
+    lines = [t('tip.op.fields')]
+    for spec in ACTION_SPECS[(kind, verb)]:
+        field, fkind = spec[0], spec[1].split(':')[0]
+        if len(spec) > 2:
+            example = t('example.value', v=spec[2])
+        else:
+            example = t('example.' + fkind)
+            if example == 'example.' + fkind:
+                example = ''
+        label = t('field.' + field)
+        lines.append(f'  {label}: {example}' if example else f'  {label}')
+    return '\n'.join(lines)
 
 
 def party_label(num, t):

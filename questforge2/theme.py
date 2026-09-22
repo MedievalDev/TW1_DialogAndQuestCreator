@@ -284,6 +284,11 @@ class Menu(tk.Menu):
     def add_cascade(self, cnf=None, **kw):
         super().add_cascade(cnf or {}, **self._soft_disable('cascade', kw))
 
+    def add_heading(self, label):
+        """A group title: gold and bold, nothing happens on a click."""
+        self.add_command(label=label, state='disabled', font=FONT_BOLD)
+        self.entryconfigure('end', foreground=GOLD, activeforeground=GOLD)
+
 
 class FloatTip:
     """A tooltip that follows the mouse over parts of one widget (canvas
@@ -318,6 +323,107 @@ class FloatTip:
                 pass
         self.tip = None
         self.text = None
+
+
+class MenuTips:
+    """Hover texts for the entries of a (popup) menu. Tk names the entry
+    under the mouse with <<MenuSelect>>; the tip shows beside the mouse.
+    A cascade passes its parent's MenuTips so the whole menu shares one
+    tip: when the menu closes, Windows selects "nothing" in the top menu,
+    and that hides the tip wherever it came from."""
+
+    def __init__(self, menu, parent=None):
+        self.menu = menu
+        self.texts = {}
+        self.watching = False
+        self.float = parent.float if parent else FloatTip(menu.nametowidget('.'))
+        menu.bind('<<MenuSelect>>', self._select, add='+')
+
+    def add(self, text):
+        """Tip for the entry added last."""
+        self.texts[self.menu.index('end')] = text
+
+    def _select(self, ev=None):
+        try:
+            i = self.menu.index('active')
+        except tk.TclError:
+            i = None
+        text = self.texts.get(i) if i is not None else None
+        if not text:
+            self.float.hide()
+            return
+        x, y = self.menu.winfo_pointerxy()
+        self.float.show(text, x, y)
+        if not self.watching:
+            self.watching = True
+            self.menu.after(300, self._watch)
+        tip = self.float.tip
+        # beside the menu, not over the entries below the mouse
+        rect = _window_rect_at(x, y)
+        if tip is None or rect is None:
+            return
+        tip.update_idletasks()
+        w, h = tip.winfo_reqwidth(), tip.winfo_reqheight()
+        left, _top, right, _bottom = rect
+        tx = right + 4
+        if tx + w > tip.winfo_screenwidth():
+            tx = max(0, left - 4 - w)
+        ty = min(max(0, y - 10), tip.winfo_screenheight() - h)
+        tip.wm_geometry(f'+{tx}+{ty}')
+
+    def hide(self):
+        self.float.hide()
+
+    def _watch(self):
+        """The tip goes when no menu of this program is open any more (a
+        submenu of a context menu gets no "nothing selected" of its own)."""
+        if self.float.tip is not None and _menu_open() is not False:
+            self.menu.after(300, self._watch)
+            return
+        self.float.hide()
+        self.watching = False
+
+
+def _menu_open():
+    """True while a popup menu of this process is on screen, None when
+    that cannot be told (not Windows)."""
+    try:
+        import ctypes
+        import os
+        from ctypes import wintypes
+        u32 = ctypes.windll.user32
+        u32.FindWindowExW.restype = wintypes.HWND
+        u32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND,
+                                      wintypes.LPCWSTR, wintypes.LPCWSTR]
+        hwnd = None
+        while True:
+            hwnd = u32.FindWindowExW(None, hwnd, '#32768', None)
+            if not hwnd:
+                return False
+            pid = wintypes.DWORD()
+            u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == os.getpid() and u32.IsWindowVisible(hwnd):
+                return True
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def _window_rect_at(x, y):
+    """Screen rectangle (left, top, right, bottom) of the window under a
+    screen point - for a popup menu the menu itself. None off Windows."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        u32 = ctypes.windll.user32
+        u32.WindowFromPoint.argtypes = [wintypes.POINT]
+        u32.WindowFromPoint.restype = wintypes.HWND
+        hwnd = u32.WindowFromPoint(wintypes.POINT(x, y))
+        r = wintypes.RECT()
+        if hwnd and u32.GetWindowRect(hwnd, ctypes.byref(r)):
+            return r.left, r.top, r.right, r.bottom
+    except (AttributeError, OSError, ValueError):
+        pass
+    return None
 
 
 class Tooltip:

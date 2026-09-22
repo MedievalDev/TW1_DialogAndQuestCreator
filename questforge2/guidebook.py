@@ -418,6 +418,12 @@ Ziehe "+ Neue Aktion" auf einen Dialog-Node. Der Node bekommt beim Ueberfahren
 einen goldenen Rahmen. Rechtsklick auf eine Aktion: bearbeiten, nach oben,
 nach unten.
 
+Im Menue stehen die Belohnungen oben unter eigener Ueberschrift, darunter die
+anderen Aktionen. Faehrst du mit der Maus ueber einen Eintrag, zeigt er
+Beispiele fuer die Eingabe. Mengen bei Gold und Erfahrung: eine feste Zahl
+oder SMALL / MEDIUM / HIGH, das heisst Heldenstufe x 30 / 80 / 150 Gold bzw.
+x 10 / 25 / 50 Erfahrung.
+
 """, """# Actions
 
 Actions happen at a point in the quest. Docked on a dialog node, the time comes
@@ -426,6 +432,11 @@ dialog are created in the quest panel and you pick the time yourself.
 
 Drag "+ New action" onto a dialog node. The node gets a gold frame while you
 hover. Right click on an action: edit, move up, move down.
+
+In the menu the rewards come first under their own heading, the other actions
+below. Hover an entry to see input examples. Amounts for gold and experience:
+a number or SMALL / MEDIUM / HIGH, meaning hero level x 30 / 80 / 150 gold or
+x 10 / 25 / 50 experience.
 
 """)
     rows = _spec_rows(model.ACTION_SPECS, 'ACTION')

@@ -597,6 +597,12 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.3.1: Belohnungen als eigene Gruppe.** Im Menue "+ Neue Aktion"
+  stehen die Belohnungen (Gold, Erfahrung, Gegenstand, Ruf, Skillpunkte)
+  oben unter eigener Ueberschrift, darunter nach einem Trenner die anderen
+  Aktionen. Beim Ueberfahren zeigt jeder Eintrag Beispiele fuer die
+  Eingabe, bei Gold und Erfahrung auch, was SMALL, MEDIUM und HIGH bedeuten
+  (Heldenstufe x 30/80/150 Gold, x 10/25/50 Erfahrung).
 - **4.3.0: Multiplayer-Quest in einem Fenster.** Quest waehlen, Namen
   eintragen, Marker auf der Karte setzen, "Uebernehmen", fertig: Das Tool
   legt die Quest an, schreibt die Marker und speichert, danach nur noch

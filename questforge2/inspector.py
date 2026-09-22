@@ -860,8 +860,9 @@ class Inspector(ttk.Frame):
         g = self.app.quest.graph
         self.title.configure(text=t('node.action'))
         self._label(t('node.action'), help_key='help.action')
-        keys = list(model.ACTION_MAIN) + list(model.ACTION_MORE)
-        labels = [t(f'op.{k}.{v}') for k, v in model.ACTION_MAIN] + \
+        keys = list(model.ACTION_ALL)
+        labels = [t(f'op.{k}.{v}') for k, v in
+                  model.ACTION_REWARDS + model.ACTION_MAIN] + \
             [t('op.more') + ': ' + t(f'op.{k}.{v}') for k, v in model.ACTION_MORE]
         cur = (node['kind'], node['verb'])
 
@@ -937,9 +938,20 @@ class Inspector(ttk.Frame):
 
     def _add_qaction_menu(self):
         menu = theme.Menu(self, tearoff=0)
+        tips = theme.MenuTips(menu)
+
+        def add(k, v):
+            def pick(k=k, v=v):
+                tips.hide()
+                self._add_qaction(k, v)
+            menu.add_command(label=t(f'op.{k}.{v}'), command=pick)
+            tips.add(model.action_tip(k, v, t))
+        menu.add_heading(t('op.group.rewards'))
+        for k, v in model.ACTION_REWARDS:
+            add(k, v)
+        menu.add_separator()
         for k, v in model.ACTION_MAIN + model.ACTION_MORE:
-            menu.add_command(label=t(f'op.{k}.{v}'),
-                             command=lambda k=k, v=v: self._add_qaction(k, v))
+            add(k, v)
         try:
             menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
         finally:

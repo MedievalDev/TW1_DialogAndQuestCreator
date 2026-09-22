@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90, 4.3.1 mit 12.91); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -2058,6 +2058,30 @@ Offen:
     - Im Spiel noch nicht bestaetigt: das Fragen-Menue mit negativem Index
       aus dem Tool (Test dialog-template-questions) und die ganze
       Uebernahme im neuen Fenster (Test mp-one-window).
+91. Belohnungen als eigene Gruppe, Eingabebeispiele im Aktionsmenue
+    (Version 4.3.1, Marco 2026-09-21: "Belohnungen als eigene Gruppe in
+    New Action, oben eine Kategorie mit Reward und darunter mit kleinem
+    Trenner den Rest, Input-Beispiele in den Hover-Tooltips").
+    - "+ Neue Aktion" (Palette, Kontextmenue, Quest-Panel): Ueberschrift
+      "Belohnungen" (gold, nicht klickbar) mit Gold, Erfahrung, Gegenstand,
+      Ruf, Skillpunkte; Trenner; die uebrigen Aktionen; "Weitere".
+      model.ACTION_REWARDS / ACTION_MAIN / ACTION_MORE, ACTION_ALL fuer
+      die Auswahl im Eigenschaftenfeld. Skillpunkte waren vorher unter
+      "Weitere".
+    - Jeder Eintrag hat beim Ueberfahren einen Hinweis mit Beispielen
+      (model.action_tip): die Belohnungen eigene Texte mit den Mengen aus
+      der SDK (PRewards.ech: SMALL/MEDIUM/HIGH = Heldenstufe x 30/80/150
+      Gold bzw. x 10/25/50 Erfahrung; ITM mit negativer Anzahl nimmt den
+      Gegenstand weg; bei Toetungsquests landen Gold und Gegenstand mit
+      SOLVE als Beute auf dem Gegner), die anderen Aktionen ihre Felder mit
+      je einem Beispiel aus den Vorgaben bzw. den Platzhaltern.
+    - Technik: native Windows-Menues, Tk meldet den Eintrag unter der Maus
+      per <<MenuSelect>> (theme.MenuTips). Der Hinweis steht neben dem
+      Menue (Fensterrechteck unter der Maus), ein Untermenue teilt ihn mit
+      dem Hauptmenue, und er verschwindet, sobald kein Menue des Programms
+      mehr offen ist. Live geprueft (echtes Popup, Maus ueber Eintraege,
+      Bildschirmfoto, Escape an das Menuefenster): Hinweis sichtbar neben
+      Haupt- und Untermenue, nach dem Schliessen weg.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

@@ -150,5 +150,43 @@ class Parties(unittest.TestCase):
         self.assertNotIn(206, model.GUILDS)       # unused in the SDK
 
 
+class ActionMenu(unittest.TestCase):
+    """"+ New action": rewards as their own group on top, a hover text with
+    input examples on every entry (Marco 2026-09-21, 4.3.1)."""
+
+    def test_groups(self):
+        self.assertEqual({k for k, _v in model.ACTION_REWARDS}, {'REWARD'})
+        self.assertEqual(len(model.ACTION_REWARDS), 5)       # GLD EXP ITM REP SKL
+        self.assertFalse([k for k in model.ACTION_MAIN + model.ACTION_MORE
+                          if k[0] == 'REWARD'])
+        # every opcode once, rewards first
+        self.assertEqual(sorted(model.ACTION_ALL), sorted(model.ACTION_SPECS))
+        self.assertEqual(len(set(model.ACTION_ALL)), len(model.ACTION_ALL))
+        self.assertEqual(model.ACTION_ALL[:5], model.ACTION_REWARDS)
+
+    def test_tips_in_both_languages(self):
+        from questforge2 import i18n
+        old = i18n.get_lang()
+        try:
+            for lang in ('de', 'en'):
+                i18n.set_lang(lang)
+                for k, v in model.ACTION_ALL:
+                    tip = model.action_tip(k, v, i18n.t)
+                    self.assertTrue(tip.strip(), (lang, k, v))
+                    for raw in ('tip.op.', 'field.', 'example.'):
+                        self.assertNotIn(raw, tip, (lang, k, v))
+                # the rewards explain the words of the amount
+                gold = model.action_tip('REWARD', 'GLD', i18n.t)
+                for word in ('SMALL', 'MEDIUM', 'HIGH', '500'):
+                    self.assertIn(word, gold)
+                self.assertIn('-1', model.action_tip('REWARD', 'ITM', i18n.t))
+                # the other actions list their fields with an example
+                tp = model.action_tip('ACTION', 'NPC_TELEPORT', i18n.t)
+                self.assertEqual(len(tp.splitlines()), 1 + 4)
+                self.assertIn('NPC_3', tp)
+        finally:
+            i18n.set_lang(old)
+
+
 if __name__ == '__main__':
     unittest.main()

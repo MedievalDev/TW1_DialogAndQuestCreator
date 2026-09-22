@@ -1580,15 +1580,28 @@ class App:
         return sel[0] if len(sel) == 1 else None
 
     def fill_action_menu(self, menu, parent):
+        """Rewards on top under their own heading, a separator, the other
+        actions, the rest under "More". Every entry has a hover text with
+        input examples."""
+        tips = theme.MenuTips(menu)
+
+        def add(m, m_tips, k, v):
+            def pick(k=k, v=v):
+                tips.hide()
+                self.graph.add_docked(model.make_action(k, v, parent))
+            m.add_command(label=t(f'op.{k}.{v}'), command=pick)
+            m_tips.add(model.action_tip(k, v, t))
+
+        menu.add_heading(t('op.group.rewards'))
+        for k, v in model.ACTION_REWARDS:
+            add(menu, tips, k, v)
+        menu.add_separator()
         for k, v in model.ACTION_MAIN:
-            menu.add_command(label=t(f'op.{k}.{v}'), command=lambda k=k, v=v:
-                             self.graph.add_docked(model.make_action(k, v,
-                                                                     parent)))
+            add(menu, tips, k, v)
         more = theme.Menu(menu, tearoff=0)
+        more_tips = theme.MenuTips(more, tips)
         for k, v in model.ACTION_MORE:
-            more.add_command(label=t(f'op.{k}.{v}'), command=lambda k=k, v=v:
-                             self.graph.add_docked(model.make_action(k, v,
-                                                                     parent)))
+            add(more, more_tips, k, v)
         menu.add_cascade(label=t('op.more'), menu=more)
 
     def fill_condition_menu(self, menu):
