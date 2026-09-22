@@ -103,6 +103,7 @@ GUIDE_REFS = (
     ('val.id', 'quests'), ('warn.id', 'quests'), ('warn.group', 'quests'),
     ('val.offer', 'quests'), ('val.cr', 'quests'),
     ('warn.question', 'quests'), ('val.journal', 'quests'),
+    ('warn.voice', 'npcs'),
 )
 
 
@@ -373,6 +374,12 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None,
         if verb == 'NPC_TELEPORT' and INTERIOR_HINT in str(
                 a['args'].get('tile', '')):
             W.append((t('warn.teleport.interior'), target))
+        # the quest is solved in the talk with the giver: a jump on SOLVE
+        # pulls the hero out of it, CLOSE comes when the talk is over
+        # (the test jumps of the Kira campaign hang on CLOSE for that)
+        if verb == 'HERO_TELEPORT_DELAYED' and when == 'SOLVE' and \
+                str(quest.map_sign or '').startswith('BACK_TO_GIVER'):
+            W.append((t('warn.teleport.solve'), target))
         if verb == 'SHOW_LOCATION' and when != 'TAKE':
             W.append((t('warn.showloc'), target))
         if verb == 'PLAY_CUTSCENE' and str(a['args'].get('number')) in ('7',
@@ -386,8 +393,47 @@ def validate_quest(quest, index=None, project=None, archive=None, t=None,
                 W.append((t('warn.location.type10'), target))
     if own:
         _engine_checks(quest, index, project, modset, actions, task, t, E, W)
+        _voice_checks(quest, project, t, W)
     # the same message for the same target once is enough
     return _dedupe(E), _dedupe(W)
+
+
+# -- own voices (4.5.0) ---------------------------------------------------------
+
+def _voice_checks(quest, project, t, W):
+    """Takes and placeholders. The game says nothing when a take is missing:
+    the line just stays silent. Silent lines are only worth a word in a
+    quest that has own takes (then they were likely forgotten)."""
+    import os
+    from . import recorder, tts
+    placeholder, outdated, missing, silent = [], [], [], []
+    own = False
+    for nid, n in quest.graph['nodes'].items():
+        if not tts.voiced_node(n):
+            continue
+        for ln in n.get('lines') or []:
+            if not tts.clean(ln.get('text')):
+                continue
+            if ln.get('voice'):
+                own = True
+                path = recorder.voice_path(project, ln) if project else None
+                if path is not None and not os.path.isfile(path):
+                    missing.append(nid)
+                elif tts.is_placeholder(ln):
+                    placeholder.append(nid)
+                    if tts.outdated(ln):
+                        outdated.append(nid)
+            elif not ln.get('cue'):
+                silent.append(nid)
+    for nid in missing:
+        W.append((t('warn.voice.missing'), nid))
+    for nid in outdated:
+        W.append((t('warn.voice.outdated'), nid))
+    if placeholder:
+        W.append((t('warn.voice.placeholder', n=len(placeholder)),
+                  placeholder[0]))
+    if own and silent:
+        W.append((t('warn.voice.silent', n=len(silent)), silent[0]))
 
 
 # -- engine rules the game fails on silently (3.8.0) ---------------------------

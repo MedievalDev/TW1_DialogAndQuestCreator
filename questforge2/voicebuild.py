@@ -11,6 +11,8 @@ campaign, in the game since 08/2026, QuestForge SOUNDBANK.md):
     sounds.xap.cued  duration per cue name - without it the dialog goes on
                      after exactly one second (XXXDEFAULT = 1.0)
     sounds.xap.info  XACT project file, not read by the game, kept in step
+    LipSync\\data.lipsync  mouth movement per cue name (4.5.0, lipsync.py);
+                     optional, 4.4.0 left it alone
 
 Cue names follow the game's pattern ``CUE_<lector>_<number>``, counted on
 behind the highest number of the same speaker: the engine reads speaker and
@@ -38,8 +40,10 @@ import os
 import re
 import shutil
 import struct
+import time
+import zipfile
 
-from . import adpcm, audioin
+from . import adpcm, audioin, lipsync
 
 XWB = 'UnitTalk.xwb'
 SMALL = ('Sounds.xsb', 'sounds.xap.cued', 'sounds.xap.info')
@@ -52,6 +56,9 @@ CUE_RE = re.compile(r'^CUE_(\d{4})_(\d{4})$')
 RESERVE = 512              # free metadata slots after growing the wave bank
 ENCODER = 1                # part of the cache key: bump when encoding changes
 BANK = 'UnitTalk'
+LIPSYNC = os.path.join('LipSync', 'data.lipsync')   # optional (4.5.0)
+PACK_EXT = '.tw1voices'    # voice pack for other players (4.5.0)
+PACK_FORMAT = 1
 
 
 class VoiceError(Exception):
@@ -115,6 +122,9 @@ def fingerprint(game):
     with open(p, 'rb') as f:
         head = f.read(wo)
     out[XWB] = [os.path.getsize(p), _sha(head)]
+    lp = os.path.join(d, LIPSYNC)
+    if os.path.isfile(lp):
+        out[LIPSYNC] = _sha(_read(lp))
     return out
 
 
@@ -136,8 +146,13 @@ def save_record(game, rec):
 
 
 def ours(game, rec):
-    """The files are exactly as our last build left them."""
-    return bool(rec.get('after')) and rec['after'] == fingerprint(game)
+    """The files are exactly as our last build left them. Only what the
+    record knows counts: a 4.4.0 record has no lip sync file in it."""
+    after = rec.get('after')
+    if not after:
+        return False
+    now = fingerprint(game)
+    return all(now.get(k) == v for k, v in after.items())
 
 
 def take_base(game):
@@ -153,8 +168,21 @@ def take_base(game):
     with open(p, 'rb') as f:
         head = f.read(wo)
     _write(os.path.join(bd, HEAD), head)
-    return {'xwb_size': os.path.getsize(p), 'xwb_count': w.count,
+    base = {'xwb_size': os.path.getsize(p), 'xwb_count': w.count,
             'head': _sha(head)}
+    keep_lipsync(game, base)
+    return base
+
+
+def keep_lipsync(game, base):
+    """The lip sync file as it is now goes into the base (a base of 4.4.0
+    has none; that version never changed the file)."""
+    lp = os.path.join(xact_dir(game), LIPSYNC)
+    if base.get('lipsync') or not os.path.isfile(lp):
+        return
+    blob = _read(lp)
+    _write(os.path.join(store_dir(game), BASE, LIPSYNC), blob)
+    base['lipsync'] = _sha(blob)
 
 
 def restore_base(game, base):
@@ -177,6 +205,11 @@ def restore_base(game, base):
                          + '; '.join(w.pruefen()))
     for n in SMALL:
         shutil.copy2(os.path.join(bd, n), os.path.join(d, n))
+    if base.get('lipsync'):
+        blob = _read(os.path.join(bd, LIPSYNC))
+        if _sha(blob) != base['lipsync']:
+            raise VoiceError('base copy of the lip sync file damaged')
+        _write(os.path.join(d, LIPSYNC), blob)
 
 
 def grow_gap(path, slots, log=print):
@@ -228,12 +261,29 @@ def encode_take(game, path):
     if not os.path.isfile(p):
         raw, _blocks = adpcm.encode(pcm)
         _write(p, raw)
+    lp = os.path.join(store_dir(game), LINES, key + '.lip')
+    if not os.path.isfile(lp):
+        _write(lp, lipsync.generate(pcm, adpcm.BANK_RATE))
     return key, os.path.getsize(p) // adpcm.BLOCK
 
 
 def _encoded(game, key):
     p = os.path.join(store_dir(game), LINES, key + '.adpcm')
     return _read(p) if os.path.isfile(p) else None
+
+
+def _lip(game, key):
+    """The mouth movement of an encoded line (made from the encoded data
+    when a pack or an older build brought none)."""
+    p = os.path.join(store_dir(game), LINES, key + '.lip')
+    if os.path.isfile(p):
+        return _read(p)
+    raw = _encoded(game, key)
+    if raw is None:
+        return b''
+    rec = lipsync.generate(adpcm.decode(raw), adpcm.BANK_RATE)
+    _write(p, rec)
+    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +395,29 @@ def _apply(game, rec, log=print):
     _write(os.path.join(d, 'sounds.xap.cued'), cued.bauen())
     if info_ok:
         _write(os.path.join(d, 'sounds.xap.info'), info.bauen())
+    _apply_lipsync(game, rec, flat, log)
     return len(flat)
+
+
+def _apply_lipsync(game, rec, flat, log):
+    """Mouth movement for the new cues (4.5.0). The file must be at its
+    base; without one nothing happens (the voices still speak)."""
+    lp = os.path.join(xact_dir(game), LIPSYNC)
+    if not os.path.isfile(lp) or not rec.get('base', {}).get('lipsync'):
+        return
+    try:
+        entries = lipsync.parse(_read(lp))
+    except lipsync.LipSyncError as e:
+        log(('voice_nolip', str(e)))
+        return
+    for _name, e in flat:
+        entries[e['cue']] = _lip(game, e['key'])
+    blob = lipsync.build(entries)
+    check = lipsync.parse(blob)
+    for _name, e in flat:
+        if check.get(e['cue']) != entries[e['cue']]:
+            raise VoiceError(f"lip sync check failed for {e['cue']}")
+    _write(lp, blob)
 
 
 def _prepare(game, rec, log):
@@ -353,6 +425,7 @@ def _prepare(game, rec, log):
     back or first time -> the current files are the base."""
     if ours(game, rec) and rec.get('base'):
         restore_base(game, rec['base'])
+        keep_lipsync(game, rec['base'])
         log(('voice_restored',))
     else:
         if rec.get('after'):
@@ -376,7 +449,9 @@ def build(game, set_name, lines, log=print, partial_quests=None):
         prev = old.get((ln['take'], ln['lector']))
         fresh.append({'take': ln['take'], 'key': key, 'lector': ln['lector'],
                       'quest': ln.get('quest'), 'blocks': blocks,
-                      'cue': prev['cue'] if prev else None})
+                      'cue': prev['cue'] if prev else None,
+                      'tts': bool(ln.get('tts')),
+                      'text': ln.get('text', '')})
     if partial_quests is not None:
         fresh += [e for e in rec['sets'].get(set_name, [])
                   if e.get('quest') not in partial_quests]
@@ -428,7 +503,8 @@ def status(game):
 # the project side
 
 def project_lines(project, recorder_voice_path):
-    """[{'take', 'path', 'lector', 'quest'}] of every line with a take, and
+    """[{'take', 'path', 'lector', 'quest', 'tts', 'text'}] of every line
+    with a take ('tts': a placeholder, 4.5.0), and
     [(quest id, take)] of those whose file is missing. A speaker without a
     lector (NPCs taken over from multiplayer quests) speaks as lector 0,
     the same number its dialog lines get in the tree (graph_to_tree)."""
@@ -450,5 +526,129 @@ def project_lines(project, recorder_voice_path):
                     skipped.append((q.id, ln['voice']))
                     continue
                 out.append({'take': ln['voice'], 'path': path,
-                            'lector': int(lector), 'quest': q.id})
+                            'lector': int(lector), 'quest': q.id,
+                            'tts': bool(ln.get('voice_tts')),
+                            'text': ln.get('text', '')})
     return out, skipped
+
+
+# ---------------------------------------------------------------------------
+# voice pack: the voices of one mod for other players (4.5.0)
+#
+# The engine reads its banks only from XACT\win, so the voices cannot travel
+# inside the .wd. A pack carries the encoded lines of one set and the cue
+# names the dialogs of that .wd refer to; installing it puts them into the
+# receiver's bank under the same names (the same way as an own export, so
+# "take own voices out of the game" removes it again).
+
+def pack_name(set_name):
+    return os.path.splitext(set_name)[0] + PACK_EXT
+
+
+def set_entries(game, set_name):
+    """The lines of one set as the last build left them ([] if none)."""
+    return list(load_record(game)['sets'].get(set_name) or [])
+
+
+def write_pack(game, set_name, path, tool='', takes=None):
+    """Write the set's lines as a pack (zip: manifest.json and
+    lines/<key>.adpcm). ``takes``: only these take names. Returns the
+    manifest."""
+    entries = set_entries(game, set_name)
+    if takes is not None:
+        entries = [e for e in entries if e['take'] in takes]
+    if not entries:
+        raise VoiceError('no voices of this mod in the game')
+    lines = []
+    tmp = path + '.qf2tmp'
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    try:
+        with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as z:
+            done = set()
+            for e in entries:
+                raw = _encoded(game, e['key'])
+                if raw is None:
+                    raise VoiceError(f"{e['take']}: encoded line missing, "
+                                     f"export the mod again")
+                if e['key'] not in done:
+                    z.writestr(f"lines/{e['key']}.adpcm", raw)
+                    z.writestr(f"lines/{e['key']}.lip", _lip(game, e['key']))
+                    done.add(e['key'])
+                lines.append({'cue': e['cue'], 'lector': e['lector'],
+                              'take': e['take'], 'key': e['key'],
+                              'blocks': e['blocks'],
+                              'seconds': e.get('seconds'),
+                              'quest': e.get('quest'),
+                              'tts': bool(e.get('tts')),
+                              'text': e.get('text', ''), 'sha': _sha(raw)})
+            man = {'format': PACK_FORMAT, 'mod': set_name, 'tool': tool,
+                   'created': time.strftime('%Y-%m-%d %H:%M'),
+                   'lines': lines}
+            z.writestr('manifest.json', json.dumps(man, indent=1,
+                                                   ensure_ascii=False))
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    return man
+
+
+def read_pack(path):
+    """The manifest of a pack, checked for its shape."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            man = json.loads(z.read('manifest.json').decode('utf-8'))
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile) as e:
+        raise VoiceError(f'not a voice pack: {e}')
+    if man.get('format') != PACK_FORMAT or not man.get('mod') \
+            or not isinstance(man.get('lines'), list):
+        raise VoiceError('unknown voice pack format')
+    for ln in man['lines']:
+        if not CUE_RE.match(ln.get('cue') or '') or \
+                not re.match(r'^[0-9a-f]{64}$', ln.get('key') or ''):
+            raise VoiceError('voice pack damaged')
+    return man
+
+
+def install_pack(game, path, log=print):
+    """Put a pack into the game. Returns {'mod', 'n', 'tts', 'moved':
+    [(cue in the pack, cue it got)]} - a moved cue was taken here already
+    (another campaign or mod), the dialog of the mod still asks for the
+    old name."""
+    if not available(game):
+        raise VoiceError('no XACT bank files in the game folder')
+    man = read_pack(path)
+    with zipfile.ZipFile(path) as z:
+        for ln in man['lines']:
+            raw = z.read(f"lines/{ln['key']}.adpcm")
+            if _sha(raw) != ln['sha'] or len(raw) != ln['blocks'] * \
+                    adpcm.BLOCK:
+                raise VoiceError(f"voice pack damaged: {ln['cue']}")
+            p = os.path.join(store_dir(game), LINES, ln['key'] + '.adpcm')
+            if not os.path.isfile(p):
+                _write(p, raw)
+            try:
+                lip = z.read(f"lines/{ln['key']}.lip")
+            except KeyError:             # made here from the audio then
+                lip = None
+            if lip is not None and len(lip) % lipsync.RECORD == 0:
+                _write(os.path.join(store_dir(game), LINES,
+                                    ln['key'] + '.lip'), lip)
+    entries = [{'take': ln['take'], 'key': ln['key'],
+                'lector': int(ln['lector']), 'quest': ln.get('quest'),
+                'blocks': ln['blocks'], 'cue': ln['cue'],
+                'tts': bool(ln.get('tts')), 'text': ln.get('text', '')}
+               for ln in man['lines']]
+    wanted = {id(e): e['cue'] for e in entries}
+    rec = load_record(game)
+    rec['sets'][man['mod']] = entries
+    _prepare(game, rec, log)
+    n = _apply(game, rec, log)
+    rec['after'] = fingerprint(game)
+    save_record(game, rec)
+    got = rec['sets'].get(man['mod'], [])
+    moved = [(wanted[id(e)], e['cue']) for e in got
+             if wanted.get(id(e), e['cue']) != e['cue']]
+    log(('voice_built', len(got), n))
+    return {'mod': man['mod'], 'n': len(got), 'moved': moved,
+            'tts': sum(1 for e in got if e.get('tts'))}

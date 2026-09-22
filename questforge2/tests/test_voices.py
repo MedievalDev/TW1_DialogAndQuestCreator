@@ -1,4 +1,5 @@
-"""Own sound files and the voices in the game's sound bank (4.4.0)."""
+"""Own sound files and the voices in the game's sound bank (4.4.0), the
+voice pack for other players (4.5.0)."""
 
 import array
 import math
@@ -14,7 +15,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from questforge2 import adpcm, audioin, data, export, model, voicebuild  # noqa
+from questforge2 import (adpcm, audioin, data, export, lipsync,  # noqa
+                         model, voicebuild)
 
 
 def tone(seconds, rate=44100, freq=440.0, amp=8000, channels=1):
@@ -122,8 +124,14 @@ class Bank(unittest.TestCase):
         struct.pack_into('<I', head, 12 + 4 * 8 + 4, 4096)
         with open(os.path.join(dst, voicebuild.XWB), 'wb') as g:
             g.write(head + b'\0' * 4096)
+        lip = os.path.join(src, voicebuild.LIPSYNC)
+        if os.path.isfile(lip):
+            os.makedirs(os.path.dirname(os.path.join(dst, voicebuild.LIPSYNC)))
+            with open(lip, 'rb') as f, open(os.path.join(
+                    dst, voicebuild.LIPSYNC), 'wb') as g:
+                g.write(f.read())
         self.orig = {n: self.read(n) for n in voicebuild.SMALL
-                     + (voicebuild.XWB,)}
+                     + (voicebuild.XWB, voicebuild.LIPSYNC)}
         self.takes = os.path.join(self.tmp.name, 'takes')
         os.makedirs(self.takes)
         self.lines = []
@@ -170,6 +178,14 @@ class Bank(unittest.TestCase):
             self.assertGreaterEqual(idx, w.count - 2)
         self.assertAlmostEqual(dur[cues['Q385_n1_0.wav']], 1.2, delta=0.01)
         self.assertEqual(w.pruefen(), [])
+        # 4.5.0: mouth movement for the new cues, the others untouched
+        lips = lipsync.parse(self.read(voicebuild.LIPSYNC))
+        old = lipsync.parse(self.orig[voicebuild.LIPSYNC])
+        for cue in cues.values():
+            recs = lipsync.records(lips[cue])
+            self.assertEqual(recs[0][0], 0)
+            self.assertLessEqual(recs[-1][1], 1200)
+        self.assertEqual({k: v for k, v in lips.items() if k in old}, old)
         size1 = len(self.read(voicebuild.XWB))
         # the same again: base restored and the lines back in, same names
         cues2 = voicebuild.build(self.game, 'Test.wd', self.lines,
@@ -216,6 +232,116 @@ class Bank(unittest.TestCase):
         for cue in again.values():
             self.assertIsNotNone(x.wave_of(cue))
         self.assertEqual(set(again), set(cues))
+
+    def test_record_of_440_without_lipsync(self):
+        """A game with voices of 4.4.0: its record knows no lip sync file
+        and the file is untouched. The next build keeps it in the base,
+        taking everything out gives it back as it was."""
+        quiet = lambda m: None                             # noqa: E731
+        voicebuild.build(self.game, 'Test.wd', self.lines, quiet)
+        rec = voicebuild.load_record(self.game)
+        # what 4.4.0 left: no lip sync in record and base, file original
+        rec['after'].pop(voicebuild.LIPSYNC, None)
+        rec['base'].pop('lipsync', None)
+        voicebuild.restore_base.__globals__['_write'](
+            os.path.join(voicebuild.xact_dir(self.game), voicebuild.LIPSYNC),
+            self.orig[voicebuild.LIPSYNC])
+        voicebuild.save_record(self.game, rec)
+        self.assertTrue(voicebuild.ours(self.game, rec))
+        logs = []
+        cues = voicebuild.build(self.game, 'Test.wd', self.lines, logs.append)
+        self.assertIn(('voice_restored',), logs)
+        self.assertNotIn(('voice_changed',), logs)
+        lips = lipsync.parse(self.read(voicebuild.LIPSYNC))
+        self.assertTrue(all(c in lips for c in cues.values()))
+        voicebuild.remove(self.game, None, quiet)
+        for n, blob in self.orig.items():
+            self.assertEqual(self.read(n), blob, n)
+
+    def test_voice_pack_round_trip(self):
+        import tw1_xwb
+        quiet = lambda m: None                             # noqa: E731
+        self.lines[1]['tts'] = True
+        cues = voicebuild.build(self.game, 'Test.wd', self.lines, quiet)
+        d = voicebuild.xact_dir(self.game)
+        w = tw1_xwb.Xwb(os.path.join(d, voicebuild.XWB))
+        waves = {c: self.wave_bytes(w, c) for c in cues.values()}
+        pack = os.path.join(self.tmp.name, voicebuild.pack_name('Test.wd'))
+        man = voicebuild.write_pack(self.game, 'Test.wd', pack, 'test')
+        lips = lipsync.parse(self.read(voicebuild.LIPSYNC))
+        self.assertEqual(os.path.basename(pack), 'Test.tw1voices')
+        self.assertEqual(sorted(ln['cue'] for ln in man['lines']),
+                         sorted(cues.values()))
+        self.assertEqual([ln['tts'] for ln in man['lines']], [False, True])
+        # another player: the game as it was, nothing of ours in the store
+        voicebuild.remove(self.game, None, quiet)
+        import shutil
+        shutil.rmtree(voicebuild.store_dir(self.game))
+        for n, blob in self.orig.items():
+            self.assertEqual(self.read(n), blob, n)
+        res = voicebuild.install_pack(self.game, pack, quiet)
+        self.assertEqual((res['mod'], res['n'], res['tts'], res['moved']),
+                         ('Test.wd', 2, 1, []))
+        x, dur, w = self.banks()
+        for take, cue in cues.items():
+            self.assertEqual(x.wave_of(cue)[0], 'UnitTalk')
+            self.assertEqual(self.wave_bytes(w, cue), waves[cue])
+        self.assertAlmostEqual(dur[cues['Q385_n1_0.wav']], 1.2, delta=0.01)
+        # the mouth movement came along in the pack
+        got = lipsync.parse(self.read(voicebuild.LIPSYNC))
+        for cue in cues.values():
+            self.assertEqual(got[cue], lips[cue])
+        # removable like an own export
+        voicebuild.remove(self.game, None, quiet)
+        for n, blob in self.orig.items():
+            self.assertEqual(self.read(n), blob, n)
+
+    def test_voice_pack_cue_taken(self):
+        quiet = lambda m: None                             # noqa: E731
+        cues = voicebuild.build(self.game, 'Test.wd', self.lines[:1], quiet)
+        pack = os.path.join(self.tmp.name, 'Test.tw1voices')
+        voicebuild.write_pack(self.game, 'Test.wd', pack)
+        voicebuild.remove(self.game, None, quiet)
+        # here another mod already speaks under that name
+        mine = voicebuild.build(self.game, 'Mine.wd', [dict(
+            self.lines[0], take='Q999_n0_0.wav', quest=999)], quiet)
+        self.assertEqual(list(mine.values()), list(cues.values()))
+        res = voicebuild.install_pack(self.game, pack, quiet)
+        self.assertEqual(len(res['moved']), 1)
+        self.assertEqual(res['moved'][0][0], cues['Q385_n0_0.wav'])
+
+    def test_voice_pack_damaged(self):
+        import zipfile
+        voicebuild.build(self.game, 'Test.wd', self.lines, lambda m: None)
+        pack = os.path.join(self.tmp.name, 'Test.tw1voices')
+        man = voicebuild.write_pack(self.game, 'Test.wd', pack)
+        bad = os.path.join(self.tmp.name, 'Bad.tw1voices')
+        with zipfile.ZipFile(pack) as z, zipfile.ZipFile(bad, 'w') as o:
+            for item in z.infolist():
+                blob = z.read(item.filename)
+                if item.filename.endswith('.adpcm'):
+                    blob = blob[:-1] + bytes([blob[-1] ^ 1])
+                o.writestr(item, blob)
+        before = {n: self.read(n) for n in voicebuild.SMALL}
+        with self.assertRaises(voicebuild.VoiceError):
+            voicebuild.install_pack(self.game, bad, lambda m: None)
+        self.assertEqual({n: self.read(n) for n in voicebuild.SMALL}, before)
+        self.assertEqual(len(man['lines']), 2)
+        with self.assertRaises(voicebuild.VoiceError):
+            voicebuild.read_pack(os.path.join(self.tmp.name, 'nothing.zip'))
+
+    def wave_bytes(self, w, cue):
+        # the ADPCM data the wave bank holds for the cue
+        import tw1_xsb
+        x = tw1_xsb.Xsb(self.read('Sounds.xsb'))
+        _bank, i = x.wave_of(cue)
+        mo, _ml = w.regionen['ENTRYMETADATA']
+        wo, _wl = w.regionen['ENTRYWAVEDATA']
+        with open(w.pfad, 'rb') as f:
+            f.seek(mo + i * w.eintragsgroesse)
+            _fd, _fmt, po, pl = struct.unpack('<IIII', f.read(16))
+            f.seek(wo + po)
+            return f.read(pl)
 
     def test_grow_gap(self):
         import tw1_xwb

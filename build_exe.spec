@@ -16,9 +16,14 @@ a = Analysis(
         ('questforge2/assets/icon64.png', 'questforge2/assets'),
         ('questforge2/assets/icon.ico', 'questforge2/assets'),
         ('questforge2/templates/*.json', 'questforge2/templates'),
+        # 4.5.0: RPGCompute with the experience curve and the enemy values
+        ('questforge2/assets/rpgcompute/*', 'questforge2/assets/rpgcompute'),
+        # 4.5.0: animations of the guide (enemy levels), per language
+        ('questforge2/assets/guide/en/*.gif', 'questforge2/assets/guide/en'),
+        ('questforge2/assets/guide/de/*.gif', 'questforge2/assets/guide/de'),
         ('questforge2/untested.json', 'questforge2'),
     ],
-    hiddenimports=['tw1_lan', 'tw1_qtx', 'tw1_wd', 'tw1_xap', 'tw1_xsb',
+    hiddenimports=['tw1_lan', 'tw1_par', 'tw1_qtx', 'tw1_wd', 'tw1_xap', 'tw1_xsb',
                    'tw1_xwb', 'wdio', 'winreg',
                    'foxfeedback'],
     hookspath=[],

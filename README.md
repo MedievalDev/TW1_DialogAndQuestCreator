@@ -597,6 +597,43 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.5.0: Platzhalterstimmen, Stimmpaket, Lippenbewegung, Testlauf.**
+  **TTS** an jeder Zeile und **Quest > Platzhalterstimmen** lassen die
+  Sprachausgabe von Windows stumme Zeilen sprechen (OneCore und SAPI über
+  PowerShell, Stimme/Höhe/Tempo je Sprecher); das Ergebnis ist überall als
+  Platzhalter markiert, eine eigene Aufnahme ersetzt es. Jeder Export mit
+  Stimmen schreibt ein Stimmpaket `<Mod>.tw1voices`, **Datei > Stimmpaket
+  einbauen** bringt die Stimmen beim Empfänger unter denselben Cue-Namen ins
+  Spiel. Zu jeder eigenen Stimme kommt ein Eintrag in
+  `LipSync\data.lipsync` (Mund folgt der Lautstärke; im Spiel belegt, dass
+  das Spiel die Einträge liest). **F5 Testlauf:** Testfassung mit
+  unsichtbarer Starter-Quest, im neuen Spiel landet der Held beim
+  Questgeber (im Spiel bestätigt); der normale Export nimmt alles wieder
+  heraus. Die Prüfung (F7) meldet fehlende, veraltete und Platzhalter-Stimmen.
+  Im Fenster Gegnerstufen oben neu: **Erfahrung bis zur nächsten Stufe** als
+  Faktor. Das Tool übersetzte das SDK-Skript `RPGCompute` einmal mit
+  `Kurve(n) * Prozent / 100` (die unveränderte Quelle ergibt byte-gleich das
+  Skript aus Update16) und schreibt nur die Prozentzahl hinein; das Skript
+  kommt mit in `EnemyLevels.wd`. Darunter je Gegnerart **Erfahrung pro
+  Kill, Lebenspunkte, Schaden, Schlagpause, Angriffstempo und
+  Resistenzen**, jede Spaltengruppe in eigener Farbe (Stufen blau, EXP
+  grün, HP rot, Schaden gelb, Pause lila, Tempo cyan, Schutz orange). Die
+  Zeile "Alle gezeigten" ändert alle gefilterten Arten auf einmal: `-10`,
+  `+25%`, `50`. Schaden steht in Punkten eines Schlags auf der
+  Maximumstufe (Menschen: Anteil der Einheit + Waffe), das Tempo in
+  Schlägen pro Minute aus Schlaganimation und Pause. Die Animationen selbst
+  laufen im Spiel immer mit 30 Bildern je Sekunde, weder die par noch ein
+  Skript kann das ändern; eine Tempo-Eingabe stellt deshalb die Pause um.
+  "Kill-EXP nicht unter 0" aus: ein Gegner mit 10 EXP und `-30` zieht dem
+  Helden 20 ab. Alle Werte rechnet dasselbe Skript im Spiel auf die gerade
+  gültige par, deshalb wirken sie auch zusammen mit der Kira-Kampagne, die
+  eine eigene par mitbringt. Neu im Guide (F1): Kapitel **Gegnerstufen und
+  Gegnerwerte** mit kurzen Animationen, dazu eine **Tour im Tool** (Hilfe >
+  Tour: Gegnerstufen): eine kleine Karte neben dem Fenster, grüne Rahmen
+  zeigen, wo. Beim ersten Start einer neuen Version listet das Fenster
+  **Neu in 4.5.0** jede Neuerung mit "Tour starten" und "Im Guide lesen"
+  (wieder aufrufbar über Hilfe > Was ist neu). Tooltips brechen um und
+  bleiben im Fenster, der Fenstertitel zeigt die Versionsnummer.
 - **4.4.0: Eigene Stimmen im Spiel.** An jeder Dialogzeile lädt der Knopf
   **Datei** eine eigene Tondatei (WAV, MP3, WMA, M4A, FLAC): das Tool
   wandelt sie über Windows in 16 Bit mono 44,1 kHz und gleicht die
@@ -683,8 +720,10 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Mikrofon mit Probeaufnahme unter Datei > Einstellungen (gemerkt). WAV 16 Bit mono 44,1 kHz
   im Ordner `<Projekt>_voice`, verknüpft als `voice` an der Zeile. Aufnahme
   über winmm ohne Zusatzbibliothek. Oder eigene Tondatei über den Knopf
-  **Datei** (seit 4.4.0). Der Export baut beides in die Sprachbank des
-  Spiels (Sounds.xsb/UnitTalk.xwb/sounds.xap.cued).
+  **Datei** (seit 4.4.0), oder ein Platzhalter der Windows-Sprachausgabe
+  über **TTS** (seit 4.5.0). Der Export baut alles in die Sprachbank des
+  Spiels (Sounds.xsb/UnitTalk.xwb/sounds.xap.cued, dazu
+  LipSync\data.lipsync) und schreibt ein Stimmpaket für die Weitergabe.
 - **Voiceline-Finder** (Suchen... beim Voice-Cue): tippen, was gesagt werden
   soll; gleiche und ähnliche Originalzeilen mit Trefferwert, Standard der
   Held, filterbar nach jedem Originalsprecher. Anhören direkt aus

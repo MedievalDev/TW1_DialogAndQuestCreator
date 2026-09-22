@@ -162,7 +162,7 @@ klickbare Links (GitHub-Repo, Alchemy Fox `https://alchemy-fox.de/`,
 Guide-Seite, Community), Trennlinie, Ueber (12.50).
 
 **Ueber-Dialog:** Name, Versionsnummer (eine Konstante `VERSION` in
-`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90, 4.3.1 mit 12.91, 4.4.0 mit 12.92); wird im Ueber-Dialog und in der
+`questforge2/__init__.py`, Stand 3.8.0 (2.0.0 bis M10, 2.1.0 mit 12.52, 2.1.1 mit 12.54, 2.5.0 mit 12.57, 2.5.1 mit 12.58, 2.6.0 mit 12.59, 2.6.1 mit 12.60, 2.7.0 mit 12.61, 2.8.0 mit 12.62, 2.9.0 mit 12.63, 3.0.0 mit 12.64, 3.1.0 mit 12.65, 3.2.0 mit 12.66, 3.3.0 mit 12.67, 3.3.1 mit 12.68, 3.3.2, 3.4.0 mit 12.69, 3.4.1, 3.5.0, 3.5.1 mit 12.70, 3.5.2 mit 12.71, 3.6.0 mit 12.72, 3.6.1, 3.6.2, 3.6.3, 3.6.4, 3.7.0, 3.7.1, 3.7.2, 3.8.0 mit 12.74, 3.9.0 mit 12.75 und 12.76, 3.9.1 mit 12.77, 3.9.2 mit 12.78, 3.9.3 mit 12.79, 4.0.0 mit 12.80, 4.0.1 mit 12.81 und 12.82, 4.0.2 mit 12.83, 4.0.3 mit 12.84, 4.1.0 mit 12.85, 4.1.1 mit 12.86, 4.1.2 mit 12.87, 4.2.0 mit 12.88, 4.2.1 mit 12.89, 4.3.0 mit 12.90, 4.3.1 mit 12.91, 4.4.0 mit 12.92, 4.5.0 mit 12.93); wird im Ueber-Dialog und in der
 Projektdatei als `tool_version` geschrieben), Links:
 Guide-Seite (`https://alchemy-fox.de/game/TW1_DialogAndQuestCreator/`),
 GitHub-Repo (`https://github.com/MedievalDev/TW1_DialogAndQuestCreator`),
@@ -2123,6 +2123,90 @@ Offen:
       Stereo, 10,2 s), der Untertitel steht bis zum Ende.
     - Offen: Lippenbewegung (LipSync\data.lipsync bekommt keine Eintraege),
       Weitergabe an andere Spieler (die Stimmen stecken nicht in der .wd).
+
+93. Platzhalterstimmen, Stimmpaket, Pruefung, Testlauf, Lippenbewegung
+    (Version 4.5.0, Marco 2026-09-22: "mach alle 5 markiere die stimmen als
+    dummy platzhalter").
+    - tts.py: Sprachausgabe ueber ein PowerShell-Skript je Stapel (WinRT
+      OneCore und System.Speech/SAPI, nichts in der Exe). Deutsches
+      Windows 11: Stefan (m), Katja, Hedda (OneCore), Hedda/Zira Desktop.
+      SSML-prosody wirkt: Stefan -20/0/+20 % -> 112/126/142 Hz. Ergebnis
+      ueber audioin (Pegel, 44,1 kHz) und detect_trim; die Zeile bekommt
+      voice_tts {voice, text, pitch, rate} = Platzhalter, eine Aufnahme oder
+      Datei nimmt die Markierung weg, geaenderter Text = veraltet. Fenster
+      Quest > Platzhalterstimmen (Stimme/Hoehe/Tempo je Sprecher im Projekt,
+      tts_voices), Knopf TTS je Zeile. Auswahlpunkte des Helden bleiben
+      stumm (1524 Retail-Auswahlpunkte, keiner vertont).
+    - Stimmpaket (voicebuild.write_pack/install_pack): Zip mit manifest.json,
+      lines/<key>.adpcm und .lip; jeder Export mit Stimmen schreibt
+      <Mod>.tw1voices neben das Projekt, "Nur Dateien" neben die Dateien
+      (Cues aus dem letzten Einbau). Einbauen behaelt die Cue-Namen; belegte
+      Namen werden gemeldet. Test: beim "Empfaenger" byte-gleiche Wellendaten.
+    - Pruefung: warn.voice.missing/outdated/placeholder/silent und
+      warn.teleport.solve (HERO_TELEPORT_DELAYED SOLVE bei BACK_TO_GIVER).
+    - testrun.py: unsichtbare Starter-Quest (Stufe 2, kein Geber, nicht im
+      Journal), in Q_3 "AOQ TAKE ENABLE" und "AOQ SOLVE SOLVE"; Sprung auf
+      ENABLE nach 450 Takten und auf SOLVE nach 30. SDK: Verzoegerung in
+      GetGameTick (30/s), ActionTeleportHero nur fuer Helden, die den Starter
+      genommen haben. Im Spiel (2026-09-22): Verzoegerung 2 ging in der
+      Anfangssequenz verloren, 450 = 15 s nach dem Ueberspringen, Kuniberts
+      Gespraech startete von selbst, Quest genommen. Teleport-Marker: 36
+      MARKER_QUEST_TELEPORT auf 15 Kacheln, 119 von 222 Giver-Markern ohne
+      einen auf ihrer Kachel -> sonst ein Marker nur fuer die Testfassung
+      (placed, quest 'test'). Normaler Export: Starter, Q_3-Zeilen und
+      Marker raus, Q_3 wieder byte-gleich mit dem Spiel (im Archiv geprueft).
+    - lipsync.py: data.lipsync = u32 Anzahl, je Cue char[16]+u32 Offset+u16
+      Laenge (nach Namen sortiert), Saetze u32 Start ms, u32 Ende ms, u8 Id
+      (0..36); Einlesen/Schreiben byte-gleich. Laut/leise-Ids aus 250
+      Retail-Zeilen gemessen. Im Spiel: ohne Eintrag bewegt sich der Mund
+      pauschal, mit Eintrag "Mund zu" blieb er in allen Bildern zu -> das
+      Spiel liest Eintraege auch fuer neue Cues. Einbau wie die Bankdateien
+      (Basis, Rueckbau byte-gleich), 4.4.0-Aufzeichnungen ohne Lipsync werden
+      uebernommen.
+    - Erfahrungskurve im Fenster Gegnerstufen (Marco: "ganz oben fuer den
+      Player needed EXP per Level ueber einen Multiplikator"): SDK Unit.ech
+      GetExperiencePointsForLevel = Tabelle 4/20/45/90/150, danach 100 +
+      vorige + n(n+5), vom Spiel beim Aufstieg und in der Charakteranzeige
+      gefragt. Konstanten allein koennen das nicht skalieren, deshalb
+      tools/build_expcurve.py: SDK-Quelle unveraendert = byte-gleich
+      RPGCompute.eco aus Update16 (174288 Byte), dann mit Basis(n) * P / 100
+      uebersetzt; P = mov edx, imm32 vor imul edx (Vorlage 31337, einmal).
+      expcurve.py schreibt P, das Skript kommt mit Klassen-Id 25 in
+      EnemyLevels.wd (build_mod_archive kann jetzt die Id je Eintrag).
+      Im Spiel bestaetigt (Marco, 2026-09-22: "funktioniert").
+    - Gegnerwerte je Art (Marco: "fuer jeden Gegner XP einstellbar, oben
+      ein Bulk-Edit +25 oder -25 %, Checkbox nicht unter null ... Attack
+      Speed, Resistenzen, Schaden"): tools/build_rpgcompute.py ersetzt
+      build_expcurve.py und baut EnemyStats.ech (327 Einheiten) in das
+      RPGCompute-Skript: HP, Schlagpause und Schutz in UpdateValues,
+      Schaden am Ende von InitMissile, Kill-EXP beim toedlichen Treffer
+      des Helden (OnHitSuccess). Werte gelten auf die jeweils aktive par,
+      also auch mit Yamalin.wd. Fenster enemywin.py (Canvas-Tabelle: Marco
+      "Level blau, EXP gruen, HP rot, Schaden und Schlagpause lila, Schutz
+      orange, Attack Speed cyan, schwarze Trennlinien"; danach Schaden
+      gelb). Schaden in
+      Punkten: (Waffenwert(Stufe) + Einheitenschaden) x Werte der eigenen
+      Waffe (Liste 381), Menschen Anteil + W. Angriffstempo = Schlaege pro
+      Minute aus anStrike0-3 (Serie 85/60/30 %) + Schlagpause; ein Tempo
+      der Animation gibt es nicht (par ohne Feld, Skript ohne Aufruf, 30
+      Bilder/s) - revamp.wd (2010) kuerzte nur die Bildbereiche von sieben
+      Sonderangriffen in der par und senkte strikeDelayTicks 32 -> 21.
+      Namen der Arten laden im Hintergrund (ohne Projekt 2,5 s), Fenster
+      0,33 s. Im Spiel noch offen: Werte und Kill-EXP.
+    - Guide und Tour (Marco: "Guide zu Gegnerstufen mit GIFs auf Webseite
+      und ins Tool, im Fenster, wo steht, was neu ist, die Guides als Tour
+      im Tool selbst"): Kapitel `enemylevels` in guidebook.py mit sieben
+      Animationen (assets/guide/<de|en>/g76-g82, 760 px, zusammen 2,2 MB;
+      Webseite 960 px EN), das Guide-Fenster spielt ``![text](gNN)`` ab,
+      solange es sichtbar ist (Pillow, ein Bild zur Zeit), und macht aus
+      ``[[tour:enemy]]`` einen Knopf. guide.WindowTour: Karte neben dem
+      Fenster, gruene Rahmen (Marks), Schritt 1 wartet auf das Fenster.
+      feedbackwin.NEWS: je Version (id, Tour, Kapitel); das Fenster "Neu in"
+      zeigt sie vor den ungetesteten Dingen, Hilfe > Was ist neu oeffnet es
+      wieder. Aufnahme: tools/record_guide.py mit PrintWindow statt
+      Bildschirmfoto (kein topmost), gemeinsame Palette (g82 6,3 MB -> 0,6 MB).
+      Dazu: Tooltips brechen auf hoechstens 440 px um und bleiben im Fenster
+      (theme._place_tip), der Fenstertitel traegt die Version.
 
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 

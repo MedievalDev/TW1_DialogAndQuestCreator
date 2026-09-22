@@ -9,6 +9,7 @@ button offers "use in quest" when the map was opened from a marker field.
 The data and what is proven about positions are in ``mapdata.py``.
 """
 
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -98,6 +99,9 @@ def confirm_mod_marker(app, parent, point):
         app.project.mod_tiles[tile] = info['name']
         app.mods_changed(rescan=False)
     return True
+
+
+_DECODED = {}      # (png path, mtime) -> decoded tile, shared by map windows
 
 
 class MapWindow:
@@ -306,7 +310,9 @@ class MapWindow:
                                   style='Accent.TButton',
                                   command=self._use_selected)
         self._filter_job = None
-        self.reload()
+        self.points, self.visible = [], []
+        # the points are read by configure(), which show() calls right away
+        # (4.5.0: reading them here as well made opening take twice as long)
 
     # -- data -------------------------------------------------------------
 
@@ -375,7 +381,7 @@ class MapWindow:
         elif tile:
             self.center_tile(tile)
         else:
-            self.redraw_all()
+            self.redraw_all(refilter=False)     # reload() just filtered
             self.win.update_idletasks()
             w, h = self.world_size()
             self.center_on(w / 2, h / 2)
@@ -443,9 +449,10 @@ class MapWindow:
 
     # -- drawing ----------------------------------------------------------
 
-    def redraw_all(self):
+    def redraw_all(self, refilter=True):
         self.c.delete('tile')
-        self.refilter()
+        if refilter:
+            self.refilter()
         self._draw_tiles()
 
     def _schedule_draw(self):
@@ -466,14 +473,19 @@ class MapWindow:
         self._scroll_to(c.canvasx(0), c.canvasy(0))
 
     def _source(self, tile, level):
-        """Decoded minimap of one level (PIL), cached."""
+        """Decoded minimap of one level (PIL), cached - also for the next
+        map window (4.5.0: reading the PNGs was a fifth of opening it)."""
         src = self._sources.get((tile, level))
         if src is None:
             path = self.store.png(tile, level)
             if not path:
                 return None
-            src = Image.open(path).convert('RGB')
-            src.load()
+            key = (path, os.path.getmtime(path))
+            src = _DECODED.get(key)
+            if src is None:
+                src = Image.open(path).convert('RGB')
+                src.load()
+                _DECODED[key] = src
             self._sources[(tile, level)] = src
         return src
 

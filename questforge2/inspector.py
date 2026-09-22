@@ -5,11 +5,12 @@ then the node is redrawn in the graph.
 """
 
 import os
+import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import data, model, mods, retail, theme
-from .i18n import t
+from .i18n import get_lang, t
 from .mappicker import MapPicker
 
 CAMS = ((None, 'cam.default'), (2, 'cam.npc'), (1, 'cam.npc2'),
@@ -1072,27 +1073,6 @@ class Inspector(ttk.Frame):
         cue = line.get('cue') or ''
         ttk.Label(row, text=t('insp.cue') + ': ' + (cue or '-'),
                   style='Panel.TLabel').pack(side='left')
-        from . import recorder
-        rec = getattr(self.app, 'voice_rec', None)
-        recording = rec is not None and rec.get('key') == (id(line), nid)
-        has_take = bool(recorder.voice_path(self.app.project, line)
-                        and os.path.isfile(recorder.voice_path(
-                            self.app.project, line)))
-        rb = ttk.Button(row, text='\u25a0' if recording else '\u25cf',
-                        width=3,
-                        command=(lambda: (self._voice_stop(), self.refresh()))
-                        if recording else
-                        (lambda: self._voice_start(nid, line, index)))
-        rb.pack(side='right', padx=(2, 0))
-        theme.Tooltip(rb, t('voice.stop') if recording else (
-            t('voice.again') if has_take else t('voice.record.tip')))
-        # 4.4.0: an own sound file instead of the microphone
-        fb = ttk.Button(row, text=t('voice.file.short'), width=6,
-                        command=lambda: self._voice_import(nid, line, index))
-        fb.pack(side='right', padx=(2, 0))
-        if recording:
-            fb.state(['disabled'])
-        theme.Tooltip(fb, t('voice.file.tip'))
         ttk.Button(row, text=t('insp.cue.search'), width=9,
                    command=lambda: self._search_cue(nid, line, node)
                    ).pack(side='right')
@@ -1108,6 +1088,38 @@ class Inspector(ttk.Frame):
                 ttk.Label(self.body, text=t('insp.cue.mismatch'),
                           foreground=theme.ERR, background=theme.PANEL,
                           wraplength=260).pack(anchor='w')
+        vrow = ttk.Frame(self.body, style='Panel.TFrame')
+        vrow.pack(fill='x', pady=(2, 0))
+        ttk.Label(vrow, text=t('voice.own'), style='Panel.TLabel'
+                  ).pack(side='left')
+        from . import recorder
+        rec = getattr(self.app, 'voice_rec', None)
+        recording = rec is not None and rec.get('key') == (id(line), nid)
+        has_take = bool(recorder.voice_path(self.app.project, line)
+                        and os.path.isfile(recorder.voice_path(
+                            self.app.project, line)))
+        rb = ttk.Button(vrow, text='\u25a0' if recording else '\u25cf',
+                        width=3,
+                        command=(lambda: (self._voice_stop(), self.refresh()))
+                        if recording else
+                        (lambda: self._voice_start(nid, line, index)))
+        rb.pack(side='right', padx=(2, 0))
+        theme.Tooltip(rb, t('voice.stop') if recording else (
+            t('voice.again') if has_take else t('voice.record.tip')))
+        # 4.4.0: an own sound file instead of the microphone
+        fb = ttk.Button(vrow, text=t('voice.file.short'), width=6,
+                        command=lambda: self._voice_import(nid, line, index))
+        fb.pack(side='right', padx=(2, 0))
+        if recording:
+            fb.state(['disabled'])
+        theme.Tooltip(fb, t('voice.file.tip'))
+        # 4.5.0: a placeholder from the speech synthesis of Windows
+        tb = ttk.Button(vrow, text=t('tts.short'), width=4,
+                        command=lambda: self._voice_tts(nid, line, index))
+        tb.pack(side='right', padx=(2, 0))
+        if recording or not (line.get('text') or '').strip():
+            tb.state(['disabled'])
+        theme.Tooltip(tb, t('tts.short.tip'))
 
     def _voice_row(self, nid, line, index):
         """Below the voice cue: the running recording (time, level, stop) or
@@ -1147,12 +1159,22 @@ class Inspector(ttk.Frame):
             tick()
             return
         if exists:
+            from . import tts
             row = ttk.Frame(self.body, style='Panel.TFrame')
             row.pack(fill='x', pady=(2, 0))
             dur = recorder.duration(path)
-            ttk.Label(row, text=t('voice.label') + ': ' + (
-                t('voice.len', s=dur) if dur is not None else '?'),
-                      style='Panel.TLabel').pack(side='left')
+            length = t('voice.len', s=dur) if dur is not None else '?'
+            if tts.is_placeholder(line):
+                vid = (line.get(tts.MARK) or {}).get('voice') or ''
+                who = vid.split(':', 1)[-1].replace('Microsoft ', '')
+                lab = ttk.Label(row, text=t('tts.label', voice=who) + ': '
+                                + length, style='Panel.TLabel',
+                                foreground=theme.WARN)
+                lab.pack(side='left')
+                theme.Tooltip(lab, t('tts.label.tip'))
+            else:
+                ttk.Label(row, text=t('voice.label') + ': ' + length,
+                          style='Panel.TLabel').pack(side='left')
             db = ttk.Button(row, text='\u00d7', width=2,
                             command=lambda: self._voice_delete(nid, line,
                                                                path))
@@ -1170,11 +1192,23 @@ class Inspector(ttk.Frame):
                             command=lambda: recorder.play(path))
             pb.pack(side='right')
             theme.Tooltip(pb, t('voice.play'))
+            if tts.is_placeholder(line) and tts.outdated(line):
+                row = ttk.Frame(self.body, style='Panel.TFrame')
+                row.pack(fill='x', pady=(2, 0))
+                ab = ttk.Button(row, text='↻', width=2,
+                                command=lambda: self._voice_tts(
+                                    nid, line, index, ask=False))
+                ab.pack(side='right', anchor='n')
+                theme.Tooltip(ab, t('tts.again'))
+                ttk.Label(row, text=t('tts.outdated'), foreground=theme.WARN,
+                          background=theme.PANEL, wraplength=230
+                          ).pack(side='left', anchor='w')
         elif line.get('voice'):
             row = ttk.Frame(self.body, style='Panel.TFrame')
             row.pack(fill='x', pady=(2, 0))
             ub = ttk.Button(row, text='×', width=2, command=lambda: (
-                self._edit(self, lambda: line.pop('voice', None), nid,
+                self._edit(self, lambda: (line.pop('voice', None),
+                                          line.pop('voice_tts', None)), nid,
                            redraw=False), self.refresh()))
             ub.pack(side='right', anchor='n')
             theme.Tooltip(ub, t('voice.unlink'))
@@ -1259,9 +1293,11 @@ class Inspector(ttk.Frame):
         if undo and app.quest is r['quest']:
             app.push_undo('voice')
             line['voice'] = name
+            line.pop('voice_tts', None)      # a real take, no placeholder
             app.changed(from_inspector=True)
         else:
             line['voice'] = name
+            line.pop('voice_tts', None)
             app.mark_dirty()
         app.set_info(t('voice.saved', s=len(pcm) / (recorder.RATE * 2),
                        path=path), 'StatusOk.TLabel')
@@ -1317,6 +1353,7 @@ class Inspector(ttk.Frame):
             return
         app.push_undo('voice')
         line['voice'] = name
+        line.pop('voice_tts', None)          # a real take, no placeholder
         app.changed(from_inspector=True)
         secs = len(pcm) / (recorder.RATE * 2)
         if note.get('limited', 0) > 0.01:
@@ -1359,9 +1396,121 @@ class Inspector(ttk.Frame):
             except OSError:
                 pass
             recorder.drop_original(path)
-        self._edit(self, lambda: line.pop('voice', None), nid, redraw=False)
+        self._edit(self, lambda: (line.pop('voice', None),
+                                  line.pop('voice_tts', None)), nid,
+                   redraw=False)
         self.refresh()
         self.app.voice_library_changed()
+
+    def _voice_tts(self, nid, line, index, ask=True):
+        """A placeholder for the line from the speech synthesis of Windows
+        (4.5.0), with the settings of its speaker (Quest > Placeholder
+        voices). Runs in a thread, the line is looked up again afterwards
+        like after a recording."""
+        from . import recorder, tts
+        app = self.app
+        if getattr(app, 'voice_rec', None) or getattr(app, 'tts_busy', False):
+            app.set_info(t('voice.busy'), 'StatusErr.TLabel')
+            return
+        if app.is_mod_quest(app.quest):
+            messagebox.showinfo(t('voice.title'), t('voice.modquest'),
+                                parent=app.root)
+            return
+        if not tts.clean(line.get('text')):
+            app.set_info(t('tts.notext'), 'StatusErr.TLabel')
+            return
+        path = recorder.voice_path(app.project, line)
+        real = (line.get('voice') and not tts.is_placeholder(line)
+                and path and os.path.isfile(path))
+        if ask and (real or (line.get('cue') and not line.get('voice'))):
+            if not messagebox.askyesno(t('tts.title'), t('tts.replace.q'),
+                                       parent=app.root):
+                return
+        if not app.project or not app.project.path:
+            if not messagebox.askyesno(t('voice.title'), t('voice.save'),
+                                       parent=app.root) \
+                    or not app.save_project_as():
+                return
+        node = app.quest.graph['nodes'].get(nid) or {}
+        key = tts.speaker_key(node)
+        rec = {'quest': app.quest, 'nid': nid, 'index': index, 'line': line,
+               'project': app.project}
+        box = {}
+        settings = app.project.extra.setdefault('tts_voices', {})
+
+        def work():
+            try:
+                voices = tts.voices()
+                if not voices:
+                    raise tts.TTSError('-')
+                conf = settings.get(key) or tts.defaults(
+                    voices, get_lang(), [key], settings)[key]
+                v = tts.find(voices, conf.get('voice')) or tts.pick(
+                    voices, get_lang())
+                (pcm, err), = tts.synthesize([{
+                    'voice': v, 'pitch': conf.get('pitch', 0),
+                    'rate': conf.get('rate', 0), 'text': line['text']}])
+                if err:
+                    raise tts.TTSError(err)
+                box.update(pcm=pcm, voice=v, conf=conf)
+            except Exception as e:           # shown in the status line
+                box['err'] = e
+
+        def done():
+            if th.is_alive():
+                app.root.after(100, done)
+                return
+            app.tts_busy = False
+            try:
+                app.root.configure(cursor='')
+            except tk.TclError:
+                return
+            if 'err' in box:
+                messagebox.showerror(t('tts.title'),
+                                     t('tts.error', err=box['err']),
+                                     parent=app.root)
+                return
+            project = rec['project']
+            ln = self._rec_line(rec)
+            if ln is None or app.project is not project:
+                app.set_info(t('voice.gone'), 'StatusErr.TLabel')
+                return
+            name = recorder.take_name(project, self._all_quests(project),
+                                      rec['quest'], nid, index, ln)
+            p = os.path.join(recorder.voice_dir(project), name)
+            try:
+                recorder.write_wav(p, box['pcm'])
+                recorder.drop_original(p)
+            except OSError as e:
+                messagebox.showerror(t('voice.title'), t('voice.error', err=e),
+                                     parent=app.root)
+                return
+            if key not in settings:
+                settings[key] = dict(box['conf'])
+            conf = box['conf']
+            if app.quest is rec['quest']:
+                app.push_undo('voice')
+            ln['voice'] = name
+            tts.mark(ln, box['voice']['id'], conf.get('pitch', 0),
+                     conf.get('rate', 0))
+            if app.quest is rec['quest']:
+                app.changed(from_inspector=True)
+            else:
+                app.mark_dirty()
+            app.set_info(t('tts.line.done',
+                           s=len(box['pcm']) / (recorder.RATE * 2),
+                           voice=tts.short_name(box['voice'])),
+                         'StatusOk.TLabel')
+            self.refresh()
+            app.voice_library_changed()
+
+        recorder.stop_playing()
+        app.tts_busy = True
+        app.root.configure(cursor='watch')
+        app.set_info(t('tts.working'), 'Status.TLabel')
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+        app.root.after(100, done)
 
     def _search_cue(self, nid, line, node):
         """Voice line finder (3.6.0): similar original lines, hero first."""

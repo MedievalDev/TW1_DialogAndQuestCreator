@@ -67,7 +67,7 @@ class App:
 
         self.root = tk.Tk()
         self.root.withdraw()
-        self.root.title(APP_NAME)
+        self.root.title(f'{APP_NAME} {VERSION}')
         self.root.geometry(self.cfg.get('window') or '1280x800')
         self.root.minsize(960, 600)
         theme.apply_dark_theme(self.root)
@@ -191,11 +191,68 @@ class App:
         m.add_command(label=t('file.exportfiles'),
                       command=lambda: self.export_ui(files_only=True),
                       state=can)
+        m.add_command(label=t('file.voices.pack'),
+                      command=self.install_voice_pack_ui,
+                      state=self._state(bool(self.cfg.get('game_dir'))))
         m.add_command(label=t('file.voices.remove'),
                       command=self.remove_voices_ui,
                       state=self._state(bool(self.cfg.get('game_dir'))))
         m.add_separator()
         m.add_command(label=t('file.quit'), command=self.quit)
+
+    def install_voice_pack_ui(self, path=None):
+        """Put the voice pack of a mod someone sent into the game (4.5.0)."""
+        from . import voicebuild
+        game = self.cfg.get('game_dir')
+        title = t('voice.pack.title')
+        if not game or not voicebuild.available(game):
+            messagebox.showerror(title, t('voice.log.nobank'),
+                                 parent=self.root)
+            return
+        if path is None:
+            path = filedialog.askopenfilename(
+                parent=self.root, title=title,
+                filetypes=[(t('voice.pack.types'),
+                            '*' + voicebuild.PACK_EXT),
+                           (t('voice.file.all'), '*.*')])
+            if not path:
+                return
+        try:
+            man = voicebuild.read_pack(path)
+        except voicebuild.VoiceError as e:
+            messagebox.showerror(title, str(e), parent=self.root)
+            return
+        if export.game_running():
+            messagebox.showerror(title, t('export.running'),
+                                 parent=self.root)
+            return
+        n_tts = sum(1 for ln in man['lines'] if ln.get('tts'))
+        info = t('voice.pack.q', mod=man['mod'], n=len(man['lines']),
+                 tts=n_tts, created=man.get('created') or '-',
+                 tool=man.get('tool') or '-')
+        if not os.path.isfile(os.path.join(game, 'Mods', man['mod'])):
+            info += NL + NL + t('voice.pack.nomod', mod=man['mod'])
+        if not messagebox.askyesno(title, info, parent=self.root):
+            return
+        self.root.configure(cursor='watch')
+        self.root.update_idletasks()
+        try:
+            res = voicebuild.install_pack(game, path, lambda m: None)
+        except (voicebuild.VoiceError, OSError) as e:
+            messagebox.showerror(title, t('voice.log.failed', err=e),
+                                 parent=self.root)
+            return
+        finally:
+            self.root.configure(cursor='')
+        text = t('voice.pack.done', n=res['n'], mod=res['mod'])
+        if res['tts']:
+            text += NL + t('voice.pack.tts', n=res['tts'])
+        if res['moved']:
+            text += NL + NL + t('voice.pack.moved', items=', '.join(
+                f'{a} -> {b}' for a, b in res['moved'][:8]))
+            messagebox.showwarning(title, text, parent=self.root)
+        else:
+            messagebox.showinfo(title, text, parent=self.root)
 
     def remove_voices_ui(self):
         """Take the project's own voice lines out of the game's sound bank
@@ -351,8 +408,15 @@ class App:
                       state=self._state(self.quest is not None))
         m.add_command(label=t('quest.preview'), command=self.show_preview,
                       state=self._state(self.quest is not None))
+        m.add_command(label=t('testrun.menu'), accelerator='F5',
+                      command=self.test_run_ui,
+                      state=self._state(in_project and bool(
+                          self.cfg.get('game_dir'))))
         m.add_command(label=t('quest.template'), command=self.save_template,
                       state=self._state(self.quest is not None))
+        m.add_command(label=t('tts.menu'), command=self.show_placeholders,
+                      state=self._state(bool(self.project
+                                             and self.project.quests)))
         m.add_separator()
         m.add_command(label=t('quest.limit', n=self.quest_limit),
                       command=self.show_quest_limit,
@@ -396,6 +460,10 @@ class App:
                       command=lambda: self.coach.start('tutorial'))
         m.add_command(label=t('help.mptour'),
                       command=lambda: self.coach.start('mp'))
+        m.add_command(label=t('help.enemytour'),
+                      command=lambda: self.start_tour('enemy'))
+        m.add_command(label=t('help.news', v=VERSION),
+                      command=self.show_news)
         m.add_command(label=t('help.docs'), command=lambda: show_docs(self))
         m.add_separator()
         for key, url in LINKS:
@@ -1464,6 +1532,19 @@ class App:
         from .guidebook import GuideWindow
         GuideWindow.show(self, chapter)
 
+    def start_tour(self, name):
+        """A tour through one window (guide.TOURS), 4.5.0."""
+        from .guide import WindowTour
+        if name == 'enemy' and not self.cfg.get('game_dir'):
+            return
+        WindowTour.start(self, name)
+
+    def show_news(self):
+        """Help > What's new: the news of this version with their guides and
+        tours, and what still wants testing."""
+        from . import feedbackwin
+        feedbackwin.WhatsNewWindow.show_current(self)
+
     def show_quest_limit(self):
         if not self.cfg.get('game_dir'):
             return
@@ -1471,6 +1552,12 @@ class App:
 
     def show_enemy_levels(self):
         if not self.cfg.get('game_dir'):
+            return
+        from .enemywin import EnemyLevelWindow
+        w = EnemyLevelWindow.current()
+        if w is not None:                # one at a time (the tour needs it)
+            w.win.deiconify()
+            w.win.lift()
             return
         EnemyLevelWindow(self)
 
@@ -1725,7 +1812,12 @@ class App:
 
     # -- export ---------------------------------------------------------------
 
-    def export_ui(self, files_only=False, quests=None):
+    def export_ui(self, files_only=False, quests=None, test_start=None,
+                  on_done=None):
+        """Export as a mod (or the files only). ``test_start``: a test build
+        with the starter of testrun.plan (4.5.0); ``on_done(result)`` after
+        a good export."""
+        from . import testrun
         p = self.project
         if quests is not None and p:
             sub = Project(p.name)
@@ -1742,6 +1834,16 @@ class App:
             messagebox.showerror(t('export.title'), t('export.nogame'),
                                  parent=self.root)
             return
+        # 4.5.0: the teleport marker of a test run is in the maps of a test
+        # build only; every other export writes the tiles without it
+        if self.project is not None and editormaps_dir(self.project):
+            if test_start:
+                moved = testrun.set_marker(self.project, test_start)
+            else:
+                moved = testrun.clear_marker(self.project)
+            if moved and not self._regenerate_tiles():
+                return
+        drop = testrun.starters(self.project) if self.project else set()
         name = export.archive_name(p)
         errors, warnings = validate.validate_project(p, self.index, name, t,
                                                      self.modset)
@@ -1765,10 +1867,12 @@ class App:
                 return
         # one question with everything instead of up to three (4.3.0)
         conf = [] if files_only else export.conflicts(game, name)
-        dlg = ExportConfirm(
-            self, target if files_only else t('export.confirm.target',
-                                              name=name),
-            conf, [] if files_only else deps, warnings)
+        head = target if files_only else t('export.confirm.target', name=name)
+        if test_start:
+            head = NL.join([t('testrun.confirm', name=name)]
+                           + testrun.describe(test_start, t))
+        dlg = ExportConfirm(self, head, conf, [] if files_only else deps,
+                            warnings)
         self.root.wait_window(dlg.win)
         if not dlg.result:
             return
@@ -1790,12 +1894,17 @@ class App:
                 entries = mods.dependency_entries(deps, logq.put)
                 entries_box.update(entries)
                 # 4.4.0: own recordings into the sound bank first, their
-                # cues then go into the dialog lines
-                cues = None if target else build_voices(p, game, name,
-                                                        logq.put)
+                # cues then go into the dialog lines. 4.5.0: files only
+                # take the cues of the last build, so the .wd and the voice
+                # pack written next to it belong together
+                cues = (recorded_cues(p, game, name, logq.put) if target
+                        else build_voices(p, game, name, logq.put))
                 result['res'] = export.export_mod(
                     p, game, data.base_dir(), self.index, logq.put,
-                    files_only=target, entries=entries, voice_cues=cues)
+                    files_only=target, entries=entries, voice_cues=cues,
+                    test_start=test_start, drop_starters=drop)
+                if cues:
+                    write_voice_pack(p, game, name, target, cues, logq.put)
                 if lhc_auto:
                     logq.put(('text', ''))
                     logq.put(('text', t('em.lhc.auto.run')))
@@ -1844,6 +1953,15 @@ class App:
                     extra = NL + NL + t('em.lhc')
                 win.finish(t('export.done', path=result['res']['archive'])
                            + NL + NL + t('export.next') + extra, ok=good)
+            if 'err' not in result and not target and \
+                    self.project is not None:
+                # 4.5.0: which starter is in the game's copy of the mod now
+                if test_start:
+                    testrun.remember(self.project, test_start, name)
+                else:
+                    testrun.forget(self.project)
+                self.mark_dirty()
+                self._test_status()
             if 'err' not in result and p is self.project:
                 self.mark_dirty()            # exported_maps changed
                 if self.project.path:
@@ -1853,10 +1971,101 @@ class App:
                 self.exported_ok = True      # the guided tours look at it
             if 'err' not in result and self.coach.tutorial.quest in p.quests:
                 self.coach.tutorial.exported = True
+            if 'err' not in result and on_done is not None:
+                on_done(result.get('res'))
 
         th = threading.Thread(target=work, daemon=True)
         th.start()
         poll()
+
+    def _regenerate_tiles(self):
+        """The tiles of the levels folder written again (placed.py) and the
+        mods read again. False when it failed (shown)."""
+        from . import placed
+        try:
+            placed.generate(self.project, self.modset,
+                            self.cfg.get('game_dir'), lambda *a: None)
+        except Exception as e:               # shown, nothing exported
+            messagebox.showerror(t('place.title'), t('place.error', err=e),
+                                 parent=self.root)
+            return False
+        self.load_modset(force=True)
+        return True
+
+    def test_run_ui(self):
+        """Quest > Test run in the game (4.5.0): a test build of the mod,
+        then the game; in a new game the hero stands next to the giver of
+        this quest and the quest is unlocked."""
+        from . import testrun
+        title = t('testrun.title')
+        p, q = self.project, self.quest
+        if not p or q is None or q not in p.quests:
+            messagebox.showinfo(title, t('testrun.noquest'), parent=self.root)
+            return
+        game = self.cfg.get('game_dir')
+        if not game:
+            messagebox.showerror(title, t('export.nogame'), parent=self.root)
+            return
+        if export.game_running():
+            messagebox.showerror(title, t('export.running'), parent=self.root)
+            return
+        if not p.path:
+            if not messagebox.askyesno(title, t('testrun.save'),
+                                       parent=self.root) \
+                    or not self.save_project_as():
+                return
+        exe, _exes = testrun.game_exe(game, self.cfg)
+        if not exe:
+            messagebox.showerror(title, t('testrun.noexe'), parent=self.root)
+            return
+        if self.modset is None:
+            self.load_modset()
+        spec = testrun.plan(p, self.index, self.modset, game, q,
+                            self.quest_limit)
+        if spec['problem']:
+            messagebox.showerror(title, t(spec['problem'], id=q.id,
+                                          npc=spec.get('npc') or '-',
+                                          tile=spec.get('tile') or '-'),
+                                 parent=self.root)
+            return
+        self.feedback.log.add(f"test run Q_{q.id} starter {spec['starter']}")
+        self.export_ui(test_start=spec,
+                       on_done=lambda res: self._start_test_game(exe))
+
+    def _start_test_game(self, exe):
+        from . import gamesession
+        game = self.cfg.get('game_dir')
+        name = export.archive_name(self.project)
+        s = gamesession.GameSession(game, self.project, name)
+        self.test_session = s
+        if not s.start(exe):
+            messagebox.showerror(t('testrun.title'),
+                                 t('testrun.startfail', exe=exe),
+                                 parent=self.root)
+            return
+        self.set_info(t('testrun.started'), 'StatusErr.TLabel')
+        self.root.after(1000, lambda: self._watch_test(s))
+
+    def _watch_test(self, s):
+        """Poll the game from the UI thread; when it ends, offer to put the
+        mod back without the starter."""
+        from . import testrun
+        if s is not getattr(self, 'test_session', None):
+            return
+        if s.state in ('waiting', 'running'):
+            self.root.after(1000, lambda: self._watch_test(s))
+            return
+        self.test_session = None
+        if s.state == 'ended' and testrun.active(self.project):
+            if messagebox.askyesno(t('testrun.title'), t('testrun.ended.q'),
+                                   parent=self.root):
+                self.export_ui()
+        self._test_status()
+
+    def _test_status(self):
+        from . import testrun
+        if testrun.active(self.project):
+            self.set_info(t('testrun.active'), 'StatusErr.TLabel')
 
     def schedule_validation(self, ms=600):
         if self._val_job:
@@ -2145,6 +2354,23 @@ class App:
         self.vars['voices'].set(True)
         self._apply_panels()
 
+    def show_placeholders(self):
+        """Placeholder voices for the silent lines (4.5.0)."""
+        from .voicewin import PlaceholderWindow
+        p = self.project
+        if not p or not p.quests:
+            return
+        if getattr(self, 'voice_rec', None) or getattr(self, 'tts_busy',
+                                                        False):
+            self.set_info(t('voice.busy'), 'StatusErr.TLabel')
+            return
+        if not p.path:
+            if not messagebox.askyesno(t('voice.title'), t('voice.save'),
+                                       parent=self.root) \
+                    or not self.save_project_as():
+                return
+        PlaceholderWindow(self)
+
     def voice_library_changed(self):
         lib = getattr(self, 'library', None)
         if lib is not None and self.vars['voices'].get():
@@ -2281,7 +2507,9 @@ class App:
                 if self.project else '')
         star = ' *' if (self.project and self.project.dirty) \
             or self.mod_dirty else ''
-        self.root.title(f'{name}{star} - {APP_NAME}' if name else APP_NAME)
+        # the version always stands behind the name (Marco 2026-09-22)
+        app = f'{APP_NAME} {VERSION}'
+        self.root.title(f'{name}{star} - {app}' if name else app)
 
     def set_info(self, text, style='Status.TLabel'):
         self.status['info'].configure(text=text, style=style)
@@ -2323,6 +2551,7 @@ class App:
         r.bind('<Control-S>', lambda e: self.save_project_as())
         r.bind('<Control-e>', lambda e: self.export_ui())
         r.bind('<F7>', lambda e: self.validate_ui())
+        r.bind('<F5>', lambda e: self.test_run_ui())
         r.bind('<F1>', lambda e: self.show_guide('start'))
         g = self.graph
         for seq, fn in (('<Control-z>', self.do_undo),
@@ -3080,390 +3309,6 @@ class ProblemWindow:
             self.app.goto_problem(q, nid)
 
 
-class EnemyLevelWindow:
-    """Minimum and maximum level per creature type (enemylevel.py).
-
-    The engine creates wandering enemies at the hero's level and then clamps
-    that to the range of the creature type, which is why animals stay weak.
-    One row per type, grouped and filterable, each value as a slider with an
-    entry next to it.
-    """
-
-    WIDTH, ROW_H = 980, 26
-
-    def __init__(self, app):
-        self.app = app
-        self.game = app.cfg.get('game_dir')
-        self.state = None
-        self.values = {}
-        self.rows = {}
-        self.win = tk.Toplevel(app.root)
-        self.win.title(t('enemy.title'))
-        self.win.transient(app.root)
-        self.win.geometry('980x740')
-        self.win.minsize(820, 560)
-        theme.dark_titlebar(self.win)
-        self.win.bind('<Escape>', lambda e: self.win.destroy())
-        f = ttk.Frame(self.win, padding=14)
-        f.pack(fill='both', expand=True)
-        ttk.Label(f, text=t('enemy.head'), style='Brand.TLabel').pack(anchor='w')
-        ttk.Label(f, text=t('enemy.sub'), style='Muted.TLabel',
-                  wraplength=930, justify='left').pack(anchor='w', pady=(2, 8))
-        self.state_lbl = ttk.Label(f, style='Muted.TLabel', wraplength=930,
-                                   justify='left')
-        self.state_lbl.pack(anchor='w', pady=(0, 8))
-
-        # filter row
-        bar = ttk.Frame(f)
-        bar.pack(fill='x')
-        ttk.Label(bar, text=t('enemy.filter')).pack(side='left')
-        self.search = tk.StringVar()
-        ent = ttk.Entry(bar, textvariable=self.search, width=18)
-        ent.pack(side='left', padx=(6, 10))
-        ent.bind('<KeyRelease>', lambda e: self.build_rows())
-        self.group = tk.StringVar(value=t('enemy.group.all'))
-        groups = [t('enemy.group.all')] + [t('enemy.group.' + g)
-                                           for g in enemylevel.GROUPS]
-        self.group_keys = [None] + list(enemylevel.GROUPS)
-        cb = ttk.Combobox(bar, textvariable=self.group, values=groups,
-                          state='readonly', width=16)
-        cb.pack(side='left')
-        cb.bind('<<ComboboxSelected>>', lambda e: self.build_rows())
-        self.only_changed = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bar, text=t('enemy.onlychanged'),
-                        variable=self.only_changed,
-                        command=self.build_rows).pack(side='left', padx=10)
-        self.count_lbl = ttk.Label(bar, style='Muted.TLabel')
-        self.count_lbl.pack(side='right')
-
-        # presets, applied to what the filter shows
-        pre = ttk.Frame(f)
-        pre.pack(fill='x', pady=(8, 4))
-        ttk.Label(pre, text=t('enemy.presets')).pack(side='left')
-        ttk.Button(pre, text=t('enemy.preset.hero'),
-                   command=self.preset_hero).pack(side='left', padx=(8, 4))
-        self.plus = tk.StringVar(value='10')
-        ttk.Spinbox(pre, from_=1, to=99, width=4, textvariable=self.plus
-                    ).pack(side='left')
-        ttk.Button(pre, text=t('enemy.preset.plus'),
-                   command=self.preset_plus).pack(side='left', padx=4)
-        self.factor = tk.StringVar(value='1.5')
-        ttk.Spinbox(pre, from_=0.5, to=5.0, increment=0.1, width=5,
-                    textvariable=self.factor).pack(side='left', padx=(10, 0))
-        ttk.Button(pre, text=t('enemy.preset.scale'),
-                   command=self.preset_scale).pack(side='left', padx=4)
-        ttk.Button(pre, text=t('enemy.preset.retail'),
-                   command=self.preset_retail).pack(side='left', padx=(10, 0))
-
-        # table
-        box = ttk.Frame(f)
-        box.pack(fill='both', expand=True, pady=(6, 0))
-        self.canvas = tk.Canvas(box, background=theme.PANEL,
-                                highlightthickness=0)
-        sb = ttk.Scrollbar(box, orient='vertical', command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=sb.set)
-        sb.pack(side='right', fill='y')
-        self.canvas.pack(side='left', fill='both', expand=True)
-        self.table = ttk.Frame(self.canvas, style='Panel.TFrame')
-        self.canvas.create_window((0, 0), window=self.table, anchor='nw',
-                                  tags='table')
-        self.table.bind('<Configure>', lambda e: self.canvas.configure(
-            scrollregion=self.canvas.bbox('all')))
-        self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfigure(
-            'table', width=e.width))
-        self.canvas.bind_all('<MouseWheel>', self._wheel)
-
-        # buttons and log
-        btns = ttk.Frame(f)
-        btns.pack(fill='x', pady=(10, 0))
-        self.btn_apply = ttk.Button(btns, text=t('enemy.apply'),
-                                    style='Accent.TButton',
-                                    command=self.apply_clicked)
-        self.btn_apply.pack(side='left')
-        self.btn_remove = ttk.Button(btns, text=t('enemy.remove'),
-                                     command=self.remove_clicked)
-        self.btn_remove.pack(side='left', padx=6)
-        ttk.Button(btns, text=t('close'), command=self.close
-                   ).pack(side='right')
-        self.txt = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=5)
-        self.txt.pack(fill='x', pady=(10, 0))
-        self.txt.tag_configure('ok', foreground=theme.OK)
-        self.txt.tag_configure('err', foreground=theme.ERR)
-        self.txt.tag_configure('warn', foreground='#e0a050')
-        self.txt.configure(state='disabled')
-        self.refresh()
-
-    # -- helpers ----------------------------------------------------------
-    def close(self):
-        self.canvas.unbind_all('<MouseWheel>')
-        self.win.destroy()
-
-    def _wheel(self, ev):
-        self.canvas.yview_scroll(-1 if ev.delta > 0 else 1, 'units')
-
-    def _put(self, text, tag=None):
-        self.txt.configure(state='normal')
-        self.txt.insert('end', text + NL, tag)
-        self.txt.see('end')
-        self.txt.configure(state='disabled')
-
-    def log(self, msg):
-        if isinstance(msg, str):
-            msg = ('text', msg)
-        kind = msg[0]
-        tag = None
-        if kind == 'patched':
-            text = t('enemy.log.patched', file=msg[1], n=msg[2], src=msg[3])
-        elif kind == 'regbackup':
-            text = t('limit.log.regbackup', path=msg[1])
-        elif kind == 'oldmod':
-            text = t('limit.log.oldmod', name=msg[1])
-        elif kind == 'written':
-            text = t('enemy.log.written', name=msg[1], n=msg[2], guid=msg[3])
-            tag = 'ok'
-        elif kind == 'otheractive':
-            text = t('limit.log.other', name=msg[1])
-            tag = 'warn'
-        elif kind == 'removed':
-            text = t('limit.log.removed', name=msg[1])
-        elif kind == 'switchedoff':
-            text = t('limit.log.off', name=msg[1])
-        else:
-            text = ' '.join(str(x) for x in msg)
-        self._put(text, tag)
-
-    def filtered(self):
-        needle = self.search.get().strip().lower()
-        gi = 0
-        for i, g in enumerate(self.group_keys):
-            label = (t('enemy.group.all') if g is None
-                     else t('enemy.group.' + g))
-            if label == self.group.get():
-                gi = i
-                break
-        group = self.group_keys[gi]
-        retail = enemylevel.retail_values()
-        out = []
-        for num, name, _mark, lo, hi, grp, _units in \
-                enemylevel.all_entries():
-            if group and grp != group:
-                continue
-            shown = self.game_names.get(num) or ''
-            if needle and needle not in name.lower() \
-                    and needle not in shown.lower():
-                continue
-            if self.only_changed.get() and self.values.get(num) == retail[num]:
-                continue
-            out.append((num, name, grp))
-        order = {g: i for i, g in enumerate(enemylevel.GROUPS)}
-        out.sort(key=lambda r: (order.get(r[2], 99), r[1]))
-        return out
-
-    # -- state ------------------------------------------------------------
-    def load_names(self):
-        """The name every type has in the game, from its language file."""
-        self.game_names = {}
-        try:
-            tr = data.load_translations(self.game)
-        except Exception:
-            return
-        for e in enemylevel.all_entries():
-            name = enemylevel.game_name(e[0], tr)
-            if name:
-                self.game_names[e[0]] = name
-
-    def refresh(self):
-        if not hasattr(self, 'game_names'):
-            self.load_names()
-        try:
-            self.state = enemylevel.State(self.game)
-            err = self.state.error
-        except Exception as e:           # shown in the window
-            self.state, err = None, str(e)
-        if self.state is None or err:
-            self.state_lbl.configure(text=t('enemy.error', e=err))
-            self.btn_apply.state(['disabled'])
-            self.btn_remove.state(['disabled'])
-            return
-        st = self.state
-        if not self.values:
-            self.values = dict(st.values)
-        notes = []
-        if st.mod_present and st.mod_active:
-            notes.append(t('enemy.mod.on', name=enemylevel.MOD_NAME))
-        elif st.mod_present:
-            notes.append(t('enemy.mod.off', name=enemylevel.MOD_NAME))
-        else:
-            notes.append(t('enemy.retail'))
-        notes.append(t('enemy.files', n=len(st.sources)))
-        for name, active in st.others:
-            if active:
-                notes.append(t('limit.log.other', name=name))
-        notes.append(t('enemy.newgames'))
-        self.state_lbl.configure(text=' '.join(notes))
-        self.btn_apply.state(['!disabled'])
-        can_remove = (st.mod_present
-                      or enemylevel.MOD_NAME in questlimit.reg_mods())
-        self.btn_remove.state(['!disabled'] if can_remove else ['disabled'])
-        self.build_rows()
-
-    def build_rows(self):
-        for w in self.table.winfo_children():
-            w.destroy()
-        self.rows = {}
-        head = ttk.Frame(self.table, style='Panel.TFrame')
-        head.pack(fill='x')
-        ttk.Label(head, text=t('enemy.col.type'), style='PanelTitle.TLabel',
-                  width=26).pack(side='left')
-        ttk.Label(head, text=t('enemy.col.min'), style='PanelTitle.TLabel'
-                  ).pack(side='left')
-        ttk.Label(head, text=t('enemy.col.max'), style='PanelTitle.TLabel'
-                  ).pack(side='left', padx=(150, 0))
-        rows = self.filtered()
-        retail = enemylevel.retail_values()
-        last_group = None
-        for num, name, grp in rows:
-            if grp != last_group:
-                last_group = grp
-                n_in = sum(1 for r in rows if r[2] == grp)
-                ttk.Label(self.table,
-                          text=t('enemy.group.' + grp) + f'  ({n_in})',
-                          style='PanelTitle.TLabel').pack(anchor='w',
-                                                          pady=(8, 0))
-            row = ttk.Frame(self.table, style='Panel.TFrame')
-            row.pack(fill='x')
-            lo, hi = self.values.get(num, retail[num])
-            changed = (lo, hi) != retail[num]
-            # the name the game shows, the one of the SDK behind it
-            shown = self.game_names.get(num) or name
-            ttk.Label(row, text=shown, style='Panel.TLabel', width=22,
-                      foreground=theme.GOLD if changed else theme.INK
-                      ).pack(side='left')
-            ttk.Label(row, text=name if shown != name else '',
-                      style='PanelMuted.TLabel', width=18).pack(side='left')
-            widgets = {}
-            for which in ('min', 'max'):
-                var = tk.StringVar(value=str(lo if which == 'min' else hi))
-                scale = ttk.Scale(row, from_=enemylevel.MIN_LEVEL,
-                                  to=enemylevel.MAX_LEVEL, length=150,
-                                  value=lo if which == 'min' else hi)
-                scale.pack(side='left', padx=(0, 4))
-                sp = ttk.Spinbox(row, from_=enemylevel.MIN_LEVEL,
-                                 to=enemylevel.MAX_LEVEL, width=4,
-                                 textvariable=var)
-                sp.pack(side='left', padx=(0, 12))
-                widgets[which] = (scale, sp, var)
-                scale.configure(command=lambda v, n=num, w=which:
-                                self._from_scale(n, w, v))
-                sp.configure(command=lambda n=num, w=which:
-                             self._from_entry(n, w))
-                sp.bind('<KeyRelease>', lambda e, n=num, w=which:
-                        self._from_entry(n, w))
-            ttk.Label(row, text=t('enemy.retailvalue',
-                                  lo=retail[num][0], hi=retail[num][1]),
-                      style='PanelMuted.TLabel').pack(side='left')
-            self.rows[num] = widgets
-        self.count_lbl.configure(text=t('enemy.count', n=len(rows),
-                                        all=len(enemylevel.all_entries())))
-        self.canvas.yview_moveto(0)
-
-    # -- editing ----------------------------------------------------------
-    def _set(self, num, which, value):
-        lo, hi = self.values.get(num, enemylevel.retail_values()[num])
-        value = max(enemylevel.MIN_LEVEL, min(enemylevel.MAX_LEVEL,
-                                              int(round(value))))
-        if which == 'min':
-            lo = value
-            hi = max(hi, lo)
-        else:
-            hi = value
-            lo = min(lo, hi)
-        self.values[num] = (lo, hi)
-        w = self.rows.get(num)
-        if w:
-            for key, val in (('min', lo), ('max', hi)):
-                scale, sp, var = w[key]
-                if var.get() != str(val):
-                    var.set(str(val))
-                if round(float(scale.get())) != val:
-                    scale.set(val)
-
-    def _from_scale(self, num, which, value):
-        self._set(num, which, float(value))
-
-    def _from_entry(self, num, which):
-        w = self.rows.get(num)
-        if not w:
-            return
-        try:
-            self._set(num, which, int(w[which][2].get()))
-        except ValueError:
-            pass
-
-    # -- presets ----------------------------------------------------------
-    def _types(self):
-        return {num for num, _n, _g in self.filtered()}
-
-    def preset_hero(self):
-        self.values = enemylevel.preset_follow_hero(self.values, self._types())
-        self.build_rows()
-
-    def preset_plus(self):
-        try:
-            plus = int(self.plus.get())
-        except ValueError:
-            return
-        self.values = enemylevel.preset_add(self.values, plus, self._types())
-        self.build_rows()
-
-    def preset_scale(self):
-        try:
-            factor = float(self.factor.get().replace(',', '.'))
-        except ValueError:
-            return
-        self.values = enemylevel.preset_scale(self.values, factor,
-                                              self._types())
-        self.build_rows()
-
-    def preset_retail(self):
-        self.values = enemylevel.preset_retail(self.values, self._types())
-        self.build_rows()
-
-    # -- actions ----------------------------------------------------------
-    def _guard(self):
-        if export.game_running():
-            messagebox.showerror(t('enemy.title'), t('export.running'),
-                                 parent=self.win)
-            return False
-        return True
-
-    def apply_clicked(self):
-        if not self._guard():
-            return
-        try:
-            enemylevel.apply(self.game, self.values, self.log)
-            self._put(t('enemy.done.apply'), 'ok')
-        except Exception as e:           # shown in the log
-            self._put(t('limit.failed', e=e), 'err')
-        self.refresh()
-
-    def remove_clicked(self):
-        if not self._guard():
-            return
-        if not messagebox.askyesno(t('enemy.title'),
-                                   t('enemy.remove.q',
-                                     name=enemylevel.MOD_NAME),
-                                   parent=self.win):
-            return
-        try:
-            enemylevel.remove(self.game, self.log)
-            self.values = {}
-            self._put(t('enemy.done.remove'), 'ok')
-        except Exception as e:           # shown in the log
-            self._put(t('limit.failed', e=e), 'err')
-        self.refresh()
-
-
 class UpdateWindow:
     """A newer release exists: notes, update now, later, skip."""
 
@@ -4180,6 +4025,9 @@ def build_voices(project, game, archive, log):
     lines, skipped = voicebuild.project_lines(project, recorder.voice_path)
     for qid, take in skipped:
         log(('voice_skipped', qid, take))
+    n_tts = sum(1 for ln in lines if ln.get('tts'))
+    if n_tts:
+        log(('voice_placeholders', n_tts))
     partial = ({q.id for q in project.quests}
                if getattr(project, 'partial', False) else None)
     if not lines and not voicebuild.load_record(game)['sets'].get(archive):
@@ -4192,6 +4040,54 @@ def build_voices(project, game, archive, log):
     except Exception as e:           # the dialogs still go out
         log(('voice_failed', str(e)))
         return None
+
+
+def editormaps_dir(project):
+    from . import editormaps
+    return editormaps.levels_dir(project)
+
+
+def recorded_cues(project, game, archive, log):
+    """{take: cue} for an export of the files only (4.5.0): the cues the
+    takes got in the last build of this mod, the game stays untouched.
+    Takes that were not built yet stay without their voice."""
+    from . import recorder, voicebuild
+    lines, _skipped = voicebuild.project_lines(project, recorder.voice_path)
+    if not lines or not game or not voicebuild.available(game):
+        return None
+    built = {(e['take'], e['lector']): e['cue']
+             for e in voicebuild.set_entries(game, archive)}
+    cues, missing = {}, 0
+    for ln in lines:
+        cue = built.get((ln['take'], ln['lector']))
+        if cue:
+            cues[ln['take']] = cue
+        else:
+            missing += 1
+    if missing:
+        log(('voice_notbuilt', missing))
+    return cues or None
+
+
+def write_voice_pack(project, game, archive, target, cues, log):
+    """The voice pack next to the files (files only) or next to the
+    project (4.5.0), for the players who get the mod."""
+    from . import voicebuild
+    folder = target or (os.path.dirname(project.path) if project.path
+                        else None)
+    if not folder:
+        return None
+    path = os.path.join(folder, voicebuild.pack_name(archive))
+    try:
+        man = voicebuild.write_pack(game, archive, path,
+                                    f'TW1 Quest Creator {VERSION}',
+                                    takes=set(cues))
+    except (voicebuild.VoiceError, OSError) as e:
+        log(('voice_packfailed', str(e)))
+        return None
+    log(('voice_pack', path, len(man['lines']),
+         sum(1 for ln in man['lines'] if ln['tts'])))
+    return path
 
 
 def voice_log_text(msg):
@@ -4219,6 +4115,16 @@ def voice_log_text(msg):
         return t('voice.log.failed', err=msg[1]), 'err'
     if kind == 'voice_removed':
         return t('voice.log.removed', n=msg[1]), 'ok'
+    if kind == 'voice_placeholders':
+        return t('voice.log.placeholders', n=msg[1]), 'warn'
+    if kind == 'voice_pack':
+        return t('voice.log.pack', path=msg[1], n=msg[2], tts=msg[3]), 'ok'
+    if kind == 'voice_packfailed':
+        return t('voice.log.packfailed', err=msg[1]), 'warn'
+    if kind == 'voice_notbuilt':
+        return t('voice.log.notbuilt', n=msg[1]), 'warn'
+    if kind == 'voice_nolip':
+        return t('voice.log.nolip', err=msg[1]), 'warn'
     return ' '.join(str(x) for x in msg), None
 
 
@@ -4282,6 +4188,12 @@ class ExportWindow:
             text = t('export.log.removed', inner=msg[1])
         elif kind == 'lnd_sorted':
             text = t('export.log.lndsorted', inner=msg[1])
+        elif kind == 'starter_added':
+            text = t('testrun.log.added', id=msg[1], quest=msg[2])
+            tag = 'warn'
+        elif kind == 'starter_removed':
+            text = t('testrun.log.removed', id=msg[1])
+            tag = 'ok'
         elif kind.startswith('voice_'):
             text, tag = voice_log_text(msg)
         else:

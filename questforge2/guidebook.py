@@ -10,12 +10,85 @@ A separate module and not part of guide.py: guide.py holds the tour and the
 tutorial coach, this is the reference that the "?" marks open.
 """
 
+import os
 import re
 import tkinter as tk
 from tkinter import ttk
 
 from . import data, model, theme
 from .i18n import get_lang, t
+
+_IMAGE = re.compile(r'^!\[([^\]]*)\]\(([\w-]+)\)$')
+_TOUR = re.compile(r'^\[\[tour:(\w+)\]\]$')
+GIF_DIR = ('questforge2', 'assets', 'guide')
+
+
+def gif_path(name):
+    """assets/guide/<lang>/<name>.gif, else the English one; None if
+    neither is there."""
+    for lang in (get_lang(), 'en'):
+        p = data.resource_path(*GIF_DIR, lang, name + '.gif')
+        if os.path.exists(p):
+            return p
+    return None
+
+
+class GifLabel(tk.Label):
+    """An animation of the guide (4.5.0). It plays only while ``visible()``
+    says it is in view, every frame is decoded when it is due - nothing
+    is kept but the frame on screen. Without Pillow it stays the first
+    frame Tk can read."""
+
+    def __init__(self, master, path, visible):
+        super().__init__(master, bd=1, relief='solid', bg=theme.BG,
+                         highlightthickness=0)
+        self.visible = visible
+        self._job = None
+        self._photo = None
+        try:
+            from PIL import Image
+            self._im = Image.open(path)
+        except Exception:                # no Pillow: a still picture
+            self._im = None
+            try:
+                self._photo = tk.PhotoImage(file=path)
+                self.configure(image=self._photo)
+            except tk.TclError:
+                self.configure(text=os.path.basename(path), fg=theme.MUT)
+            return
+        self._show()
+        self._job = self.after(300, self._tick)
+
+    def _show(self):
+        from PIL import ImageTk
+        self._photo = ImageTk.PhotoImage(self._im.convert('RGB'))
+        self.configure(image=self._photo)
+
+    def _tick(self):
+        self._job = None
+        try:
+            if not self.winfo_exists():
+                return
+            delay = 300
+            if self.visible():
+                try:
+                    self._im.seek(self._im.tell() + 1)
+                except EOFError:
+                    self._im.seek(0)
+                self._show()
+                delay = max(40, int(self._im.info.get('duration') or 100))
+            self._job = self.after(delay, self._tick)
+        except (tk.TclError, OSError, ValueError):
+            pass
+
+    def destroy(self):
+        if self._job:
+            try:
+                self.after_cancel(self._job)
+            except tk.TclError:
+                pass
+            self._job = None
+        super().destroy()
 
 
 def _l(de, en):
@@ -548,9 +621,9 @@ Wert hinter der Einheit genau steuert. Das Tool uebernimmt sie von der Vorlage.
 
 ## Zeilen selbst aufnehmen
 
-In der Voice-Cue-Zeile jeder Dialogzeile steht neben **Suchen...** der
-Punkt-Knopf. Klick, Zeile sprechen, derselbe Knopf (jetzt ein Quadrat)
-stoppt; waehrenddessen zeigen Zeit und Pegel darunter, dass etwas ankommt.
+Unter dem Voice-Cue jeder Dialogzeile steht die Zeile **Eigene Stimme**
+mit **TTS**, **Datei** und dem Punkt-Knopf. Punkt klicken, Zeile sprechen,
+derselbe Knopf (jetzt ein Quadrat) stoppt; waehrenddessen zeigen Zeit und Pegel darunter, dass etwas ankommt.
 Liegt eine Aufnahme vor, stehen darunter Laenge, **Abspielen** (Dreieck) und
 loeschen (x); der Punkt nimmt neu auf. Mikrofon und Probeaufnahme stehen
 unter Datei > **Einstellungen**.
@@ -571,8 +644,56 @@ unter Datei > **Einstellungen**.
   der Zeile den neuen Cue (`CUE_<Sprecher>_<Nummer>`). Die Stimmen einer
   Kampagne wie Kira bleiben erhalten. **Datei > Eigene Stimmen aus dem Spiel
   nehmen** setzt die Dateien auf den Stand vor dem ersten Einbau zurueck.
-- Die Stimmen stecken nicht in der Mod-Datei: Wer nur die .wd bekommt, sieht
-  den Untertitel ohne Ton.
+- Die Stimmen stecken nicht in der Mod-Datei. Fuer die Weitergabe schreibt
+  der Export ein Stimmpaket (siehe unten).
+
+## Platzhalterstimmen (Sprachausgabe von Windows)
+
+**TTS** in der Zeile *Eigene Stimme* laesst die Sprachausgabe von Windows
+die Zeile sprechen, **Quest > Platzhalterstimmen** macht das fuer alle
+stummen Zeilen einer Quest oder des ganzen Projekts auf einmal.
+
+- Stimme, Hoehe und Tempo je Sprecher, im Projekt gespeichert. **Probe**
+  spielt die erste Zeile des Sprechers vor. Zur Wahl stehen die Stimmen der
+  Windows-Einstellungen (Zeit und Sprache > Sprachausgabe) und SAPI-Stimmen
+  anderer Anbieter; ein deutsches Windows 11 hat Stefan (maennlich), Katja
+  und Hedda. Verschiedene Hoehen machen aus einer Stimme mehrere Sprecher.
+- Das Ergebnis ist eine Aufnahme wie jede andere, aber als **Platzhalter**
+  markiert: orange in den Eigenschaften und in der Aufnahme-Bibliothek, als
+  Warnung in der Pruefung (F7) und im Export-Log, vermerkt im Stimmpaket.
+  Eine eigene Aufnahme oder Tondatei ersetzt den Platzhalter und nimmt die
+  Markierung weg.
+- Aendert sich der Text danach, gilt der Platzhalter als veraltet: Der
+  Kreispfeil darunter oder das Fenster spricht ihn neu.
+- Unberuehrt bleiben Zeilen mit Originalcue oder eigener Aufnahme und die
+  Auswahlpunkte des Helden (die sind auch im Spiel stumm).
+
+## Stimmen weitergeben (Stimmpaket)
+
+Das Spiel liest Stimmen nur aus `XACT/win`, nicht aus der Mod-Datei. Jeder
+Export mit Stimmen schreibt deshalb ein **Stimmpaket** `<Mod>.tw1voices`
+neben das Projekt (bei **Nur Dateien exportieren** neben die Dateien): die
+kodierten Aufnahmen, die Cue-Namen, nach denen die Dialoge der .wd fragen,
+und die Lippenbewegung.
+
+- Wer die Mod bekommt: .wd in den Mods-Ordner, dann im Quest Creator
+  **Datei > Stimmpaket einbauen...**. Die Cues heissen dort genauso wie beim
+  Autor. Ist ein Name schon belegt (andere Kampagne oder Mod), sagt das
+  Tool es: Diese Zeilen sprechen dann die fremde Aufnahme.
+- **Datei > Eigene Stimmen aus dem Spiel nehmen** nimmt auch eingebaute
+  Pakete wieder heraus.
+- **Nur Dateien exportieren** nimmt die Cues aus dem letzten Einbau.
+  Aufnahmen, die noch nie eingebaut waren, bleiben dort stumm: erst einmal
+  als Mod exportieren.
+
+## Lippenbewegung
+
+Zu jeder eigenen Stimme schreibt der Export einen Eintrag in
+`XACT/win/LipSync/data.lipsync`: Mund zu in den Pausen, offen an lauten
+Stellen, in Schritten von 80 ms. Ohne Eintrag bewegt das Spiel den Mund
+pauschal, auch in Sprechpausen (im Spiel verglichen). Echte Lautbilder wie
+bei den Originalstimmen sind das nicht, die entstehen dort aus einer
+Lautanalyse der Aufnahme.
 
 ## Aufnahmen verwalten und kuerzen
 
@@ -637,8 +758,9 @@ after the unit controls exactly. The tool takes them from the template.
 
 ## Recording lines yourself
 
-In the voice cue row of every dialog line there is a dot button next to
-**Search...**. Click, speak the line, the same button (now a square) stops;
+Below the voice cue of every dialog line is the row **Own voice** with
+**TTS**, **File** and the dot button. Click the dot, speak the line, the same
+button (now a square) stops;
 time and level below show that sound arrives. Once a take exists, its
 length, **Play** (triangle) and delete (x) show below; the dot records again.
 Microphone and test recording are under File > **Settings**.
@@ -658,8 +780,52 @@ Microphone and test recording are under File > **Settings**.
   the line the new cue (`CUE_<speaker>_<number>`). The voices of a campaign
   like Kira stay. **File > Take own voices out of the game** sets the files
   back to how they were before the first build.
-- The voices are not in the mod file: whoever gets only the .wd sees the
-  subtitle without sound.
+- The voices are not in the mod file. For passing the mod on, the export
+  writes a voice pack (see below).
+
+## Placeholder voices (speech synthesis of Windows)
+
+**TTS** in the row *Own voice* lets the speech synthesis of Windows speak
+the line, **Quest > Placeholder voices** does it for all silent lines of a
+quest or of the whole project at once.
+
+- Voice, pitch and speed per speaker, kept in the project. **Try** plays
+  the speaker's first line. The voices are those of the Windows settings
+  (Time & language > Speech) and SAPI voices of other vendors; a German
+  Windows 11 has Stefan (male), Katja and Hedda. Different pitches turn one
+  voice into several speakers.
+- The result is a take like any other, but marked as a **placeholder**:
+  orange in the properties and the recording library, a warning in the check
+  (F7) and the export log, noted in the voice pack. An own recording or sound
+  file replaces the placeholder and drops the mark.
+- When the text changes afterwards, the placeholder counts as outdated: the
+  circle arrow below it or the window speaks it again.
+- Lines with an original cue or an own take stay as they are, and so do the
+  hero's choices (they are silent in the game too).
+
+## Passing voices on (voice pack)
+
+The game reads voices from `XACT/win` only, not from the mod file. So every
+export with voices writes a **voice pack** `<mod>.tw1voices` next to the
+project (with **Export files only** next to the files): the encoded takes,
+the cue names the dialogs of the .wd ask for, and the mouth movement.
+
+- Whoever gets the mod: the .wd into the Mods folder, then in the Quest
+  Creator **File > Install a voice pack...**. The cues get the same names as
+  at the author's. If a name is taken already (another campaign or mod), the
+  tool says so: those lines then speak the foreign recording.
+- **File > Take own voices out of the game** takes installed packs out too.
+- **Export files only** takes the cues of the last build. Takes never built
+  in stay silent there: export as a mod once first.
+
+## Mouth movement
+
+For every own voice the export writes an entry into
+`XACT/win/LipSync/data.lipsync`: the mouth closed in pauses, open where it
+is loud, in steps of 80 ms. Without an entry the game moves the mouth all
+the time, pauses included (compared in the game). These are no real
+phonemes like the original voices have; those come from a sound analysis
+of the recording.
 
 ## Managing and trimming recordings
 
@@ -732,6 +898,19 @@ Skelett, Zwerg und mehr). Jede Zeile traegt den Namen, den das Spiel
 zeigt, und dahinter grau den Namen aus dem SDK: `MO_WOLF_04` heisst dort
 "Gray Wolf", im Spiel aber Silberwolf.
 
+Ganz oben im selben Fenster steht seit 4.5.0 **Held: Erfahrung bis zur
+naechsten Stufe**: ein Faktor fuer die Erfahrungspunkte jeder Stufe (1 =
+Original, 2 = doppelt so viele, 0.5 = halb so viele, 0.1 bis 10). Daneben
+stehen Beispiele: Stufe 10 braucht im Original 1014 Punkte, Stufe 30
+14134. Das Spiel fragt dafuer das Skript `RPGCompute`; das Tool schreibt
+es mit dem Faktor in dieselbe Mod (`EnemyLevels.wd`). Eine andere Mod, die
+ebenfalls `RPGCompute.eco` mitbringt (etwa eine Skillpunkte-Mod), meldet
+das Fenster: nur eine der beiden kann gelten.
+
+Erfahrung pro Kill, Lebenspunkte, Schaden, Tempo und Resistenzen je Art
+stehen in derselben Tabelle: Kapitel **Gegnerstufen und Gegnerwerte**, mit
+Animationen und einer Tour im Tool.
+
 ## Parteien
 """, """# Creating and spawning enemies
 
@@ -747,6 +926,19 @@ dwarf and more). Every row carries the name the game shows, with the SDK
 name behind it in grey: `MO_WOLF_04` is a "Gray Wolf" there but a Silver
 Wolf in the game.
 
+At the very top of the same window there is **Hero: experience to the
+next level** since 4.5.0: a factor for the experience points of every
+level (1 = original, 2 = twice as many, 0.5 = half as many, 0.1 to 10).
+Examples stand next to it: level 10 needs 1014 points in the original,
+level 30 14134. The game asks the script `RPGCompute` for them; the tool
+writes it with the factor into the same mod (`EnemyLevels.wd`). Another
+mod shipping `RPGCompute.eco` as well (a skill point mod, say) is named in
+the window: only one of the two can count.
+
+Experience per kill, hit points, damage, speed and resistances per kind
+are in the same table: chapter **Enemy levels and values**, with
+animations and a tour in the tool.
+
 ## Parties
 """) + _table(['Nr.', _l('Name', 'Name'), _l('Verhalten', 'Behaviour')],
               parties) + '\n\n' + _l('Quelle: SDK Enums.ech. ',
@@ -755,6 +947,182 @@ Wolf in the game.
         _table([_l('Vorlage', 'Template'), _l('Typ', 'Type'),
                 _l('Anzahl', 'Count'), _l('Stufe', 'Level'),
                 _l('Partei', 'Party')], tpls)
+
+
+def ch_enemylevels():
+    """Quest > Enemy levels, step by step (4.5.0). ``![text](gNN)`` is an
+    animation from assets/guide, ``[[tour:enemy]]`` the button for the tour
+    (GuideWindow)."""
+    return _l("""# Gegnerstufen und Gegnerwerte
+
+Quest > Gegnerstufen der Welt (Knopf **Gegnerstufen** oben rechts in der
+Zeitleiste) stellt ein, wie stark jede Gegnerart im Spiel ist: Stufen,
+Erfahrung pro Kill, Lebenspunkte, Schaden, Schlagpause, Angriffstempo und
+Resistenzen. Geschrieben wird eine Mod (`EnemyLevels.wd`), das Spiel selbst
+bleibt unveraendert. Die Tour zeigt dieselben Schritte direkt im Fenster.
+
+[[tour:enemy]]
+
+## 1. Fenster oeffnen
+
+Knopf **Gegnerstufen** in der Zeitleiste. Jede Zeile ist eine Gegnerart
+mit dem Namen aus dem Spiel, dahinter grau der Name aus dem SDK. Jede
+Spaltengruppe hat ihre Farbe: Stufen blau, Erfahrung gruen, Lebenspunkte
+rot, Schaden gelb, Schlagpause lila, Schlaege pro Minute cyan, Resistenzen
+orange. Die Maus ueber einer Ueberschrift erklaert die Spalte.
+
+![Das Fenster Gegnerstufen oeffnet sich](g76-enemy-open)
+
+## 2. Arten finden
+
+Namen ins Filterfeld tippen (Wolf, Ork, Skelett) oder oben eine Gruppe
+waehlen. "nur geaenderte" zeigt, was du schon angepasst hast.
+
+![Filter "wolf" zeigt die Woelfe](g77-enemy-filter)
+
+## 3. Einen Wert aendern
+
+Auf eine Zahl klicken, tippen, Enter: `-10` zieht 10 ab, `+25%` erhoeht um
+ein Viertel, `50` setzt 50. Geaenderte Werte werden gold, der Name der Art
+auch. Die Maus ueber einer Zelle zeigt den Originalwert und was die Zahl
+bedeutet.
+
+![Schaden des Wolfs +20, danach Lebenspunkte +50%](g78-enemy-cell)
+
+## 4. Alle gezeigten auf einmal
+
+Die Zeile **Alle gezeigten** unter den Ueberschriften wirkt auf jede Art,
+die der Filter zeigt: Werte eintragen, **Anwenden**. Arten, die dieselben
+Einheiten nutzen (Ork und Ork-Bogenschuetze), aendern sich nur einmal.
+
+![Tiere: +50% Lebenspunkte und +20% Erfahrung fuer alle](g79-enemy-bulk)
+
+## 5. Schaden und Angriffstempo
+
+**SCHADEN** ist der Schaden eines Schlags auf der Maximumstufe, im
+Durchschnitt und vor der Ruestung. Menschen tragen zufaellige Waffen, bei
+ihnen steht der Anteil der Einheit + W. `150%` setzt den Schaden auf das
+Anderthalbfache.
+
+**SCHLAEGE/MIN** ist das Angriffstempo: Schlaganimation plus Pause, Serien
+mit eingerechnet. Die Animationen laufen im Spiel immer mit 30 Bildern je
+Sekunde, weder die par noch ein Skript kann das aendern. Eine Eingabe hier
+stellt deshalb die **SCHLAGPAUSE** um: +25% Tempo heisst kuerzere Pause.
+
+![Tempo des Wolfs +25%, die Schlagpause faellt von 60 auf 40](g80-enemy-speed)
+
+## 6. Erfahrung
+
+Ganz oben der Faktor fuer die Erfahrung, die der Held bis zur naechsten
+Stufe braucht (1 = Original, 2 = doppelt so viel, 0.5 = halb so viel).
+Rechts **Kill-EXP nicht unter 0**: ohne Haken kann ein Gegner mit `-30` bei
+EXP/KILL den Helden Erfahrung kosten (ein Gegner mit 10 EXP zieht dann 20
+ab).
+
+![Faktor 1.5, dann -30 Erfahrung und der Haken aus](g81-enemy-exp)
+
+## 7. Ins Spiel bringen
+
+**Uebernehmen und einschalten** schreibt `EnemyLevels.wd` in den
+Mods-Ordner und schaltet die Mod ein. Die Werte rechnet das Spielskript
+`RPGCompute` im Spiel auf die jeweils gueltige par, sie wirken also auch
+zusammen mit einer Kampagne wie Kira. Sie gelten fuer neu erschaffene
+Gegner: am besten ein neues Spiel beginnen. **Mod entfernen** nimmt alles
+wieder heraus.
+
+Im Spiel noch nicht bestaetigt sind die Werte je Art und die Kill-EXP
+(Hilfe > Ungetestetes testen). Die Erfahrungskurve ist bestaetigt.
+
+## Die Tour
+
+Hilfe > Tour: Gegnerstufen, oder im Fenster "Neu in 4.5.0". Eine kleine
+Karte neben dem Fenster erklaert jeden Schritt, gruene Rahmen zeigen wo.
+
+![Die Tour im Fenster Gegnerstufen](g82-enemy-tour)
+""", """# Enemy levels and values
+
+Quest > Enemy levels of the world (button **Enemy levels** at the top right
+of the timeline) sets how strong every kind of enemy is in the game:
+levels, experience per kill, hit points, damage, strike pause, attack speed
+and resistances. A mod is written (`EnemyLevels.wd`), the game itself stays
+untouched. The tour shows the same steps right in the window.
+
+[[tour:enemy]]
+
+## 1. Open the window
+
+Button **Enemy levels** in the timeline. Every row is a kind of enemy with
+the name the game shows, the SDK name behind it in grey. Every group of
+columns has its colour: levels blue, experience green, hit points red,
+damage yellow, strike pause purple, blows a minute cyan, resistances
+orange. The mouse over a heading explains the column.
+
+![The enemy levels window opens](g76-enemy-open)
+
+## 2. Find kinds
+
+Type a name into the filter (wolf, orc, skeleton) or pick a group on top.
+"changed only" shows what you have changed already.
+
+![Filter "wolf" shows the wolves](g77-enemy-filter)
+
+## 3. Change a value
+
+Click a number, type, Enter: `-10` takes 10 away, `+25%` adds a quarter,
+`50` sets 50. Changed values turn gold, and so does the name of the kind.
+The mouse over a cell shows the original value and what the number means.
+
+![Damage of the wolf +20, then hit points +50%](g78-enemy-cell)
+
+## 4. All shown at once
+
+The row **All shown** under the headings works on every kind the filter
+shows: enter values, **Apply**. Kinds that use the same units (orc and orc
+archer) change only once.
+
+![Animals: +50% hit points and +20% experience for all](g79-enemy-bulk)
+
+## 5. Damage and attack speed
+
+**DAMAGE** is the damage of one blow at the maximum level, on average and
+before armour. People carry random weapons; for them the unit's share
++ W is shown. `150%` sets the damage to one and a half times.
+
+**BLOWS/MIN** is the attack speed: strike animation plus pause, series
+included. The animations always play at 30 frames a second in the game,
+neither the par nor a script can change that. An input here therefore
+changes the **STRIKE PAUSE**: +25% speed means a shorter pause.
+
+![Speed of the wolf +25%, the strike pause drops from 60 to 40](g80-enemy-speed)
+
+## 6. Experience
+
+At the very top the factor for the experience the hero needs to the next
+level (1 = original, 2 = twice as much, 0.5 = half). On the right **Kill
+experience not below 0**: without the tick an enemy with `-30` at EXP/KILL
+can cost the hero experience (an enemy worth 10 then takes 20 away).
+
+![Factor 1.5, then -30 experience and the tick off](g81-enemy-exp)
+
+## 7. Into the game
+
+**Apply and switch on** writes `EnemyLevels.wd` into the Mods folder and
+switches the mod on. The game script `RPGCompute` works the values out in
+the game on whatever par counts, so they also work together with a
+campaign like Kira. They count for newly created enemies: best start a new
+game. **Remove mod** takes everything out again.
+
+Not confirmed in the game yet are the values per kind and the kill
+experience (Help > Test untested things). The experience curve is
+confirmed.
+
+## The tour
+
+Help > Tour: enemy levels, or in the window "New in 4.5.0". A small card
+beside the window explains every step, green frames show where.
+
+![The tour in the enemy levels window](g82-enemy-tour)
+""")
 
 
 def ch_markers():
@@ -1198,6 +1566,21 @@ def ch_build():
    neuen Spiels gelesen und liegt danach im Spielstand.
 6. **Markermethode:** Erscheint nichts, zuerst eine bekannte fruehe Textzeile mit
    `[MOD]` markieren. Sieht man den Marker nicht, laedt die Mod gar nicht.
+7. **Testlauf (F5, Quest > Testlauf im Spiel):** exportiert eine TESTFASSUNG
+   und startet das Spiel. In einem neuen Spiel landet der Held etwa 15
+   Sekunden nach der Anfangssequenz beim Questgeber der offenen Quest, die
+   Quest ist freigeschaltet. Dahinter steckt eine unsichtbare Starter-Quest
+   an der ersten Quest des Spiels und, wo kein Teleport-Marker nahe am
+   Questgeber liegt, ein Marker nur fuer die Testfassung. Geht der Sprung
+   verloren, kommt er nach den zwei Goblins im Tempel. Solange die
+   Testfassung im Spiel liegt, sagt die Statuszeile das; nach dem Spiel
+   bietet das Tool den normalen Export an, der Starter und Marker wieder
+   herausnimmt. Nur in neuen Spielen: Ein Spielstand bringt seine
+   Queststaende mit.
+8. **Pruefung (F7) seit 4.5.0 auch fuer Stimmen:** fehlende Aufnahme,
+   Platzhalter, veralteter Platzhalter, stumme Zeilen in einer sonst
+   vertonten Quest; dazu der Sprung des Helden auf "Geloest" bei "Zurueck
+   zum Auftraggeber" (reisst ihn aus dem Gespraech, "Abgeschlossen" nehmen).
 """, """# Building and testing
 
 1. **Validate:** F7. Errors block the export.
@@ -1211,6 +1594,19 @@ def ch_build():
    starts and lives in the save afterwards.
 6. **Marker method:** if nothing appears, mark a known early text line with
    `[MOD]` first. No marker visible means the mod does not load at all.
+7. **Test run (F5, Quest > Test run in the game):** exports a TEST BUILD and
+   starts the game. In a new game the hero lands next to the giver of the
+   open quest about 15 seconds after the opening scene, the quest unlocked.
+   Behind it: an invisible starter quest hung on the game's first quest and,
+   where no teleport marker lies close to the giver, a marker for the test
+   build only. If the jump gets lost, it comes after the two goblins in the
+   temple. While the test build is in the game the status line says so;
+   after the game the tool offers the normal export, which takes starter and
+   marker out again. New games only: a save brings its own quest states.
+8. **The check (F7) covers voices since 4.5.0:** missing take, placeholder,
+   outdated placeholder, silent lines in an otherwise voiced quest; and a
+   jump of the hero on "Solved" with "Back to giver" (pulls him out of the
+   talk, take "Closed").
 """)
 
 
@@ -1225,6 +1621,8 @@ CHAPTERS = (
     ('links', ('Quest-Verknuepfungen (AOQ)', 'Quest links (AOQ)'), ch_links),
     ('npcs', ('NPCs und Sprecher', 'NPCs and speakers'), ch_npcs),
     ('enemies', ('Gegner', 'Enemies'), ch_enemies),
+    ('enemylevels', ('Gegnerstufen und Gegnerwerte', 'Enemy levels and values'),
+     ch_enemylevels),
     ('markers', ('Marker, Orte, Truhen', 'Markers, locations, chests'),
      ch_markers),
     ('mods', ('Mods einbinden', 'Using mods'), ch_mods),
@@ -1378,7 +1776,10 @@ class GuideWindow:
                                         foreground=theme.GOLD_HI)),
                         ('bold', dict(font=('Segoe UI Semibold', 10))),
                         ('hit', dict(background=theme.SEL,
-                                     foreground=theme.GOLD_HI))):
+                                     foreground=theme.GOLD_HI)),
+                        ('caption', dict(font=theme.FONT_SMALL,
+                                         foreground=theme.MUT,
+                                         spacing3=10))):
             self.txt.tag_configure(tag, **kw)
         body.add(left, weight=0)
         body.add(right, weight=1)
@@ -1420,9 +1821,55 @@ class GuideWindow:
         self.current = cid
         self.txt.configure(state='normal')
         self.txt.delete('1.0', 'end')
-        self._render(self.txt, _prepare(chapter_text(cid)))
+        self._fill(_prepare(chapter_text(cid)))
         self._mark_hits()
         self.txt.configure(state='disabled')
+
+    def _fill(self, text):
+        """Markdown, with animations (``![text](gNN)``) and tour buttons
+        (``[[tour:name]]``) on lines of their own."""
+        part = []
+        for line in text.split('\n'):
+            img, tour = _IMAGE.match(line.strip()), _TOUR.match(line.strip())
+            if not img and not tour:
+                part.append(line)
+                continue
+            if part:
+                self._render(self.txt, '\n'.join(part))
+                part = []
+            if img:
+                self._gif(img.group(2), img.group(1))
+            else:
+                self._tour_button(tour.group(1))
+        if part:
+            self._render(self.txt, '\n'.join(part))
+
+    def _gif(self, name, caption):
+        path = gif_path(name)
+        if path is None:
+            self.txt.insert('end', f'[{caption}]\n', 'inline')
+            return
+        mark = f'gif{len(self.txt.window_names())}'
+        self.txt.mark_set(mark, 'end-1c')
+        self.txt.mark_gravity(mark, 'left')
+        txt = self.txt
+
+        def visible():
+            try:
+                return txt.winfo_viewable() and \
+                    txt.bbox(mark) is not None
+            except tk.TclError:
+                return False
+        self.txt.window_create('end', window=GifLabel(self.txt, path,
+                                                      visible), padx=4, pady=6)
+        self.txt.insert('end', '\n' + caption + '\n', 'caption')
+
+    def _tour_button(self, name):
+        btn = ttk.Button(self.txt, text=t('guidewin.tour'),
+                         style='Accent.TButton',
+                         command=lambda: self.app.start_tour(name))
+        self.txt.window_create('end', window=btn, padx=2, pady=6)
+        self.txt.insert('end', '\n')
 
     def _search(self):
         needle = self.q.get().strip().lower()

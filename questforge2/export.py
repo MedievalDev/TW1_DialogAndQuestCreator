@@ -1073,9 +1073,10 @@ def strip_texts(master, ids):
 
 
 def build_files(project, base_qtx, master_lan, index=None, overlay_name=None,
-                gone=(), prev_overlay=None, voice_cues=None):
+                gone=(), prev_overlay=None, voice_cues=None, test_start=None):
     """{inner path: bytes} for all quests of the project. ``gone``: quest
-    ids of earlier exports the project no longer has."""
+    ids of earlier exports the project no longer has. ``test_start``: the
+    starter of a test build (testrun.plan, 4.5.0)."""
     quests = list(project.quests)
     files = {}
     base_text = base_qtx.decode('latin-1')
@@ -1083,6 +1084,9 @@ def build_files(project, base_qtx, master_lan, index=None, overlay_name=None,
         base_text = strip_quests(base_text.replace('\r\n', '\n'), gone)
         master_lan = strip_texts(master_lan, gone)
     text, _ = patch_qtx(base_text, quests, index)
+    if test_start:
+        from . import testrun
+        text = testrun.add_starter(text, test_start)
     if text != base_text.replace('\r\n', '\n') or any(
             not q.retail for q in quests):
         files[INNER_QTX] = text.encode('latin-1')
@@ -1161,11 +1165,14 @@ def _own_record(project, name):
 
 
 def export_mod(project, game_dir, base_dir, index=None, log=print,
-               files_only=None, register=True, entries=None, voice_cues=None):
+               files_only=None, register=True, entries=None, voice_cues=None,
+               test_start=None, drop_starters=()):
     """Full export (plan 3.1 "Exportieren als Mod"). Returns a summary.
     ``files_only``: write the files into that folder instead of packing.
     ``entries``: {inner: tw1_wd.Entry} map files of mods the quests depend
-    on (mods.dependency_entries)."""
+    on (mods.dependency_entries). ``test_start``: build the test starter in
+    (testrun, 4.5.0); ``drop_starters``: starters of earlier test builds
+    that leave the quest file again."""
     name = archive_name(project)
     archive = os.path.join(game_dir, 'Mods', name)
     base_qtx = master_lan = None
@@ -1194,6 +1201,18 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
         with open(os.path.join(base_dir, 'TwoWorldsQuests.lan'), 'rb') as f:
             master_lan = f.read()
         log(('base', 'lan', 'Language.wd'))
+    # 4.5.0: the starter of a test build goes before anything else looks at
+    # the quest file (it is no quest of the project that "went")
+    drop = {int(n) for n in drop_starters or ()}
+    if test_start:
+        drop.discard(int(test_start['starter']))
+    if drop:
+        text = base_qtx.decode('latin-1').replace('\r\n', '\n')
+        ids = quest_ids(text) & drop
+        if ids:
+            base_qtx = strip_quests(text, ids).encode('latin-1')
+            for qid in sorted(ids):
+                log(('starter_removed', qid))
     # own quests of an earlier export that are gone from the project
     # (renumbered or deleted): everything not in the game's own quest file
     gone = set()
@@ -1205,10 +1224,15 @@ def export_mod(project, game_dir, base_dir, index=None, log=print,
         gone = quest_ids(base_qtx.decode('latin-1')) - retail_ids - own_now
         if getattr(project, 'partial', False):
             gone = set()             # "export this quest" keeps the others
+        if test_start:               # replaced by add_starter, no quest gone
+            gone.discard(int(test_start['starter']))
         for qid in sorted(gone):
             log(('gone', qid))
     files = build_files(project, base_qtx, master_lan, index,
-                        overlay_stem(project), gone, prev_overlay, voice_cues)
+                        overlay_stem(project), gone, prev_overlay, voice_cues,
+                        test_start)
+    if test_start:
+        log(('starter_added', test_start['starter'], test_start['quest']))
     for inner, blob in files.items():
         log(('file', inner, len(blob)))
     files.update(entries or {})

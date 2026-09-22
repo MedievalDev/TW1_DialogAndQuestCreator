@@ -438,7 +438,8 @@ def restore_original(path):
 
 def library(project, quests):
     """Every take of the project: [{'name', 'path', 'exists', 'seconds',
-    'mtime', 'trimmed', 'uses': [(quest, nid, index, text)]}], files on disk
+    'mtime', 'trimmed', 'tts', 'uses': [(quest, nid, index, text)]}] ('tts':
+    a placeholder of the speech synthesis, 4.5.0), files on disk
     and names referenced by lines (missing files included), sorted by name."""
     d = voice_dir(project)
     items = {}
@@ -458,7 +459,11 @@ def library(project, quests):
                     'name': name, 'path': os.path.join(d, name) if d else None,
                     'exists': False, 'uses': []})
                 it['uses'].append((q, nid, i, ln.get('text', '')))
+                # 4.5.0: tts.MARK (not imported: tts imports this module)
+                if ln.get('voice_tts'):
+                    it['tts'] = True
     for it in items.values():
+        it.setdefault('tts', False)
         if it['exists']:
             it['seconds'] = duration(it['path'])
             it['mtime'] = os.path.getmtime(it['path'])

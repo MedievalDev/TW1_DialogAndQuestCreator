@@ -8,6 +8,12 @@ element it talks about. The tour only explains. The tutorial checks the
 state after every step: "Next" stays disabled until the step is done and
 the coach moves on by itself once it is; every step also offers a button
 that does the step for the user.
+
+4.5.0 (Marco 2026-09-22: "im Fenster, wo steht, was neu ist, verlinkst du
+die Guides als Tour im Tool selbst"): WindowTour leads through one tool
+window with a small card beside it and green frames (Marks) on what the
+step is about; TOURS names them for the What's-new window, the Help menu
+and the guide chapters.
 """
 
 import os
@@ -845,6 +851,288 @@ class Coach(ttk.Frame):
         for f, (fx, fy, fw, fh) in zip(self._frames, geo):
             f.place(x=fx, y=fy, width=fw, height=fh)
             f.lift()
+
+
+# ---------------------------------------------------------------------------
+# tours through one window (4.5.0)
+
+CARD_WRAP = 330
+
+
+def _monitor_rect(x, y):
+    """Work area (left, top, right, bottom) of the monitor at a screen
+    point, None off Windows."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [('cbSize', wintypes.DWORD), ('rcMonitor', wintypes.RECT),
+                        ('rcWork', wintypes.RECT), ('dwFlags', wintypes.DWORD)]
+
+        u32 = ctypes.windll.user32
+        u32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+        u32.MonitorFromPoint.restype = wintypes.HANDLE
+        handle = u32.MonitorFromPoint(wintypes.POINT(int(x), int(y)), 2)
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        if handle and u32.GetMonitorInfoW(handle, ctypes.byref(info)):
+            r = info.rcWork
+            return r.left, r.top, r.right, r.bottom
+    except (AttributeError, OSError, ValueError):
+        pass
+    return None
+
+
+def enemy_tour_steps(app):
+    """Quest > Enemy levels, step by step. Every step but the first needs
+    the window; closing it goes back to the first."""
+    from .enemywin import EnemyLevelWindow
+
+    def win():
+        return EnemyLevelWindow.current()
+
+    def top():
+        w = win()
+        return w.win if w else None
+
+    def mark(widget, key=None):
+        return (widget, GREEN, t(key) if key else None)
+
+    def on(fn):
+        """Marks of a step on the open window."""
+        return lambda: fn(win()) if win() else []
+
+    return [
+        {'key': 'etour.open', 'window': top,
+         'check': lambda: win() is not None,
+         'do': app.show_enemy_levels,
+         'marks': lambda: [mark(app.timeline.enemy_btn, 'etour.open.mark')]},
+        {'key': 'etour.colours', 'window': top, 'needs_window': True,
+         'marks': on(lambda w: [mark(w.head)])},
+        {'key': 'etour.filter', 'window': top, 'needs_window': True,
+         'marks': on(lambda w: [mark(w.search_entry, 'etour.filter.mark'),
+                                mark(w.group_cb)])},
+        {'key': 'etour.cell', 'window': top, 'needs_window': True,
+         'marks': on(lambda w: [mark(w.body, 'etour.cell.mark')])},
+        {'key': 'etour.bulk', 'window': top, 'needs_window': True,
+         'marks': on(lambda w: [mark(w.bulk_entries['hp']),
+                                mark(w.bulk_btn)])},
+        {'key': 'etour.speed', 'window': top, 'needs_window': True,
+         # no labels in the bulk row: they would cover the next field
+         'marks': on(lambda w: [mark(w.bulk_entries['dmg']),
+                                mark(w.bulk_entries['speed'])])},
+        {'key': 'etour.exp', 'window': top, 'needs_window': True,
+         'marks': on(lambda w: [mark(w.exp_spin, 'etour.exp.mark'),
+                                mark(w.floor_cb)])},
+        {'key': 'etour.apply', 'window': top, 'needs_window': True,
+         'marks': on(lambda w: [mark(w.btn_apply, 'etour.apply.mark')])},
+        {'key': 'etour.done', 'window': top, 'final': True,
+         'buttons': [('etour.guide', lambda: app.show_guide('enemylevels'))]},
+    ]
+
+
+# name -> (title key, steps(app)); the What's-new window, the Help menu and
+# the guide chapters start them by name
+TOURS = {'enemy': ('etour.name', enemy_tour_steps)}
+
+
+class WindowTour:
+    """A tour through one tool window: a small card beside the window says
+    what the step is about, green frames (Marks) show where. A step is
+    {'key', 'window': fn -> the Toplevel it is about, 'marks': fn,
+    'check'/'do' (like the tutorial), 'needs_window', 'final',
+    'buttons': [(label key, fn)]}."""
+
+    current = None
+
+    @classmethod
+    def start(cls, app, name):
+        if cls.current is not None:
+            cls.current.end()
+        title_key, steps = TOURS[name]
+        cls.current = cls(app, t(title_key), steps(app))
+        return cls.current
+
+    def __init__(self, app, title, steps):
+        self.app, self.title, self.steps = app, title, steps
+        self.i = 0
+        self.marks = Marks()
+        self._job = self._advance = None
+        self._pos = self._master = None
+        self.card = tk.Toplevel(app.root)
+        self.card.title(title)
+        self.card.resizable(False, False)
+        theme.dark_titlebar(self.card)
+        self.card.protocol('WM_DELETE_WINDOW', self.end)
+        self.card.bind('<Escape>', lambda e: self.end())
+        self.body = ttk.Frame(self.card, padding=14)
+        self.body.pack(fill='both', expand=True)
+        self.show()
+
+    def _target(self):
+        fn = self.steps[self.i].get('window')
+        try:
+            w = fn() if fn else None
+            return w if w is not None and w.winfo_exists() else None
+        except tk.TclError:
+            return None
+
+    def show(self):
+        self._cancel()
+        for w in self.body.winfo_children():
+            w.destroy()
+        step = self.steps[self.i]
+        key = step['key']
+        ttk.Label(self.body, text=f'{self.title}  ·  ' + t(
+            'coach.step', i=self.i + 1, n=len(self.steps)),
+            style='Muted.TLabel').pack(anchor='w')
+        ttk.Label(self.body, text=t(key + '.title'), foreground=theme.GOLD,
+                  font=theme.FONT_H2).pack(anchor='w', pady=(4, 2))
+        ttk.Label(self.body, text=t(key + '.text'), wraplength=CARD_WRAP,
+                  justify='left').pack(anchor='w', fill='x')
+        self.state_lbl = None
+        if step.get('check'):
+            self.state_lbl = ttk.Label(self.body, text='',
+                                       wraplength=CARD_WRAP)
+            self.state_lbl.pack(anchor='w', pady=(6, 0))
+        if step.get('do'):
+            ttk.Button(self.body, text=t('coach.doit'), command=self._do
+                       ).pack(anchor='w', pady=(8, 0))
+        for label, fn in step.get('buttons', ()):
+            ttk.Button(self.body, text=t(label), command=fn
+                       ).pack(anchor='w', pady=(8, 0))
+        nav = ttk.Frame(self.body)
+        nav.pack(fill='x', pady=(12, 0))
+        back = ttk.Button(nav, text=t('coach.back'), command=self.back)
+        back.pack(side='left', padx=(0, 6))
+        if self.i == 0:
+            back.state(['disabled'])
+        final = bool(step.get('final'))
+        self.next_btn = ttk.Button(
+            nav, text=t('coach.finish') if final else t('coach.next'),
+            style='Accent.TButton', command=self.end if final else self.next)
+        self.next_btn.pack(side='left')
+        if not final:
+            ttk.Button(nav, text=t('coach.end'), command=self.end
+                       ).pack(side='right')
+        self.marks.clear()
+        self._place()
+        self._poll()
+
+    def _place(self):
+        """Beside the window of the step (right, else left, else over its
+        lower right corner), inside the main window before it is open."""
+        c = self.card
+        c.update_idletasks()
+        cw, ch = c.winfo_reqwidth(), c.winfo_reqheight()
+        target = self._target()
+        ref = target or self.app.root
+        try:
+            rx, ry = ref.winfo_rootx(), ref.winfo_rooty()
+            rw, rh = ref.winfo_width(), ref.winfo_height()
+        except tk.TclError:
+            return
+        mon = _monitor_rect(rx + rw // 2, ry + rh // 2) or (
+            0, 0, c.winfo_screenwidth(), c.winfo_screenheight())
+        if target is None:
+            x, y = rx + rw - cw - 24, ry + 140
+        elif rx + rw + 16 + cw <= mon[2]:
+            x, y = rx + rw + 16, ry
+        elif rx - 16 - cw >= mon[0]:
+            x, y = rx - 16 - cw, ry
+        else:
+            x, y = rx + rw - cw - 24, ry + rh - ch - 24
+        x = max(mon[0], min(x, mon[2] - cw))
+        y = max(mon[1], min(y, mon[3] - ch))
+        if (x, y) != self._pos:
+            c.geometry(f'+{x}+{y}')
+            self._pos = (x, y)
+        master = target or self.app.root
+        if master is not self._master:
+            try:
+                c.transient(master)
+                c.lift()
+            except tk.TclError:
+                pass
+            self._master = master
+
+    def _do(self):
+        try:
+            self.steps[self.i]['do']()
+        finally:
+            self._poll()
+
+    def next(self):
+        if self.i < len(self.steps) - 1:
+            self.i += 1
+            self.show()
+
+    def back(self):
+        if self.i > 0:
+            self.i -= 1
+            self.show()
+
+    def _auto_next(self):
+        self._advance = None
+        step = self.steps[self.i]
+        try:
+            ok = step.get('check') and step['check']()
+        except Exception:
+            ok = False
+        if ok:
+            self.next()
+
+    def _cancel(self):
+        for job in (self._job, self._advance):
+            if job:
+                try:
+                    self.card.after_cancel(job)
+                except tk.TclError:
+                    pass
+        self._job = self._advance = None
+
+    def _poll(self):
+        self._job = None
+        try:
+            if not self.card.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        step = self.steps[self.i]
+        if step.get('needs_window') and self._target() is None:
+            self.i = 0                   # the window was closed: open it again
+            self.show()
+            return
+        try:
+            marks = step['marks']() if step.get('marks') else []
+        except Exception:
+            marks = []
+        self.marks.show(marks)
+        check = step.get('check')
+        if check:
+            try:
+                ok = bool(check())
+            except Exception:
+                ok = False
+            self.state_lbl.configure(
+                text=t('coach.done') if ok else t('coach.open'),
+                foreground=theme.OK if ok else theme.MUT)
+            self.next_btn.state(['!disabled'] if ok else ['disabled'])
+            if ok and self._advance is None:
+                self._advance = self.card.after(700, self._auto_next)
+        self._place()
+        self._job = self.card.after(POLL_MS // 2, self._poll)
+
+    def end(self):
+        self._cancel()
+        self.marks.clear()
+        try:
+            self.card.destroy()
+        except tk.TclError:
+            pass
+        if WindowTour.current is self:
+            WindowTour.current = None
 
 
 # ---------------------------------------------------------------------------

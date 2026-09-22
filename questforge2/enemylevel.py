@@ -18,6 +18,10 @@ campaign) and ``TwoWorldsEnemies16.eco`` (the 1.6 and network path).
 
 Only newly created enemies get the new levels, so a new game is needed; units
 already in a save keep what they had.
+
+4.5.0: the same mod can carry ``RPGCompute.eco`` (rpgcompute.py) with the
+hero's experience curve times a factor (expcurve.py) and the values of the
+enemies per unit (enemystats.py).
 """
 
 import os
@@ -340,13 +344,15 @@ def patch_body(body, values):
 # archive with both scripts
 
 def build_mod_archive(out_path, blobs):
-    """blobs: [(inner path, body, resource name)] -> one WD archive with a
-    fresh GUID per entry."""
+    """blobs: [(inner path, body, resource name[, class id])] -> one WD
+    archive with a fresh GUID per entry (class id 4 unless given: the enemy
+    scripts; RPGCompute has 25)."""
     import random
     head = zlib.compress(questlimit.WD_MAGIC + random.randbytes(16))
     parts, dir_rows, offset = [head], [], len(head)
     guids = {}
-    for inner, body, res in blobs:
+    for inner, body, res, *rest in blobs:
+        cid = rest[0] if rest else questlimit.ENTRY_ID
         data = zlib.compress(body)
         parts.append(data)
         guid = random.randbytes(16)
@@ -355,7 +361,7 @@ def build_mod_archive(out_path, blobs):
         row += struct.pack('<BIII', questlimit.ENTRY_FLAGS, offset, len(data),
                            len(body))
         row += bytes([len(res)]) + res
-        row += struct.pack('<I', questlimit.ENTRY_ID)
+        row += struct.pack('<I', cid)
         row += guid
         dir_rows.append(row)
         offset += len(data)
@@ -373,6 +379,9 @@ def build_mod_archive(out_path, blobs):
 # ---------------------------------------------------------------------------
 # state
 
+_BASE_CACHE = {}         # the parsed par values, per archive and date
+
+
 class State:
     """Where the enemy scripts come from and which levels they carry."""
 
@@ -387,6 +396,14 @@ class State:
         self.values = {}         # what the game will use
         self.mod_values = {}
         self.others = []         # other mods shipping an enemy script
+        self.exp_percent = 100   # hero experience curve the game will use
+        self.mod_exp = None      # the percent in our mod (None: not in it)
+        self.exp_others = []     # other mods shipping RPGCompute.eco
+        self.stats = {}          # {unit: {field: value}} of the mod
+        self.floor = True        # a kill is worth at least 0
+        self.base = {}           # {unit: {stat: par value}} for the window
+        self.base_label = None
+        self.base_error = None
         self.error = None
         if game:
             self.read()
@@ -427,8 +444,23 @@ class State:
                         eco_body(wd_read_file(self.mod_path, e)))
             except Exception:
                 self.mod_values = {}
+        if self.mod_present:
+            try:
+                from . import rpgcompute
+                ents = {e['path']: e for e in wd_entries(self.mod_path)}
+                e = ents.get(rpgcompute.INNER)
+                got = rpgcompute.read(eco_body(wd_read_file(
+                    self.mod_path, e))) if e else None
+                if got:
+                    self.mod_exp, stats, floor = got
+                    if self.mod_active:
+                        self.stats, self.floor = stats, floor
+            except Exception:
+                self.mod_exp = None
         if self.mod_present and self.mod_active and self.mod_values:
             self.values = dict(self.mod_values)
+        if self.mod_present and self.mod_active and self.mod_exp:
+            self.exp_percent = self.mod_exp
         if not os.path.isdir(self.mods_dir):
             return
         for f in sorted(os.listdir(self.mods_dir)):
@@ -441,6 +473,26 @@ class State:
                 continue
             if paths & set(INNER):
                 self.others.append((f, bool(switches.get(f, 0))))
+            if 'Scripts\\RPGCompute\\RPGCompute.eco' in paths:
+                self.exp_others.append((f, bool(switches.get(f, 0))))
+
+    def read_base(self):
+        """The par values of the units, for showing what edits come to."""
+        from . import enemystats
+        try:
+            src = enemystats.base_par_source(self.game, own=MOD_NAME)
+            if src is None:
+                self.base_error = 'nopar'
+                return
+            key = (src[0], src[1]['offset'], os.path.getmtime(src[0]))
+            if _BASE_CACHE.get('key') != key:
+                par = enemystats.load_par(src[0], src[1])
+                _BASE_CACHE.update(key=key, base=enemystats.read_base(
+                    par, enemystats.units()))
+            self.base = _BASE_CACHE['base']
+            self.base_label = src[2]
+        except Exception as e:           # shown in the window
+            self.base_error = str(e)
 
     def retail_body(self, inner):
         arc, e = self.sources[inner]
@@ -451,12 +503,28 @@ class State:
         return self.values != retail_values()
 
 
-def apply(game, values, log=print):
-    """Write Mods\\EnemyLevels.wd with the given {type: (min, max)}."""
+def apply(game, values, log=print, exp_percent=100, stats=None,
+          floor=True):
+    """Write Mods\\EnemyLevels.wd with the given {type: (min, max)} and,
+    when something differs from the game, RPGCompute.eco with the hero's
+    experience curve and {unit: {field: value}} of the enemies."""
     st = State(game)
     if st.error:
         raise RuntimeError(st.error)
     blobs = []
+    stats = {u: v for u, v in (stats or {}).items() if v}
+    rpg = int(exp_percent) != 100 or bool(stats)
+    if rpg:
+        from . import expcurve, rpgcompute
+        why = rpgcompute.usable(game)
+        if why != 'ok':
+            raise RuntimeError('rpgcompute: ' + why)
+        blobs.append(rpgcompute.blob(expcurve.clamp(exp_percent), stats,
+                                     floor))
+        if int(exp_percent) != 100:
+            log(('expcurve', expcurve.clamp(exp_percent)))
+        if stats:
+            log(('enemystats', len(stats), bool(floor)))
     for inner in INNER:
         if inner not in st.sources:
             continue
@@ -480,12 +548,13 @@ def apply(game, values, log=print):
     tmp = st.mod_path + '.neu'
     guids = build_mod_archive(tmp, blobs)
     back = {e['path']: e for e in wd_entries(tmp)}
-    for inner, body, res in blobs:
+    for inner, body, res, *rest in blobs:
         e = back.get(inner)
+        cid = rest[0] if rest else questlimit.ENTRY_ID
         if (e is None or eco_body(wd_read_file(tmp, e)) != body
                 or e['guid'] != guids[inner] or e['res'] != res
                 or e['flags'] != questlimit.ENTRY_FLAGS
-                or e['id'] != questlimit.ENTRY_ID):
+                or e['id'] != cid):
             os.remove(tmp)
             raise RuntimeError('archive differs after writing')
     os.replace(tmp, st.mod_path)
@@ -495,6 +564,10 @@ def apply(game, values, log=print):
     for name, active in st.others:
         if active:
             log(('otheractive', name))
+    if rpg:
+        for name, active in st.exp_others:
+            if active:
+                log(('expother', name))
     return len(blobs)
 
 

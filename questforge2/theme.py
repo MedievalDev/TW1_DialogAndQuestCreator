@@ -18,6 +18,7 @@ GOLD_HI = '#e3b45c'
 SEL = '#3a3122'
 OK = '#43b563'
 ERR = '#e06c60'
+WARN = '#e0a050'             # placeholders, warnings in logs
 CANVAS_BG = '#0f0d0a'
 GRID = '#1a1611'
 
@@ -29,6 +30,17 @@ PLAYER_COLOR = '#6ca0e0'
 ENTRY_COLOR = '#43b563'
 COMMENT_COLOR = '#4a453d'
 DIM = '#5c564c'
+# column groups of the enemy table (enemywin.py, Marco 2026-09-22: level
+# blue, EXP green, HP red, damage yellow, strike pause purple, attack speed
+# cyan, protections orange, black lines between the columns)
+ENEMY_LEVEL = '#4f8fdc'
+ENEMY_EXP = '#4cb35a'
+ENEMY_HP = '#dd4f45'
+ENEMY_DAMAGE = '#e0c83c'
+ENEMY_STRIKE = '#a56ad6'
+ENEMY_SPEED = '#27c3d6'
+ENEMY_PROTECT = '#e38b3a'
+ENEMY_SEPARATOR = '#000000'
 SCROLL_THUMB = '#7a7061'     # scrollbar thumb, readable on BG
 # light blue is reserved for content from mods (update 5b): frames, dots,
 # list entries. The journal group palette below keeps away from it.
@@ -290,6 +302,42 @@ class Menu(tk.Menu):
         self.entryconfigure('end', foreground=GOLD, activeforeground=GOLD)
 
 
+TIP_WIDTH = 440          # widest a tooltip gets before it wraps
+
+
+def _tip_window(host, text):
+    """An undecorated tooltip window with its label."""
+    tip = tk.Toplevel(host)
+    tip.wm_overrideredirect(True)
+    tip.attributes('-topmost', True)
+    label = tk.Label(tip, text=text, bg=PANEL, fg=INK, bd=1, relief='solid',
+                     justify='left', padx=6, pady=3, font=FONT_SMALL)
+    label.pack()
+    return tip, label
+
+
+def _place_tip(tip, label, host, x_root, y_root, dx=14, dy=14):
+    """Wrap a tooltip so it never leaves the window of ``host`` (Marco
+    2026-09-22: "die Tooltips nie ueber das Fenster raus, vorher in
+    mehrere Zeilen") and put it beside the mouse: right and below, else
+    left of the window's edge or above the mouse."""
+    try:
+        top = host.winfo_toplevel()
+        left, up = top.winfo_rootx(), top.winfo_rooty()
+        right, down = left + top.winfo_width(), up + top.winfo_height()
+    except tk.TclError:
+        return
+    width = max(160, min(TIP_WIDTH, right - left - 8))
+    label.configure(wraplength=width - 16)
+    tip.update_idletasks()
+    w, h = tip.winfo_reqwidth(), tip.winfo_reqheight()
+    x = max(left + 4, min(x_root + dx, right - 4 - w))
+    y = y_root + dy
+    if y + h > down - 4:
+        y = max(up + 4, y_root - dy - h)
+    tip.wm_geometry(f'+{x}+{y}')
+
+
 class FloatTip:
     """A tooltip that follows the mouse over parts of one widget (canvas
     items, list rows); the caller decides the text."""
@@ -297,6 +345,7 @@ class FloatTip:
     def __init__(self, master):
         self.master = master
         self.tip = None
+        self.label = None
         self.text = None
 
     def show(self, text, x_root, y_root):
@@ -304,16 +353,12 @@ class FloatTip:
             self.hide()
             return
         if self.tip is not None and text == self.text:
-            self.tip.wm_geometry(f'+{x_root + 14}+{y_root + 14}')
+            _place_tip(self.tip, self.label, self.master, x_root, y_root)
             return
         self.hide()
         self.text = text
-        self.tip = tk.Toplevel(self.master)
-        self.tip.wm_overrideredirect(True)
-        self.tip.attributes('-topmost', True)
-        tk.Label(self.tip, text=text, bg=PANEL, fg=INK, bd=1, relief='solid',
-                 justify='left', padx=6, pady=3, font=FONT_SMALL).pack()
-        self.tip.wm_geometry(f'+{x_root + 14}+{y_root + 14}')
+        self.tip, self.label = _tip_window(self.master, text)
+        _place_tip(self.tip, self.label, self.master, x_root, y_root)
 
     def hide(self):
         if self.tip is not None:
@@ -322,6 +367,7 @@ class FloatTip:
             except tk.TclError:
                 pass
         self.tip = None
+        self.label = None
         self.text = None
 
 
@@ -365,10 +411,15 @@ class MenuTips:
         tip.update_idletasks()
         w, h = tip.winfo_reqwidth(), tip.winfo_reqheight()
         left, _top, right, _bottom = rect
+        # inside the program's window, like every tooltip (_place_tip)
+        win = self.float.master.winfo_toplevel()
+        wl, wt = win.winfo_rootx(), win.winfo_rooty()
+        wr, wb = wl + win.winfo_width(), wt + win.winfo_height()
         tx = right + 4
-        if tx + w > tip.winfo_screenwidth():
-            tx = max(0, left - 4 - w)
-        ty = min(max(0, y - 10), tip.winfo_screenheight() - h)
+        if tx + w > wr - 4:
+            tx = left - 4 - w
+        tx = max(wl + 4, min(tx, wr - 4 - w))
+        ty = max(wt + 4, min(y - 10, wb - 4 - h))
         tip.wm_geometry(f'+{tx}+{ty}')
 
     def hide(self):
@@ -439,13 +490,9 @@ class Tooltip:
     def _show(self, ev):
         if self.tip or not self.text:
             return
-        self.tip = tk.Toplevel(self.widget)
-        self.tip.wm_overrideredirect(True)
-        self.tip.attributes('-topmost', True)
-        tk.Label(self.tip, text=self.text, bg=PANEL, fg=INK, bd=1,
-                 relief='solid', justify='left', padx=6, pady=3,
-                 font=FONT_SMALL).pack()
-        self.tip.wm_geometry(f'+{ev.x_root + 14}+{ev.y_root + 12}')
+        self.tip, label = _tip_window(self.widget, self.text)
+        _place_tip(self.tip, label, self.widget, ev.x_root, ev.y_root,
+                   dy=12)
 
     def _hide(self, ev=None):
         if self.tip:

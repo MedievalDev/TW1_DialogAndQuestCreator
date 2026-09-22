@@ -13,7 +13,6 @@ __pycache__/
 questforge_config.json
 
 # Broken/superseded — kept locally only
-tw1_par.py
 tw1-quest-modding/archive_build_smoketest.py.txt
 
 # Local story bible + campaign implementation - not for the public repo

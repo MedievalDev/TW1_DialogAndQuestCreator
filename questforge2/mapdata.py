@@ -24,6 +24,7 @@ What is proven and where it comes from:
   ``MARKER_TRAP*``), ``TwoWorldsTeleports.ec`` (``MARKER_TELEPORT_STATIC``).
 """
 
+import functools
 import hashlib
 import json
 import os
@@ -113,7 +114,10 @@ def lab(colour):
     return 116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))
 
 
+@functools.lru_cache(maxsize=None)
 def group_of(name):
+    # asked for every one of about 20000 points, of some 130 names (4.5.0:
+    # without the cache it was a third of the time the map took to open)
     for key, _src, names, prefixes in MARKER_GROUPS:
         if name in names or any(name.startswith(p) for p in prefixes):
             return key

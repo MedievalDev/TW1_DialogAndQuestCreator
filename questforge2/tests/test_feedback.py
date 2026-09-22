@@ -263,6 +263,68 @@ class Keys(unittest.TestCase):
         self.assertEqual(validate.guide_ref(''), 'trouble')
 
 
+class News(unittest.TestCase):
+    """What's new with tours and guide chapters (4.5.0, Marco 2026-09-22:
+    "im Fenster, wo steht, was neu ist, verlinkst du die Guides als Tour")."""
+
+    def test_versions(self):
+        now = feedbackwin.news_since(None)
+        self.assertEqual(now, list(feedbackwin.NEWS.get(VERSION, ())))
+        self.assertEqual(feedbackwin.news_since(VERSION), [])
+        self.assertEqual(feedbackwin.news_since('4.4.0'),
+                         list(feedbackwin.NEWS['4.5.0']))
+
+    def test_links_and_texts(self):
+        from questforge2 import guide, guidebook
+        chapters = {c[0] for c in guidebook.CHAPTERS}
+        try:
+            for lang in ('de', 'en'):
+                i18n.set_lang(lang)
+                for items in feedbackwin.NEWS.values():
+                    for nid, tour, chapter in items:
+                        for part in ('title', 'text'):
+                            key = f'news.{nid}.{part}'
+                            self.assertNotEqual(i18n.t(key), key)
+                        self.assertTrue(tour is None or tour in guide.TOURS)
+                        self.assertIn(chapter, chapters)
+                import types
+                app = types.SimpleNamespace(show_enemy_levels=None,
+                                            show_guide=None, timeline=None)
+                for name, (title, steps) in guide.TOURS.items():
+                    self.assertNotEqual(i18n.t(title), title)
+                    for st in steps(app):
+                        for part in ('title', 'text'):
+                            key = st['key'] + '.' + part
+                            self.assertNotEqual(i18n.t(key), key)
+                    self.assertTrue(steps(app)[-1].get('final'))
+        finally:
+            i18n.set_lang('de')
+
+    def test_guide_animations_and_tours(self):
+        """Every ``![...](gNN)`` of the guide has its GIF in both languages,
+        every ``[[tour:x]]`` is a tour."""
+        import os
+        from questforge2 import data, guide, guidebook
+        seen = 0
+        try:
+            for lang in ('de', 'en'):
+                i18n.set_lang(lang)
+                for _cid, _titles, fn in guidebook.CHAPTERS:
+                    for line in fn().split(chr(10)):
+                        m = guidebook._IMAGE.match(line.strip())
+                        if m:
+                            seen += 1
+                            p = data.resource_path(*guidebook.GIF_DIR, lang,
+                                                   m.group(2) + '.gif')
+                            self.assertTrue(os.path.exists(p), p)
+                        m = guidebook._TOUR.match(line.strip())
+                        if m:
+                            self.assertIn(m.group(1), guide.TOURS)
+        finally:
+            i18n.set_lang('de')
+        self.assertGreaterEqual(seen, 14)
+
+
 class Session(unittest.TestCase):
     def test_exes(self):
         import shutil

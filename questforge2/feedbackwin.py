@@ -11,8 +11,11 @@
 - ``BugWindow``: "Report a bug" of the error windows. The public title is
   made from the error, the user's words stay private.
 - ``IssuesWindow``: what has been reported for this tool.
-- ``WhatsNewWindow``: first start of a new version with untested news: the
-  button "I will test this".
+- ``WhatsNewWindow``: first start of a new version: what it brings (NEWS),
+  each with "Start tour" (guide.TOURS) and "Read in the guide", then the
+  untested things with "I will test this" (4.5.0, Marco 2026-09-22: "im
+  Fenster, wo steht, was neu ist, verlinkst du die Guides als Tour im Tool
+  selbst"). Help > What's new opens it again.
 """
 
 import json
@@ -692,8 +695,34 @@ class IssuesWindow:
                 i.get('version'), i.get('count'), i.get('fixed_in') or ''))
 
 
+# What every version brings: (id, tour in guide.TOURS or None, chapter of
+# the guide); the texts are news.<id>.title / .text.
+NEWS = {
+    '4.5.0': (('enemystats', 'enemy', 'enemylevels'),
+              ('expcurve', 'enemy', 'enemylevels'),
+              ('placeholders', None, 'npcs'),
+              ('voicepack', None, 'npcs'),
+              ('testrun', None, 'build')),
+}
+
+
+def news_since(seen):
+    """The news of the versions after ``seen`` up to this one; with no
+    version seen (first start) those of this one."""
+    now = _vkey(VERSION)
+    out = []
+    for version, items in NEWS.items():
+        v = _vkey(version)
+        if v > now or (seen is None and v != now) or \
+                (seen is not None and v <= _vkey(seen)):
+            continue
+        out.extend(items)
+    return out
+
+
 class WhatsNewWindow:
-    """First start of a new version that brings untested things."""
+    """First start of a new version: its news with tour and guide, and the
+    untested things."""
 
     @classmethod
     def maybe(cls, app):
@@ -707,22 +736,61 @@ class WhatsNewWindow:
         app.cfg.save()
         fresh = [x for x in app.feedback.untested()
                  if first_run or _vkey(x['since']) > _vkey(seen)]
-        return cls(app, fresh) if fresh else None
+        news = news_since(None if first_run else seen)
+        return cls(app, fresh, news) if fresh or news else None
 
-    def __init__(self, app, tests):
+    @classmethod
+    def show_current(cls, app):
+        """Help > What's new: this version's news and its untested things."""
+        tests = [x for x in app.feedback.untested()
+                 if _vkey(x['since']) == _vkey(VERSION)]
+        return cls(app, tests, news_since(None))
+
+    def __init__(self, app, tests, news=()):
+        self.app = app
         self.win = tk.Toplevel(app.root)
         self.win.title(t('news.title', version=VERSION))
-        self.win.geometry('640x420')
+        self.win.minsize(640, 200)
         self.win.transient(app.root)
         theme.dark_titlebar(self.win)
         f = ttk.Frame(self.win, padding=16)
         f.pack(fill='both', expand=True)
-        ttk.Label(f, text=t('news.head'), style='Brand.TLabel'
-                  ).pack(anchor='w')
-        ttk.Label(f, text=t('news.sub'), style='Muted.TLabel', wraplength=600,
-                  justify='left').pack(anchor='w', pady=(2, 10))
         ttk.Button(f, text=t('close'), command=self.win.destroy
-                   ).pack(side='bottom', anchor='e', pady=(8, 0))
+                   ).pack(side='bottom', anchor='e', pady=(10, 0))
+        if news:
+            ttk.Label(f, text=t('news.new.head', version=VERSION),
+                      style='Brand.TLabel').pack(anchor='w')
+            ttk.Label(f, text=t('news.new.sub'), style='Muted.TLabel',
+                      wraplength=640, justify='left'
+                      ).pack(anchor='w', pady=(2, 8))
+            for nid, tour, chapter in news:
+                row = ttk.Frame(f)
+                row.pack(fill='x', pady=4)
+                btns = ttk.Frame(row)
+                btns.pack(side='right', anchor='n')
+                if tour:
+                    ttk.Button(btns, text=t('news.tour'),
+                               style='Accent.TButton',
+                               command=lambda n=tour: self._tour(n)
+                               ).pack(side='left', padx=(6, 0))
+                if chapter:
+                    ttk.Button(btns, text=t('news.guide'),
+                               command=lambda c=chapter: app.show_guide(c)
+                               ).pack(side='left', padx=(6, 0))
+                text = ttk.Frame(row)
+                text.pack(side='left', fill='x', expand=True)
+                ttk.Label(text, text=t(f'news.{nid}.title'),
+                          font=theme.FONT_BOLD, wraplength=420,
+                          justify='left').pack(anchor='w')
+                ttk.Label(text, text=t(f'news.{nid}.text'),
+                          style='Muted.TLabel', wraplength=420,
+                          justify='left').pack(anchor='w')
+        if not tests:
+            return
+        ttk.Label(f, text=t('news.head'), style='Brand.TLabel'
+                  ).pack(anchor='w', pady=(16 if news else 0, 0))
+        ttk.Label(f, text=t('news.sub'), style='Muted.TLabel', wraplength=640,
+                  justify='left').pack(anchor='w', pady=(2, 10))
         for x in tests[:6]:
             row = ttk.Frame(f)
             row.pack(fill='x', pady=3)
@@ -732,3 +800,7 @@ class WhatsNewWindow:
                        ).pack(side='right')
             ttk.Label(row, text=f"{_loc(x['title'])}  ({x['since']})",
                       wraplength=440, justify='left').pack(side='left')
+
+    def _tour(self, name):
+        self.win.destroy()
+        self.app.start_tour(name)

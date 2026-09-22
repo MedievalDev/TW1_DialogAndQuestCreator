@@ -7,14 +7,17 @@
   line; play, jump to the line, trim, delete unused files.
 - TrimWindow: waveform with a start and an end handle, play the selection,
   detect the silence, apply (the untrimmed take stays in ``_original``).
+- PlaceholderWindow (4.5.0): placeholder voices for the silent lines from
+  the speech synthesis of Windows (tts.py), marked as placeholders.
 """
 
 import os
+import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import recorder, theme, voicebank
-from .i18n import t
+from .i18n import get_lang, t
 
 
 def original_voices(app):
@@ -192,6 +195,443 @@ class VoiceFinder:
         recorder.stop_playing()
         cue, text = self.rows[sel[0]]
         self.result = (cue, text if self.take_text.get() else None)
+        self.win.destroy()
+
+
+# -- placeholder voices (4.5.0) -------------------------------------------------
+
+class PlaceholderWindow:
+    """Placeholder voices for the silent lines: voice, pitch and speed per
+    speaker (kept in the project as ``tts_voices``), then one run of the
+    speech synthesis for all lines of the scope. Modal."""
+
+    def __init__(self, app):
+        from . import tts
+        self.app = app
+        self.tts = tts
+        self.voices = []
+        self.conf = {}                   # speaker key -> settings shown
+        self.rows = []
+        self.running = False
+        self.cancel = None
+        self.progress = (0, 1)
+        p = app.project
+        self.settings = p.extra.setdefault('tts_voices', {})
+        in_project = app.quest is not None and app.quest in p.quests
+        self.win = tk.Toplevel(app.root)
+        self.win.title(t('tts.title'))
+        self.win.transient(app.root)
+        self.win.geometry('840x580')
+        self.win.minsize(720, 440)
+        theme.dark_titlebar(self.win)
+        f = ttk.Frame(self.win, padding=12)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text=t('tts.head'), style='Brand.TLabel').pack(anchor='w')
+        ttk.Label(f, text=t('tts.sub'), style='Muted.TLabel', wraplength=800,
+                  justify='left').pack(anchor='w', pady=(2, 8))
+        top = ttk.Frame(f)
+        top.pack(fill='x')
+        ttk.Label(top, text=t('tts.scope')).pack(side='left')
+        self.scope = tk.StringVar(value='quest' if in_project else 'all')
+        rq = ttk.Radiobutton(top, text=t('tts.scope.quest',
+                                         id=app.quest.id if in_project else '-'),
+                             value='quest', variable=self.scope,
+                             command=self._fill)
+        rq.pack(side='left', padx=(6, 0))
+        if not in_project:
+            rq.state(['disabled'])
+        ttk.Radiobutton(top, text=t('tts.scope.all'), value='all',
+                        variable=self.scope, command=self._fill
+                        ).pack(side='left', padx=(12, 0))
+        outer = ttk.Frame(f)
+        outer.pack(fill='both', expand=True, pady=(10, 6))
+        canvas = tk.Canvas(outer, bg=theme.BG, highlightthickness=0)
+        sb = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+        canvas.pack(side='left', fill='both', expand=True)
+        self.table = ttk.Frame(canvas)
+        canvas.create_window(0, 0, window=self.table, anchor='nw')
+        self.table.bind('<Configure>', lambda e: canvas.configure(
+            scrollregion=canvas.bbox('all')))
+        self.renew_old = tk.BooleanVar(value=True)
+        self.renew_all = tk.BooleanVar(value=False)
+        ttk.Checkbutton(f, text=t('tts.renew.outdated'),
+                        variable=self.renew_old, command=self._count
+                        ).pack(anchor='w')
+        ttk.Checkbutton(f, text=t('tts.renew.all'), variable=self.renew_all,
+                        command=self._count).pack(anchor='w')
+        self.info = ttk.Label(f, text=t('tts.loading'), wraplength=800,
+                              justify='left')
+        self.info.pack(anchor='w', pady=(8, 0))
+        self.bar = ttk.Progressbar(f, maximum=100)
+        self.bar.pack(fill='x', pady=(6, 0))
+        bottom = ttk.Frame(f)
+        bottom.pack(fill='x', pady=(10, 0))
+        self.close_btn = ttk.Button(bottom, text=t('close'),
+                                    command=self.close)
+        self.close_btn.pack(side='right')
+        self.start_btn = ttk.Button(bottom, text=t('tts.start'),
+                                    style='Accent.TButton',
+                                    command=self.start)
+        self.start_btn.pack(side='right', padx=(0, 6))
+        self.start_btn.state(['disabled'])
+        self.win.protocol('WM_DELETE_WINDOW', self.close)
+        self.win.bind('<Escape>', lambda e: self.close())
+        self._load()
+        self.win.grab_set()
+
+    # -- data -----------------------------------------------------------------
+
+    def _alive(self):
+        try:
+            return bool(self.win.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def _later(self, ms, fn):
+        if self._alive():
+            self.win.after(ms, fn)
+
+    def _load(self):
+        box = {}
+
+        def work():
+            try:
+                box['v'] = self.tts.voices()
+            except Exception as e:           # shown in the window
+                box['err'] = e
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def poll():
+            if th.is_alive():
+                self._later(100, poll)
+                return
+            if not self._alive():
+                return
+            self.voices = box.get('v') or []
+            if not self.voices:
+                self.info.configure(text=t('tts.novoices',
+                                           err=box.get('err') or '-'),
+                                    foreground=theme.ERR)
+                return
+            self._fill()
+        self._later(100, poll)
+
+    def _quests(self):
+        p = self.app.project
+        if self.scope.get() == 'quest' and self.app.quest in p.quests:
+            return [self.app.quest]
+        return list(p.quests)
+
+    def _all_quests(self):
+        app = self.app
+        qs = list(app.project.quests)
+        qs += [q for q in getattr(app, 'mod_quests', {}).values()
+               if q not in qs]
+        return qs
+
+    def _speakers(self, quests):
+        """[(key, label)]: the hero first, then the NPCs as they come."""
+        tts = self.tts
+        seen = {}
+        for q in quests:
+            for node in q.graph.get('nodes', {}).values():
+                if not tts.voiced_node(node) or not any(
+                        tts.clean(ln.get('text'))
+                        for ln in node.get('lines') or []):
+                    continue
+                key = tts.speaker_key(node)
+                if key in seen:
+                    continue
+                if key == tts.HERO:
+                    seen[key] = t('finder.hero')
+                else:
+                    spk = q.speaker(node.get('speaker')) or {}
+                    name = spk.get('name') or ''
+                    seen[key] = f'{name}  (NPC_{key})' if name \
+                        else f'NPC_{key}'
+        pos = {k: i for i, k in enumerate(seen)}
+        order = sorted(seen, key=lambda k: (k != tts.HERO, pos[k]))
+        return [(k, seen[k]) for k in order]
+
+    def _voice_label(self, v):
+        g = v.get('gender')
+        extra = v['lang'] + (', ' + t('tts.' + g) if g in ('male', 'female')
+                             else '')
+        return f"{self.tts.short_name(v)}  ({extra})"
+
+    def _exists(self, line):
+        path = recorder.voice_path(self.app.project, line)
+        return bool(path and os.path.isfile(path))
+
+    def _todo(self):
+        return self.tts.todo(self._quests(), self._exists,
+                             self.renew_old.get(), self.renew_all.get())
+
+    # -- table ----------------------------------------------------------------
+
+    def _fill(self):
+        if not self.voices:
+            return
+        tts = self.tts
+        for w in self.table.winfo_children():
+            w.destroy()
+        self.rows = []
+        speakers = self._speakers(self._quests())
+        keys = [k for k, _ in speakers]
+        have = {k: v for k, v in self.settings.items()}
+        have.update(self.conf)
+        new = tts.defaults(self.voices, get_lang(), keys, have)
+        for k in keys:
+            if k not in self.conf:
+                self.conf[k] = dict(self.settings.get(k) or new[k])
+        labels = [self._voice_label(v) for v in self.voices]
+        for c, key in enumerate(('speaker', 'voice', 'pitch', 'rate', '',
+                                 'lines')):
+            ttk.Label(self.table, text=t('tts.col.' + key) if key else '',
+                      style='Muted.TLabel').grid(row=0, column=c, sticky='w',
+                                                 padx=(0, 10), pady=(0, 4))
+        for r, (key, name) in enumerate(speakers, start=1):
+            conf = self.conf[key]
+            v = tts.find(self.voices, conf.get('voice')) or tts.pick(
+                self.voices, get_lang())
+            conf['voice'] = v['id']
+            ttk.Label(self.table, text=name).grid(row=r, column=0,
+                                                  sticky='w', padx=(0, 10))
+            var = tk.StringVar(value=self._voice_label(v))
+            cb = ttk.Combobox(self.table, textvariable=var, values=labels,
+                              state='readonly', width=34)
+            cb.grid(row=r, column=1, sticky='w', padx=(0, 10), pady=1)
+            pitch = tk.StringVar(value=str(conf.get('pitch', 0)))
+            rate = tk.StringVar(value=str(conf.get('rate', 0)))
+            for c, sv in ((2, pitch), (3, rate)):
+                ttk.Spinbox(self.table, from_=-tts.LIMIT, to=tts.LIMIT,
+                            increment=5, width=6, textvariable=sv
+                            ).grid(row=r, column=c, sticky='w', padx=(0, 10))
+            pb = ttk.Button(self.table, text='▶ ' + t('tts.probe'),
+                            command=lambda k=key: self._probe(k))
+            pb.grid(row=r, column=4, sticky='w', padx=(0, 10))
+            theme.Tooltip(pb, t('tts.probe.tip'))
+            cnt = ttk.Label(self.table, text='', style='Muted.TLabel')
+            cnt.grid(row=r, column=5, sticky='w')
+
+            def changed(*_a, k=key, var=var, pitch=pitch, rate=rate):
+                self._take(k, var, pitch, rate)
+            var.trace_add('write', changed)
+            pitch.trace_add('write', changed)
+            rate.trace_add('write', changed)
+            self.rows.append((key, cnt, pb))
+        self._count()
+
+    def _take(self, key, var, pitch, rate):
+        conf = self.conf[key]
+        labels = [self._voice_label(v) for v in self.voices]
+        if var.get() in labels:
+            conf['voice'] = self.voices[labels.index(var.get())]['id']
+        for name, sv in (('pitch', pitch), ('rate', rate)):
+            try:
+                val = int(float(sv.get()))
+            except ValueError:
+                continue
+            conf[name] = max(-self.tts.LIMIT, min(self.tts.LIMIT, val))
+        if self.settings.get(key) != conf:
+            self.settings[key] = dict(conf)
+            self.app.mark_dirty()
+
+    def _count(self):
+        if not self.voices:
+            return
+        items = self._todo()
+        per = {}
+        kinds = {'new': 0, 'outdated': 0, 'renew': 0}
+        for it in items:
+            per[it[4]] = per.get(it[4], 0) + 1
+            kinds[it[5]] += 1
+        for key, cnt, _pb in self.rows:
+            cnt.configure(text=str(per.get(key, 0)))
+        if items:
+            self.info.configure(text=t('tts.count', n=len(items),
+                                       new=kinds['new'],
+                                       old=kinds['outdated'],
+                                       again=kinds['renew']),
+                                foreground=theme.INK)
+        else:
+            self.info.configure(text=t('tts.count.none'),
+                                foreground=theme.INK)
+        if not self.running:
+            self.start_btn.state(['!disabled'] if items else ['disabled'])
+
+    # -- speaking -------------------------------------------------------------
+
+    def _job(self, key, text):
+        conf = self.conf[key]
+        v = self.tts.find(self.voices, conf.get('voice')) or self.tts.pick(
+            self.voices, get_lang())
+        return {'voice': v, 'pitch': conf.get('pitch', 0),
+                'rate': conf.get('rate', 0), 'text': text}
+
+    def _probe(self, key):
+        if self.running:
+            return
+        text = None
+        for q in self._quests():
+            for node in q.graph.get('nodes', {}).values():
+                if self.tts.voiced_node(node) and \
+                        self.tts.speaker_key(node) == key:
+                    for ln in node.get('lines') or []:
+                        if self.tts.clean(ln.get('text')):
+                            text = ln['text']
+                            break
+                if text:
+                    break
+            if text:
+                break
+        job = self._job(key, text or t('tts.sample'))
+        box = {}
+
+        def work():
+            try:
+                box['res'] = self.tts.synthesize([job])[0]
+            except Exception as e:           # shown in the window
+                box['res'] = (None, str(e))
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+        self.win.configure(cursor='watch')
+
+        def poll():
+            if th.is_alive():
+                self._later(100, poll)
+                return
+            if not self._alive():
+                return
+            self.win.configure(cursor='')
+            pcm, err = box['res']
+            if err:
+                self.info.configure(text=t('tts.error', err=err),
+                                    foreground=theme.ERR)
+                return
+            import tempfile
+            p = os.path.join(tempfile.gettempdir(), 'qf2_tts_probe.wav')
+            recorder.stop_playing()
+            recorder.write_wav(p, pcm)
+            recorder.play(p)
+        self._later(100, poll)
+
+    def start(self):
+        if self.running:
+            if self.cancel is not None:
+                self.cancel.set()
+            return
+        app, tts = self.app, self.tts
+        items = self._todo()
+        if not items:
+            return
+        for key, conf in self.conf.items():
+            if self.settings.get(key) != conf:
+                self.settings[key] = dict(conf)
+                app.mark_dirty()
+        project = app.project
+        quests = self._all_quests()
+        jobs = [self._job(it[4], it[3]['text']) for it in items]
+        names = [recorder.take_name(project, quests, q, nid, i, ln)
+                 for q, nid, i, ln, _k, _r in items]
+        folder = recorder.voice_dir(project)
+        self.cancel = threading.Event()
+        self.running = True
+        app.tts_busy = True
+        self.progress = (0, 2 * len(jobs))
+        self.start_btn.configure(text=t('tts.cancel'))
+        self.close_btn.state(['disabled'])
+        recorder.stop_playing()
+        box = {}
+
+        def progress(done, total):
+            self.progress = (done, 2 * total)
+
+        def work():
+            out = []
+            try:
+                res = tts.synthesize(jobs, progress, self.cancel)
+                for k, ((pcm, err), name) in enumerate(zip(res, names)):
+                    self.progress = (len(jobs) + k + 1, 2 * len(jobs))
+                    if pcm is None:
+                        out.append((False, err))
+                        continue
+                    p = os.path.join(folder, name)
+                    try:
+                        recorder.write_wav(p, pcm)
+                        recorder.drop_original(p)
+                        out.append((True, None))
+                    except OSError as e:
+                        out.append((False, str(e)))
+            except Exception as e:           # shown in the window
+                box['err'] = e
+            box['out'] = out
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def poll():
+            done, total = self.progress
+            try:
+                self.bar.configure(value=100 * done / max(total, 1))
+                self.info.configure(text=t('tts.running',
+                                           done=min(done, len(jobs)),
+                                           total=len(jobs)),
+                                    foreground=theme.INK)
+            except tk.TclError:
+                pass
+            if th.is_alive():
+                self._later(150, poll)
+                return
+            self._finish(items, names, jobs, box)
+        self._later(150, poll)
+
+    def _finish(self, items, names, jobs, box):
+        app, tts = self.app, self.tts
+        self.running = False
+        app.tts_busy = False
+        out = box.get('out') or []
+        ok = [(it, name, job) for it, name, job, res in
+              zip(items, names, jobs, out) if res[0]]
+        errs = [res[1] for res in out if not res[0]]
+        if 'err' in box:
+            errs.insert(0, str(box['err']))
+        cur = app.quest
+        if any(it[0] is cur for it, _n, _j in ok):
+            app.push_undo('voice')
+        for (q, nid, i, ln, key, reason), name, job in ok:
+            ln['voice'] = name
+            tts.mark(ln, job['voice']['id'], job['pitch'], job['rate'])
+        if ok:
+            if any(it[0] is cur for it, _n, _j in ok):
+                app.changed(from_inspector=True)
+            else:
+                app.mark_dirty()
+            app.inspector.refresh()
+            app.voice_library_changed()
+        if not self._alive():
+            return
+        self.start_btn.configure(text=t('tts.start'))
+        self.close_btn.state(['!disabled'])
+        self.bar.configure(value=100 if ok else 0)
+        self._count()
+        text = t('tts.done', n=len(ok))
+        app.set_info(text, 'StatusOk.TLabel')
+        failed = len(items) - len(ok)
+        if failed:
+            text += '  ' + t('tts.failed', n=failed,
+                             err=errs[0] if errs else '-')
+        self.info.configure(text=text, foreground=theme.ERR if failed
+                            else theme.OK)
+
+    def close(self):
+        if self.running:
+            if self.cancel is not None:
+                self.cancel.set()
+            return
+        recorder.stop_playing()
         self.win.destroy()
 
 
@@ -375,6 +815,10 @@ class LibraryPanel(ttk.Frame):
             b.pack(side='left', padx=(0, 3))
             theme.Tooltip(b, t('lib.' + key))
             self.btns[key] = b
+        tb = ttk.Button(row, text=t('tts.short'), width=4,
+                        command=self.placeholders)
+        tb.pack(side='left', padx=(6, 0))
+        theme.Tooltip(tb, t('lib.ttsbtn'))
         self.count = ttk.Label(row, text='', style='PanelMuted.TLabel')
         self.count.pack(side='right')
         box = ttk.Frame(body, style='Panel.TFrame')
@@ -389,6 +833,7 @@ class LibraryPanel(ttk.Frame):
                              anchor='e' if col == 'len' else 'w')
         self.tree.tag_configure('unused', foreground=theme.MUT)
         self.tree.tag_configure('missing', foreground=theme.ERR)
+        self.tree.tag_configure('tts', foreground=theme.WARN)
         sb = ttk.Scrollbar(box, orient='vertical', command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         sb.pack(side='right', fill='y')
@@ -401,6 +846,9 @@ class LibraryPanel(ttk.Frame):
     def hide(self):
         self.app.vars['voices'].set(False)
         self.app._apply_panels()
+
+    def placeholders(self):
+        self.app.show_placeholders()
 
     def schedule(self):
         if self._job:
@@ -434,11 +882,16 @@ class LibraryPanel(ttk.Frame):
             line = uses[0][3] if uses else t('lib.unused')
             if not it['exists']:
                 line = t('lib.missing') + (' ' + uses[0][3] if uses else '')
+            if it.get('tts'):
+                line = t('lib.tts') + ' ' + line
             text = f"{it['name']} {where} {' '.join(u[3] for u in uses)}"
+            if it.get('tts'):
+                text += ' ' + t('lib.tts')
             if q and q not in text.lower():
                 continue
             tag = ('missing',) if not it['exists'] else (
-                ('unused',) if not uses else ())
+                ('unused',) if not uses else (
+                    ('tts',) if it.get('tts') else ()))
             secs = it['seconds']
             self.tree.insert('', 'end', iid=str(i), values=(
                 it['name'] + (' ✂' if it['trimmed'] else ''),

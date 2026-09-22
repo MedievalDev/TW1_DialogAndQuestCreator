@@ -340,6 +340,142 @@
         "de": "Nach der Antwort fehlt die gerade gestellte Frage im Menue, die andere Frage und Annehmen/Ablehnen stehen da.",
         "en": "After the answer the question just asked is gone from the menu, the other question and accept/decline are there."
       }
+    },
+    {
+      "id": "enemy-values-ingame",
+      "since": "4.5.0",
+      "needs_game": true,
+      "title": {
+        "de": "Gegnerwerte je Art: Lebenspunkte und Angriffstempo wirken im Spiel",
+        "en": "Enemy values per kind: hit points and attack speed work in the game"
+      },
+      "why": {
+        "de": "Seit 4.5.0 aendert das Fenster Gegnerstufen Lebenspunkte, Schaden, Schlagpause und Resistenzen je Gegnerart. Das Spielskript RPGCompute rechnet die Werte im Spiel aus; gemessen ist, dass das Skript richtig gebaut wird. Im Spiel hat es noch niemand gesehen.",
+        "en": "Since 4.5.0 the enemy levels window changes hit points, damage, strike pause and resistances per kind of enemy. The game script RPGCompute works the values out in the game; it is measured that the script is built correctly. Nobody has seen it in the game yet."
+      },
+      "steps": {
+        "de": [
+          "Quest > Gegnerstufen der Welt oeffnen, oben die Gruppe \"Gruenhaeute\" waehlen.",
+          "In der Zeile \"Alle gezeigten\" bei MAX HP +400% und bei SCHLAEGE/MIN -50% eintragen, \"Anwenden\" klicken.",
+          "\"Uebernehmen und einschalten\" klicken, das Fenster schliessen.",
+          "Unten auf \"Spiel starten\" klicken und ein NEUES Spiel beginnen.",
+          "Im Tempel am Anfang gegen die Grome (Goblins) kaempfen: Wie viele Treffer braucht einer, wie oft schlagen sie zu?",
+          "Spiel beenden, im Tool \"Mod entfernen\" klicken und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Open Quest > Enemy levels of the world, pick the group \"Greenskins\" on top.",
+          "In the row \"All shown\" enter +400% at MAX HP and -50% at BLOWS/MIN, click \"Apply\".",
+          "Click \"Apply and switch on\", close the window.",
+          "Click \"Start game\" below and begin a NEW game.",
+          "Fight the goblins in the temple at the start: how many hits does one take, how often do they strike?",
+          "Quit the game, click \"Remove mod\" in the tool and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Die Grome halten etwa fuenfmal so viele Treffer aus wie sonst und greifen sichtbar seltener an.",
+        "en": "The goblins take about five times as many hits as usual and attack clearly less often."
+      }
+    },
+    {
+      "id": "enemy-killexp-ingame",
+      "since": "4.5.0",
+      "needs_game": true,
+      "title": {
+        "de": "Kill-EXP je Gegnerart: mehr Erfahrung pro Kill",
+        "en": "Kill experience per kind: more experience per kill"
+      },
+      "why": {
+        "de": "Die Mod legt beim toedlichen Treffer des Helden Erfahrung drauf oder zieht sie ab. Wann das Spiel den Tod meldet, ist aus dem SDK abgeleitet, im Spiel aber noch nicht gesehen.",
+        "en": "On the hero's killing hit the mod adds experience or takes it away. When the game reports the death is worked out from the SDK but not seen in the game yet."
+      },
+      "steps": {
+        "de": [
+          "Quest > Gegnerstufen der Welt oeffnen, oben die Gruppe \"Gruenhaeute\" waehlen.",
+          "In der Zeile \"Alle gezeigten\" bei EXP/KILL +100 eintragen, \"Anwenden\", dann \"Uebernehmen und einschalten\".",
+          "Unten auf \"Spiel starten\" klicken und ein NEUES Spiel beginnen.",
+          "Vor dem ersten Kampf im Tempel die Erfahrung im Charakterfenster (C) ablesen.",
+          "Einen Grom toeten und die Erfahrung wieder ablesen.",
+          "Spiel beenden, im Tool \"Mod entfernen\" klicken und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Open Quest > Enemy levels of the world, pick the group \"Greenskins\" on top.",
+          "In the row \"All shown\" enter +100 at EXP/KILL, \"Apply\", then \"Apply and switch on\".",
+          "Click \"Start game\" below and begin a NEW game.",
+          "Before the first fight in the temple read the experience in the character window (C).",
+          "Kill a goblin and read the experience again.",
+          "Quit the game, click \"Remove mod\" in the tool and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Ein Grom bringt rund 100 Erfahrung mehr als sonst (sonst so viel wie seine Stufe).",
+        "en": "A goblin gives about 100 experience more than usual (usually as much as its level)."
+      }
+    },
+    {
+      "id": "testrun-far-giver",
+      "since": "4.5.0",
+      "needs_game": true,
+      "title": {
+        "de": "Testlauf (F5) mit einem Questgeber weit weg vom Start",
+        "en": "Test run (F5) with a quest giver far from the start"
+      },
+      "why": {
+        "de": "Der Testlauf setzt den Helden in einem neuen Spiel zum Questgeber. Bestaetigt ist das fuer einen Geber im Tempel am Anfang; fuer einen Geber in einer Stadt hat es noch niemand gesehen.",
+        "en": "The test run puts the hero next to the quest giver in a new game. That is confirmed for a giver in the temple at the start; nobody has seen it for a giver in a town yet."
+      },
+      "steps": {
+        "de": [
+          "Eine eigene Quest nehmen (oder eine neue anlegen), deren Questgeber in einer Stadt steht, z. B. in Komorin oder Thalmont.",
+          "Quest > Testlauf im Spiel (F5), im Fenster \"Testlauf\" bestaetigen.",
+          "Im Spiel ein NEUES Spiel beginnen und die Anfangssequenz mit Esc ueberspringen.",
+          "Nach dem Kampf im Tempel etwa 15 Sekunden warten.",
+          "Spiel beenden, den normalen Export machen, den das Tool anbietet, und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Take an own quest (or make a new one) whose quest giver stands in a town, e.g. in Komorin or Thalmont.",
+          "Quest > Test run in the game (F5), confirm in the window \"Test run\".",
+          "Begin a NEW game in the game and skip the intro with Esc.",
+          "After the fight in the temple wait about 15 seconds.",
+          "Quit the game, do the normal export the tool offers and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Der Held steht beim Questgeber in der Stadt, die Quest laesst sich ansprechen.",
+        "en": "The hero stands next to the quest giver in the town, the quest can be talked to."
+      }
+    },
+    {
+      "id": "voicepack-other-pc",
+      "since": "4.5.0",
+      "needs_game": true,
+      "title": {
+        "de": "Stimmpaket auf einem anderen PC einbauen",
+        "en": "Install a voice pack on another PC"
+      },
+      "why": {
+        "de": "Der Export schreibt die eigenen Stimmen als .tw1voices, Datei > Stimmpaket einbauen bringt sie ins Spiel. Getestet ist das auf dem PC, auf dem die Stimmen entstanden sind, nicht auf einem zweiten.",
+        "en": "The export writes the own voices as .tw1voices, File > Install voice pack brings them into the game. That is tested on the PC the voices were made on, not on a second one."
+      },
+      "steps": {
+        "de": [
+          "Eine Mod mit eigenen Stimmen (Aufnahme, Tondatei oder Platzhalter) und ihre Datei <Mod>.tw1voices von jemand anderem bekommen, oder beides selbst auf einen zweiten PC kopieren.",
+          "Die Mod-Datei (.wd) in den Mods-Ordner des Spiels legen und einschalten.",
+          "Im Quest Creator Datei > Stimmpaket einbauen..., die .tw1voices waehlen.",
+          "Spiel starten, NEUES Spiel, die Quest der Mod ansprechen.",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Get a mod with own voices (recording, sound file or placeholder) and its file <Mod>.tw1voices from somebody else, or copy both to a second PC yourself.",
+          "Put the mod file (.wd) into the Mods folder of the game and switch it on.",
+          "In the Quest Creator File > Install voice pack..., pick the .tw1voices.",
+          "Start the game, NEW game, talk to the quest of the mod.",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Die Zeilen sprechen mit den Stimmen aus dem Paket, der Mund bewegt sich mit.",
+        "en": "The lines speak with the voices of the pack, the mouth moves along."
+      }
     }
   ]
 }
