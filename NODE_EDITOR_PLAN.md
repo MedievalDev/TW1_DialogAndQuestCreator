@@ -2208,6 +2208,27 @@ Offen:
       Dazu: Tooltips brechen auf hoechstens 440 px um und bleiben im Fenster
       (theme._place_tip), der Fenstertitel traegt die Version.
 
+94. Alle Multiplayer-Quests auf einmal (Version 4.6.0, Marco 2026-09-25:
+    "automatisches Uebertragen aller MP-Quests in SP mit Random-Markern
+    ueber den begehbaren Bereich der Map, Rand- und Wassertiles direkt
+    ausschliessen"; seine Wahl: Ziel 300 bis 800 m vom Geber, etwa 12
+    Kacheln, Namensliste, Geber passiv).
+    - Gemessen: Meer = Wasserbecken Hoehe 870 (lndmap liest jetzt die
+      Becken, Grenzen in 256er-Zellen); A1-A6, A12, B1, B2, B5 ganz Wasser,
+      B3/B4 85 %; offenes Meer im Begehbarkeitsfeld gesperrt, seichtes
+      Wasser bis 7 % einer Kuestenkachel nicht. Rand A/I/1/12 plus Kacheln
+      mit >= 50 % Wasser raus, 66 bleiben. 120 MP-Quests (90 CLEAR_AREA mit
+      Radius in Metern, 30 BRING_OBJECT), jeder eigener Geber, keine AOQ,
+      keine Namen (66 Frauen CITIZEN_F_*). Mit Grenze 600 197 freie
+      Questnummern, 191 NPC-Nummern.
+    - mpbatch.py: Kachelgruppen (3-4 Nachbarn, Reste haengen an), Zellen
+      2 m begehbar/trocken/16 m Rand/vier Nachbarn frei/groesstes Gebiet,
+      Geber 30 m auseinander, Ziel 300-800 m, weitere Zeilen im Radius der
+      Aufgabe (hoechstens 20 m). placewin.commit_many schreibt alle Karten
+      in einem Durchgang. Probelauf: 120 Quests in 6,7 s gewuerfelt, in
+      1,5 s gebaut, 0 Fehler in der Pruefung, Karten 13 MB. Im Spiel noch
+      nicht gesehen.
+
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 
 Vollstaendiger Verlauf zwischen Marco und Claude, aus dem dieser Plan

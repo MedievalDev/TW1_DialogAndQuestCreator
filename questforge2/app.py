@@ -367,6 +367,9 @@ class App:
         m.add_command(label=t('quest.mpmerge'), command=self.merge_mp_quest,
                       state=self._state(self.project is not None
                                         and self.cfg.get('game_dir')))
+        m.add_command(label=t('quest.mpbatch'), command=self.merge_all_mp,
+                      state=self._state(self.project is not None
+                                        and self.cfg.get('game_dir')))
         m.add_command(label=t('free.menu'), command=self.place_markers,
                       state=self._state(self.project is not None
                                         and self.cfg.get('game_dir')))
@@ -807,6 +810,14 @@ class App:
         """Wizard: multiplayer quest into the single player (mpmerge.py)."""
         from .mpmerge import MpMergeWindow
         MpMergeWindow.show(self, qid)
+
+    def merge_all_mp(self):
+        """All multiplayer quests at once, random markers (mpbatch.py)."""
+        if self.project is None or not self.cfg.get('game_dir') or \
+                self.index is None:
+            return
+        from .mpbatch import BatchWindow
+        BatchWindow.show(self)
 
     def copy_quest_as_new(self, qid_or_quest):
         src = (qid_or_quest if isinstance(qid_or_quest, Quest)

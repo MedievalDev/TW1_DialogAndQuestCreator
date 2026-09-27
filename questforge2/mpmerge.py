@@ -483,6 +483,10 @@ class MpMergeWindow:
         ttk.Button(bottom, text=t('mp.tour'),
                    command=lambda: app.coach.start('mp')
                    ).pack(side='left', padx=(0, 10))
+        # 4.6.0: all of them at once, with random markers (mpbatch.py)
+        ttk.Button(bottom, text=t('quest.mpbatch'),
+                   command=lambda: (self.close(), app.merge_all_mp())
+                   ).pack(side='left', padx=(0, 10))
         self.status = ttk.Label(bottom, text='', style='Muted.TLabel',
                                 wraplength=760, justify='left')
         self.status.pack(side='left', fill='x', expand=True)

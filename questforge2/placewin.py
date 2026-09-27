@@ -786,7 +786,39 @@ def commit(app, q, targets, log=lambda *a: None):
     """Placements into the quest, the checklist and the project, then the
     tiles of the levels folder rebuilt and the mods read again. Returns
     the report of placed.generate."""
-    project = app.project
+    return commit_many(app, [(q, targets)], log)
+
+
+def commit_many(app, pairs, log=lambda *a: None):
+    """commit for several quests with ONE rebuild of the tiles (4.6.0: all
+    multiplayer quests at once, mpbatch.py). ``pairs``: [(quest,
+    targets)]."""
+    for q, targets in pairs:
+        record(app.project, q, targets)
+    app.mark_dirty()
+    # the maps on disk cannot be undone: an older snapshot of the quest
+    # would point its lines back at markers that are no longer written
+    if any(getattr(app, 'quest', None) is q for q, _t in pairs) and \
+            hasattr(app, 'undo'):
+        app.undo.clear()
+    report = placed.generate(app.project, app.modset,
+                             app.cfg.get('game_dir'), log)
+    # a marker the map had already was not written: its item stays open
+    clashes = [c for r in report.values() for c in r['clash']]
+    for q, _targets in pairs:
+        for c in clashes:
+            for x in q.extra.get('markers_todo') or []:
+                if _key(x.get('name'), x.get('tile'), x.get('num')) == \
+                        _key(c['name'], c['tile'], int(c['num'])):
+                    x['done'] = False
+                    x.pop('placed', None)
+    app.load_modset(force=True)
+    return report
+
+
+def record(project, q, targets):
+    """The placements of ``targets`` into the quest (its lines and giver),
+    its checklist and the project's list; nothing written to disk."""
     lst = placed.placements(project)
     todo = q.extra.setdefault('markers_todo', [])
     refs = _ref_map(q)
@@ -816,23 +848,6 @@ def commit(app, q, targets, log=lambda *a: None):
                  'quest': q.id}
         lst.append(entry)
         tg['orig'], tg['key'] = entry, new
-    app.mark_dirty()
-    # the maps on disk cannot be undone: an older snapshot of the quest
-    # would point its lines back at markers that are no longer written
-    if getattr(app, 'quest', None) is q and hasattr(app, 'undo'):
-        app.undo.clear()
-    report = placed.generate(project, app.modset, app.cfg.get('game_dir'),
-                             log)
-    # a marker the map had already was not written: its item stays open
-    for r in report.values():
-        for c in r['clash']:
-            for x in todo:
-                if _key(x.get('name'), x.get('tile'), x.get('num')) == \
-                        _key(c['name'], c['tile'], int(c['num'])):
-                    x['done'] = False
-                    x.pop('placed', None)
-    app.load_modset(force=True)
-    return report
 
 
 def free_targets(project):

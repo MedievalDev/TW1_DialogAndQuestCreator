@@ -476,6 +476,41 @@
         "de": "Die Zeilen sprechen mit den Stimmen aus dem Paket, der Mund bewegt sich mit.",
         "en": "The lines speak with the voices of the pack, the mouth moves along."
       }
+    },
+    {
+      "id": "mpbatch-ingame",
+      "since": "4.6.0",
+      "needs_game": true,
+      "title": {
+        "de": "Alle Multiplayer-Quests auf einmal: Geber und Ziele im Spiel",
+        "en": "All multiplayer quests at once: givers and targets in the game"
+      },
+      "why": {
+        "de": "Seit 4.6.0 uebernimmt das Tool alle 120 Multiplayer-Quests mit zufaelligen Markern auf begehbarem, trockenem Boden. Gemessen sind Karten, Wasser und Abstaende; ob Geber, Gegner und Gegenstaende im Spiel dort stehen und die Quests sich loesen lassen, hat noch niemand gesehen.",
+        "en": "Since 4.6.0 the tool takes all 120 multiplayer quests over with random markers on walkable, dry ground. Maps, water and distances are measured; whether givers, enemies and objects stand there in the game and the quests can be solved nobody has seen yet."
+      },
+      "steps": {
+        "de": [
+          "Questgrenze 600 einschalten (Kopfleiste \"Questgrenze\"), falls noch nicht an.",
+          "Datei > Neues Projekt, dann Quest > Alle Multiplayer-Quests uebernehmen..., \"Wuerfeln\", \"Alle uebernehmen\".",
+          "Datei > Exportieren als Mod.",
+          "Ansicht > Karte: eine der Kacheln aus dem Ergebnis ansehen und einen Geber mit Namen suchen.",
+          "Spiel starten, NEUES Spiel, zu diesem Geber gehen, ansprechen, die Quest annehmen und das Ziel suchen (Gebiet saeubern oder Gegenstand holen).",
+          "Spiel beenden und hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Switch the quest limit 600 on (header \"Quest limit\") if it is not on yet.",
+          "File > New project, then Quest > Take over all multiplayer quests..., \"Roll\", \"Take all over\".",
+          "File > Export as mod.",
+          "View > Map: look at one of the tiles of the result and find a giver with a name.",
+          "Start the game, NEW game, walk to that giver, talk, take the quest and find the target (clear the area or fetch the object).",
+          "Quit the game and pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Der Geber steht auf freiem Boden und spricht; das Ziel liegt 300 bis 800 m entfernt, die Gegner stehen dort, und die Quest laesst sich loesen.",
+        "en": "The giver stands on open ground and talks; the target is 300 to 800 m away, the enemies are there, and the quest can be solved."
+      }
     }
   ]
 }

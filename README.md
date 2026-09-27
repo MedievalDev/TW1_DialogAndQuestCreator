@@ -597,6 +597,18 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.6.0: Alle Multiplayer-Quests auf einmal.** Quest > **Alle
+  Multiplayer-Quests übernehmen** macht aus allen 120 MP-Quests
+  Einzelspieler-Quests mit zufälligen Markern: Geber irgendwo auf den
+  gewählten Kacheln, das Ziel der Aufgabe 300 bis 800 m entfernt, die Gegner
+  im Umkreis des Ziels. Nur begehbarer, trockener Boden (das Tool liest die
+  Wasserbecken der Karten, seichtes Wasser gilt im Begehbarkeitsfeld teils
+  als begehbar), 16 m vom Kachelrand, im größten zusammenhängenden Gebiet
+  der Kachel. Randkacheln (A, I, 1, 12) und Kacheln zur Hälfte unter Wasser
+  sind ausgeschlossen, 66 bleiben; gewählt werden 12 in Gruppen von
+  Nachbarkacheln. Namen aus einer Liste (Frauen und Männer), Geber passiv.
+  Würfeln zeigt das Ergebnis, erst "Alle übernehmen" schreibt. Braucht die
+  Questgrenze 600.
 - **4.5.0: Platzhalterstimmen, Stimmpaket, Lippenbewegung, Testlauf.**
   **TTS** an jeder Zeile und **Quest > Platzhalterstimmen** lassen die
   Sprachausgabe von Windows stumme Zeilen sprechen (OneCore und SAPI über

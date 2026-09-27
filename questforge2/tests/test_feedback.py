@@ -271,8 +271,11 @@ class News(unittest.TestCase):
         now = feedbackwin.news_since(None)
         self.assertEqual(now, list(feedbackwin.NEWS.get(VERSION, ())))
         self.assertEqual(feedbackwin.news_since(VERSION), [])
-        self.assertEqual(feedbackwin.news_since('4.4.0'),
-                         list(feedbackwin.NEWS['4.5.0']))
+        k = feedbackwin._vkey
+        after = [x for v, items in feedbackwin.NEWS.items()
+                 if k('4.4.0') < k(v) <= k(VERSION) for x in items]
+        self.assertEqual(feedbackwin.news_since('4.4.0'), after)
+        self.assertTrue(set(feedbackwin.NEWS['4.5.0']) <= set(after))
 
     def test_links_and_texts(self):
         from questforge2 import guide, guidebook

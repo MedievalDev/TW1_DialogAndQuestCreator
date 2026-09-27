@@ -264,6 +264,23 @@ Quest an, schreibt die Marker in die Karte und speichert das Projekt (ein
 neues Projekt landet dabei von selbst unter Dokumente\TW1 Quest Creator).
 Danach nur noch Datei > Exportieren als Mod.
 
+**Alle auf einmal (4.6.0):** Quest > **Alle Multiplayer-Quests
+uebernehmen** macht aus jeder noch nicht uebernommenen MP-Quest eine
+Einzelspieler-Quest, ohne Klick auf die Karte. Der Geber steht an einem
+zufaelligen Ort, das Ziel der Aufgabe (das Gebiet zum Saeubern, der
+Gegenstand) 300 bis 800 m entfernt, die Gegner im Umkreis des Ziels. Marker
+landen nur auf begehbarem, trockenem Boden, 16 m vom Kachelrand, nicht in
+eingeschlossenen Ecken; die Randkacheln (Spalte A und I, Zeile 1 und 12)
+und Kacheln, die mindestens zur Haelfte unter Wasser liegen, sind
+ausgeschlossen. Die Kacheln kommen in Gruppen von 3 bis 4 Nachbarn
+(Standard 12 Kacheln; jede Kachel mit Markern geht als ganze Karte in die
+Mod, rund 1,4 MB). Die Geber bekommen Namen aus einer eingebauten Liste
+(Frauen und Maenner passend zur Figur) und sprechen den Helden nicht von
+selbst an. **Wuerfeln** zeigt das Ergebnis und schreibt noch nichts, **Neu
+wuerfeln** wuerfelt anders, **Alle uebernehmen** baut alle Quests und
+schreibt die Marker in einem Durchgang. Dafuer braucht es die Questgrenze
+600 (mit 400 ist nur eine Nummer frei).
+
 Voreingestellt: Der Questgeber spricht den Helden von selbst an, wenn er
 nahe kommt (wie Tago), und die Quest ist ab Spielbeginn da (Stufe 0; das
 Spiel zaehlt beim Start jede Quest einmal hoch). Wer sie erst nach einer
@@ -370,6 +387,21 @@ missing", green "done". When everything is green, **Take over** creates the
 quest, writes the markers into the map and saves the project (a new project
 goes to Documents\TW1 Quest Creator on its own). After that only File >
 Export as mod.
+
+**All at once (4.6.0):** Quest > **Take over all multiplayer quests**
+turns every MP quest not taken over yet into a single player quest, without
+a click on the map. The giver stands at a random spot, the target of the
+task (the area to clear, the object) 300 to 800 m away, the enemies around
+the target. Markers only land on walkable, dry ground, 16 m from the
+border of a tile, not in closed-in corners; the edge tiles (columns A and
+I, rows 1 and 12) and tiles half under water or more are left out. The
+tiles come in groups of 3 to 4 neighbours (12 tiles by default; every tile
+with markers goes into the mod as a whole map, about 1.4 MB). The givers
+get names from a built-in list (women and men as the figure is) and do not
+talk to the hero on their own. **Roll** shows the result and writes
+nothing yet, **Roll again** rolls differently, **Take all over** builds
+every quest and writes the markers in one go. It needs the quest limit 600
+(with 400 there is one free id).
 
 Preset: the giver talks to the hero on his own when he comes near (like
 Tago), and the quest is there from the start of the game (level 0; the game

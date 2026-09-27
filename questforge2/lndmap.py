@@ -16,6 +16,10 @@ Measured 2026-09-19 on the 108 surface tiles of the game (Levels.wd):
 - passable field 1024 rows x 32 uint32 = 1024 x 1024 bits, 32 units per
   bit, row = y / 32, bit = (x / 32) % 32 counted from the lowest bit;
   99.6 % of the retail markers stand on a set bit.
+- water pools (4.6.0, measured 2026-09-25): surface height in heightmap
+  units (the sea everywhere 870), bounds in cells of 256 units (0..127).
+  Open sea is blocked in the passable field, shallow water partly not
+  (up to 7 % of a coast tile): "dry" needs the pools, not only the field.
 
 The body is the UNCOMPRESSED map as ``tw1_wd.Entry.data`` holds it.
 ``tw1_lnd.add_marker`` returns compressed bytes, which must not end up in
@@ -63,9 +67,14 @@ class Terrain:
         pos += 8 + w * h * 2
         n = _u32(d, pos)                                # water pools
         pos += 8
+        self.pools = []          # (height, lava, min x, min y, max x, max y)
         for _ in range(n):
+            height = struct.unpack_from('<H', d, pos + 12)[0]
+            lava = _u32(d, pos + 18)
             pos += 4 + 4 + 4 + 2 + 4 + 4 + 88 + 4 + 4 + 8 + 4 + 4 + 16 + 4
             pos = _skip_ascii(d, pos, 2)
+            self.pools.append((height, lava) +
+                              struct.unpack_from('<HHHH', d, pos))
             pos += 8
         w, h = struct.unpack_from('<II', d, pos)        # colour base
         pos += 8 + w * h * 4
@@ -106,6 +115,22 @@ class Terrain:
                          + v[y0 * w + x0 + 1] * ax * (1 - ay)
                          + v[(y0 + 1) * w + x0] * (1 - ax) * ay
                          + v[(y0 + 1) * w + x0 + 1] * ax * ay))
+
+    def wet(self, x, y):
+        """True when the ground at world x/y lies under the surface of a
+        water pool (lava pools do not count)."""
+        if not self.pools:
+            return False
+        cx, cy = int(x) // 256, int(y) // 256
+        ground = None
+        for height, lava, x0, y0, x1, y1 in self.pools:
+            if lava or not (x0 <= cx <= x1 and y0 <= cy <= y1):
+                continue
+            if ground is None:
+                ground = self.height(x, y)
+            if ground < height:
+                return True
+        return False
 
     def passable(self, x, y):
         """True when the ground at world x/y is walkable (no tree, rock,
