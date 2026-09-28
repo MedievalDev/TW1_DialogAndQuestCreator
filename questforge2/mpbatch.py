@@ -30,6 +30,17 @@ four sides and in the largest connected walkable area of the tile (no
 pocket closed in by rocks). The tiles are picked as groups of 3 or 4
 neighbours, so the ring of 300 to 800 m reaches other chosen tiles; every
 tile with a marker goes into the mod as a whole map (about 1.4 MB).
+
+Own maps (Marco 2026-09-28, for Smoothness, who wants his own maps to get
+the markers): the tiles can be typed in ("f01-f04, g01-g04") instead of
+rolled, every tile of the list can get an own .lnd (empty: the original
+level), and every quest can get its own tiles ("f01, f02"; empty: any tile
+of the list). Tiles typed in count even on the edge of the world; water
+stays out everywhere. The walkable cells come from the own map, and at
+"Take all over" the own maps go into the project like maps from the
+editor (the markers are written into them, the file itself is kept in
+<project>_levels_base). A quest whose tiles leave no room for 300 to 800 m
+gets its target on them anyway, nearer or farther ("relaxed").
 """
 
 import math
@@ -37,9 +48,12 @@ import random
 from collections import deque
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
-from . import lndmap, mapdata, mods, mpmerge, placed, theme
+import os
+import re
+
+from . import editormaps, lndmap, mapdata, mods, mpmerge, placed, theme
 from .i18n import t
 
 M = 512                          # metres (and map pixels) per tile side
@@ -92,6 +106,45 @@ NAMES_F = (
 
 # ---------------------------------------------------------------------------
 # tiles
+
+_TILE_TOKEN = re.compile(r'^([a-i])(\d{1,2})(?:-([a-i])?(\d{1,2}))?$', re.I)
+
+
+def parse_tiles(text):
+    """Tiles typed in: "f01, f02", "F1 G4", "f01-f04" (a column), "f01-g04"
+    (a block). Returns (tiles in map order, bad tokens)."""
+    tiles, bad = [], []
+    for tok in re.split(r'[,;\s]+', (text or '').strip()):
+        if not tok:
+            continue
+        m = _TILE_TOKEN.match(tok)
+        if not m:
+            bad.append(tok)
+            continue
+        c0 = mapdata.COLS.index(m.group(1).upper())
+        r0 = int(m.group(2))
+        c1 = mapdata.COLS.index(m.group(3).upper()) if m.group(3) else c0
+        r1 = int(m.group(4)) if m.group(4) else r0
+        if not (1 <= r0 <= mapdata.ROWS and 1 <= r1 <= mapdata.ROWS):
+            bad.append(tok)
+            continue
+        for c in range(min(c0, c1), max(c0, c1) + 1):
+            for r in range(min(r0, r1), max(r0, r1) + 1):
+                tile = f'{mapdata.COLS[c]}{r}'
+                if tile not in tiles:
+                    tiles.append(tile)
+    return sort_tiles(tiles), bad
+
+
+def sort_tiles(tiles):
+    def key(tile):
+        s = mapdata.split_tile(tile)
+        return (s[0], s[1]) if s else (99, 99)
+    return sorted(set(tiles), key=key)
+
+
+tile_label = mapdata.tile_label
+
 
 def is_edge(tile):
     """Column A or I, row 1 or 12: the edge of the world."""
@@ -235,16 +288,26 @@ class Placer:
         return {'tile': tile, 'x': int(x), 'y': int(y),
                 'z': self.grids[tile].terrain.height(x, y)}
 
-    def anywhere(self):
-        tile = self.rng.choices(self.tiles, self.weights)[0]
+    def anywhere(self, allowed=None):
+        tiles, weights = self.tiles, self.weights
+        if allowed:
+            tiles = [k for k in self.tiles if k in allowed]
+            weights = [len(self.grids[k].cells) for k in tiles]
+        if not tiles:
+            return None
+        tile = self.rng.choices(tiles, weights)[0]
         return (tile,) + self.grids[tile].random_point(self.rng)
 
-    def giver(self, blocked=lambda tile: False):
+    def giver(self, blocked=lambda tile: False, allowed=None):
         """GIVER_GAP_M from every giver so far (else the widest gap of the
-        tries); ``blocked(tile)``: the giver's number is taken there."""
+        tries); ``blocked(tile)``: the giver's number is taken there;
+        ``allowed``: the tiles of the quest (None: all)."""
         best, best_gap = None, -1.0
         for _ in range(TRIES):
-            tile, x, y = self.anywhere()
+            got = self.anywhere(allowed)
+            if got is None:
+                return None
+            tile, x, y = got
             if blocked(tile):
                 continue
             p = to_map(tile, x, y)
@@ -258,9 +321,9 @@ class Placer:
         self.givers.append(to_map(*best))
         return self.spot(*best)
 
-    def around(self, spot, lo, hi, tries=TRIES):
-        """A spot lo to hi metres from ``spot`` on a chosen tile, None when
-        the tries find none."""
+    def around(self, spot, lo, hi, tries=TRIES, allowed=None):
+        """A spot lo to hi metres from ``spot`` on a chosen tile (of
+        ``allowed``), None when the tries find none."""
         centre = to_map(spot['tile'], spot['x'], spot['y'])
         for _ in range(tries):
             ang = self.rng.uniform(0.0, 2 * math.pi)
@@ -270,6 +333,8 @@ class Placer:
             if got is None:
                 continue
             tile, x, y = got
+            if allowed and tile not in allowed:
+                continue
             g = self.grids.get(tile)
             if g is not None and g.fits(x, y):
                 return self.spot(tile, x, y)
@@ -303,9 +368,12 @@ def anchor_index(targets, refs):
     return rest[0]
 
 
-def place_quest(src, targets, placer, number_of, blocked, band=TARGET_M):
+def place_quest(src, targets, placer, number_of, blocked, band=TARGET_M,
+                allowed=None):
     """Set 'placed' on every target that the game does not have. Returns
-    False when no spot was found (the quest is left out)."""
+    'ok', 'relaxed' (the tiles of the quest had no room for the band: the
+    target is as near or far as they allow) or False (no spot at all, the
+    quest is left out)."""
     refs = mpmerge.marker_refs(src)
     giver = next(tg for tg in targets if tg['key'] == mpmerge.GIVER_KEY)
     anchor = anchor_index(targets, refs)
@@ -313,29 +381,37 @@ def place_quest(src, targets, placer, number_of, blocked, band=TARGET_M):
     rng = _task_range(src)
     if rng:
         near = max(4, min(NEAR_M, rng // 2))
-    for _attempt in range(20):
-        g = placer.giver(blocked)
+    result = 'ok'
+    g = a = None
+    for attempt in range(24):
+        lo, hi = band
+        if attempt >= 20:                # relaxed: the tiles are too few
+            lo, hi, result = 0, 5000, 'relaxed'
+        g = placer.giver(blocked, allowed)
         if g is None:
             return False
-        a = None
-        if anchor is not None:
-            a = placer.around(g, *band)
-            if a is None:
-                placer.givers.pop()      # this giver has no target: again
-                continue
-        giver['placed'] = dict(g, num=giver['num'])
-        number_of(giver)
-        for k, tg in enumerate(targets):
-            if tg is giver or tg.get('exists'):
-                continue
-            if k == anchor:
-                spot = a
-            else:
-                spot = placer.around(a or g, 2, near) or dict(a or g)
-            tg['placed'] = dict(spot, num=None)
-            number_of(tg)
-        return True
-    return False
+        if anchor is None:
+            break
+        a = placer.around(g, lo, hi, allowed=allowed)
+        if a is not None:
+            break
+        placer.givers.pop()              # this giver has no target: again
+        g = None
+    if g is None:
+        return False
+    giver['placed'] = dict(g, num=giver['num'])
+    number_of(giver)
+    for k, tg in enumerate(targets):
+        if tg is giver or tg.get('exists'):
+            continue
+        if k == anchor:
+            spot = a
+        else:
+            spot = placer.around(a or g, 2, near, allowed=allowed) or \
+                dict(a or g)
+        tg['placed'] = dict(spot, num=None)
+        number_of(tg)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +442,10 @@ class Batch:
                              else mods.retail_markers(self.game))
         self.jobs = []
         self.skipped = []           # (quest id, reason key)
+        self.relaxed = []           # quest ids with the target off the band
         self.tiles = []
+        self.empty = []             # chosen tiles without room for a marker
+        self.own_maps = {}          # tile: own .lnd (Smoothness' maps)
         self.seed = None
         self._terrain, self._heads = {}, {}
 
@@ -397,7 +476,20 @@ class Batch:
 
     # -- maps -------------------------------------------------------------------
 
+    def set_own_map(self, tile, path):
+        """An own .lnd for a tile (None: the original level again)."""
+        if path:
+            self.own_maps[tile] = path
+        else:
+            self.own_maps.pop(tile, None)
+        self._terrain.pop(tile, None)
+        self._heads.pop(tile, None)
+
     def _body(self, tile):
+        own = self.own_maps.get(tile)
+        if own:
+            with open(own, 'rb') as f:
+                return placed._unwrap_file(f.read())
         app = self.app
         return placed.base_of(app.project, app.modset, self.game, tile)[0]
 
@@ -436,19 +528,38 @@ class Batch:
     # -- rolling -----------------------------------------------------------------
 
     def roll(self, n_tiles=TILES, band=TARGET_M, seed=None,
-             progress=lambda text: None):
+             progress=lambda text: None, tiles=None, quest_tiles=None,
+             with_tiles=()):
         """Choose the tiles and a spot for every marker of every open
-        quest. Nothing is written."""
+        quest. Nothing is written. ``tiles``: the tiles typed in (None:
+        ``n_tiles`` rolled, groups of neighbours, edge and water out);
+        ``quest_tiles`` {quest id: [tiles]}: where a quest may go (they
+        join the tiles); ``with_tiles``: tiles that always join (those with
+        an own map)."""
         self.seed = seed if seed is not None else random.randrange(1 << 30)
         rng = random.Random(self.seed)
-        self.jobs, self.skipped = [], []
-        progress(t('mpb.p.tiles'))
-        usable = usable_tiles(self.surface(), self._load)
-        self.tiles = pick_tiles(usable, n_tiles, rng)
+        self.jobs, self.skipped, self.relaxed, self.empty = [], [], [], []
+        quest_tiles = {k: v for k, v in (quest_tiles or {}).items() if v}
+        wanted = {x for v in quest_tiles.values() for x in v}
+        wanted |= set(with_tiles)
+        if tiles:
+            chosen = list(tiles)
+        else:
+            progress(t('mpb.p.tiles'))
+            usable = usable_tiles(self.surface(), self._load)
+            chosen = pick_tiles({k: v for k, v in usable.items()
+                                 if k not in wanted},
+                                max(0, n_tiles - len(wanted)), rng)
+        self.tiles = sort_tiles(set(chosen) | wanted)
         grids = {}
         for k, tile in enumerate(self.tiles):
             progress(t('mpb.p.grid', tile=tile, i=k + 1, n=len(self.tiles)))
-            grids[tile] = TileGrid(tile, self._load(tile))
+            ter = self._load(tile)
+            grid = TileGrid(tile, ter) if ter is not None else None
+            if grid is None or not grid.cells:
+                self.empty.append(tile)
+                continue
+            grids[tile] = grid
             self._head(tile)
         placer = Placer(grids, rng)
         qids = self.open_quests()
@@ -491,10 +602,17 @@ class Batch:
                                             npc) or any(
                     o['tile'] == tile and o['name'] == GIVER
                     and int(o['num']) == npc for o in others)
-            if not place_quest(src, targets, placer, number_of, blocked,
-                               band):
+            allowed = set(quest_tiles.get(qid) or ()) or None
+            if allowed and not allowed & set(grids):
+                self.skipped.append((qid, 'mpb.skip.tiles'))
+                continue
+            done = place_quest(src, targets, placer, number_of, blocked,
+                               band, allowed)
+            if not done:
                 self.skipped.append((qid, 'mpb.skip.spot'))
                 continue
+            if done == 'relaxed':
+                self.relaxed.append(qid)
             female = '_F_' in giver_unit(self.app.index, src.giver)
             pool = pools[female] or pools[not female]
             name = pool.pop() if pool else f'NPC_{npc}'
@@ -541,19 +659,42 @@ class Batch:
             app.project.quests.append(new)
             pairs.append((new, mpmerge.commit_targets(job['targets'])))
         progress(t('mpb.p.maps', n=len(self.tile_counts())))
+        self.import_own_maps()
         report = placewin.commit_many(app, pairs)
         app.project.extra['mp_batch'] = {
             'seed': self.seed, 'tiles': list(self.tiles),
+            'own_maps': {k: os.path.basename(v)
+                         for k, v in self.own_maps.items()},
             'quests': [q.id for q, _tg in pairs]}
         return [q for q, _tg in pairs], report
+
+    def import_own_maps(self):
+        """The own maps of the tiles that got markers into the project's
+        levels folder, like maps from the editor (app.import_editor_maps):
+        placed.generate then writes the markers into them and keeps the
+        file itself in <project>_levels_base."""
+        used = set(self.tile_counts())
+        paths = [p for k, p in self.own_maps.items() if k in used]
+        if not paths:
+            return []
+        project = self.app.project
+        dest = editormaps.levels_dir(project)
+        items, _skipped = editormaps.plan_import(paths)
+        done = editormaps.import_maps(items, dest)
+        key = os.path.normcase(os.path.abspath(dest))
+        if not any(os.path.normcase(os.path.abspath(m['path'])) == key
+                   for m in project.mods):
+            project.mods.append({'path': dest, 'enabled': True})
+        return done
 
 
 # ---------------------------------------------------------------------------
 # window
 
 class BatchWindow:
-    """Quest > Take over all multiplayer quests: settings, "Roll" (the
-    result is shown, nothing written), "Take over"."""
+    """Quest > Take over all multiplayer quests: settings, the tiles with
+    their own maps, the quests with their tiles, "Roll" (the result is
+    shown, nothing written), "Take all over"."""
 
     _open = None
 
@@ -572,10 +713,12 @@ class BatchWindow:
     def __init__(self, app):
         self.app = app
         self.batch = Batch(app)
+        self.rolled = False
+        self.qvars = {}
         self.win = tk.Toplevel(app.root)
         self.win.title(t('mpb.title'))
-        self.win.geometry('760x640')
-        self.win.minsize(640, 520)
+        self.win.geometry('1180x860')
+        self.win.minsize(980, 700)
         self.win.transient(app.root)
         theme.dark_titlebar(self.win)
         self.win.protocol('WM_DELETE_WINDOW', self.close)
@@ -584,37 +727,60 @@ class BatchWindow:
         f.pack(fill='both', expand=True)
         ttk.Label(f, text=t('mpb.head'), style='Brand.TLabel').pack(anchor='w')
         ttk.Label(f, text=t('mpb.intro'), style='Muted.TLabel',
-                  wraplength=720, justify='left').pack(anchor='w', pady=(2, 8))
-        self.info = ttk.Label(f, text='', wraplength=720, justify='left')
-        self.info.pack(anchor='w')
-        self.limit_btn = ttk.Button(f, text=t('mpb.limit.btn'),
-                                    command=self._limit)
+                  wraplength=1140, justify='left').pack(anchor='w', pady=(2, 8))
+        top = ttk.Frame(f)
+        top.pack(fill='x')
+        self.info = ttk.Label(top, text='', justify='left')
+        self.info.pack(side='left', anchor='n')
+        self.limit_btn = ttk.Button(top, text=t('mpb.limit.btn'),
+                                    command=self.app.show_quest_limit)
+
+        # settings
         opts = ttk.Frame(f)
         opts.pack(fill='x', pady=(10, 4))
+        opts.columnconfigure(3, weight=1)
+        self.mode = tk.StringVar(value='random')
         ttk.Label(opts, text=t('mpb.tiles')).grid(row=0, column=0, sticky='w')
+        ttk.Radiobutton(opts, text=t('mpb.mode.random'), value='random',
+                        variable=self.mode, command=self._changed
+                        ).grid(row=0, column=1, sticky='w', padx=(8, 4))
         self.n_tiles = tk.StringVar(value=str(TILES))
-        ttk.Spinbox(opts, from_=1, to=66, width=5, textvariable=self.n_tiles
-                    ).grid(row=0, column=1, sticky='w', padx=8)
+        ttk.Spinbox(opts, from_=1, to=66, width=5, textvariable=self.n_tiles,
+                    command=self._changed).grid(row=0, column=2, sticky='w')
         ttk.Label(opts, text=t('mpb.tiles.note'), style='Muted.TLabel',
-                  wraplength=560, justify='left'
-                  ).grid(row=0, column=2, sticky='w')
-        ttk.Label(opts, text=t('mpb.dist')).grid(row=1, column=0, sticky='w',
-                                                 pady=(4, 0))
+                  wraplength=700, justify='left'
+                  ).grid(row=0, column=3, sticky='w', padx=(10, 0))
+        ttk.Radiobutton(opts, text=t('mpb.mode.list'), value='list',
+                        variable=self.mode, command=self._changed
+                        ).grid(row=1, column=1, sticky='w', padx=(8, 4),
+                               pady=(4, 0))
+        self.tiles_text = tk.StringVar()
+        ent = ttk.Entry(opts, textvariable=self.tiles_text, width=34)
+        ent.grid(row=1, column=2, columnspan=2, sticky='w', pady=(4, 0))
+        ent.bind('<FocusIn>', lambda e: self.mode.set('list'))
+        self.tiles_text.trace_add('write', lambda *_: self._changed())
+        theme.Tooltip(ent, t('mpb.tiles.tip'))
+        ttk.Label(opts, text=t('mpb.dist')).grid(row=2, column=0, sticky='w',
+                                                 pady=(6, 0))
         dist = ttk.Frame(opts)
-        dist.grid(row=1, column=1, columnspan=2, sticky='w', padx=8,
-                  pady=(4, 0))
+        dist.grid(row=2, column=1, columnspan=3, sticky='w', padx=8,
+                  pady=(6, 0))
         self.d_lo = tk.StringVar(value=str(TARGET_M[0]))
         self.d_hi = tk.StringVar(value=str(TARGET_M[1]))
         ttk.Spinbox(dist, from_=0, to=3000, increment=50, width=6,
-                    textvariable=self.d_lo).pack(side='left')
+                    textvariable=self.d_lo, command=self._changed
+                    ).pack(side='left')
         ttk.Label(dist, text=t('mpb.to')).pack(side='left', padx=6)
         ttk.Spinbox(dist, from_=50, to=5000, increment=50, width=6,
-                    textvariable=self.d_hi).pack(side='left')
+                    textvariable=self.d_hi, command=self._changed
+                    ).pack(side='left')
         ttk.Label(dist, text='m').pack(side='left', padx=(6, 0))
         self.active = tk.BooleanVar(value=False)
         ttk.Checkbutton(opts, text=t('mpb.active'), variable=self.active
-                        ).grid(row=2, column=0, columnspan=3, sticky='w',
+                        ).grid(row=3, column=0, columnspan=4, sticky='w',
                                pady=(6, 0))
+
+        # buttons and status at the bottom (packed first: they keep room)
         btns = ttk.Frame(f)
         btns.pack(side='bottom', fill='x', pady=(10, 0))
         style = ttk.Style(self.win)
@@ -631,16 +797,44 @@ class BatchWindow:
         self.take_btn.pack(side='left', padx=8)
         self.take_btn.state(['disabled'])
         self.map_btn = ttk.Button(btns, text=t('mpb.map'),
-                                  command=self._map)
+                                  command=self.app.show_map)
         ttk.Button(btns, text=t('close'), command=self.close
                    ).pack(side='right')
         self.status = ttk.Label(f, text='', style='Muted.TLabel',
-                                wraplength=720, justify='left')
+                                wraplength=1140, justify='left')
         self.status.pack(side='bottom', anchor='w', pady=(6, 0))
-        self.txt = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=12)
-        self.txt.pack(fill='both', expand=True, pady=(8, 0))
+        self.txt = tk.Text(f, wrap='word', font=theme.FONT_MONO, height=8)
+        self.txt.pack(side='bottom', fill='x', pady=(8, 0))
         self.txt.configure(state='disabled')
+
+        # the two lists
+        lists = ttk.Frame(f)
+        lists.pack(fill='both', expand=True, pady=(8, 0))
+        lists.columnconfigure(0, weight=2, uniform='l')
+        lists.columnconfigure(1, weight=3, uniform='l')
+        lists.rowconfigure(1, weight=1)
+        head = ttk.Frame(lists)
+        head.grid(row=0, column=0, sticky='ew', padx=(0, 12))
+        ttk.Label(head, text=t('mpb.tilelist'), font=theme.FONT_BOLD
+                  ).pack(side='left')
+        ttk.Button(head, text=t('mpb.maps.many'), command=self._many_maps
+                   ).pack(side='right')
+        ttk.Label(lists, text=t('mpb.questlist'), font=theme.FONT_BOLD
+                  ).grid(row=0, column=1, sticky='w')
+        self.tile_box = self._scroll(lists, 0, (0, 12))
+        self.quest_box = self._scroll(lists, 1, (0, 0))
+        ttk.Label(lists, text=t('mpb.tilelist.note'), style='Muted.TLabel',
+                  wraplength=440, justify='left'
+                  ).grid(row=2, column=0, sticky='w', padx=(0, 12),
+                         pady=(4, 0))
+        ttk.Label(lists, text=t('mpb.questlist.note'), style='Muted.TLabel',
+                  wraplength=660, justify='left'
+                  ).grid(row=2, column=1, sticky='w', pady=(4, 0))
         self._info()
+        self._quest_rows()
+        self._tile_rows()
+
+    # -- helpers -----------------------------------------------------------------
 
     def close(self):
         BatchWindow._open = None
@@ -649,6 +843,31 @@ class BatchWindow:
         except tk.TclError:
             pass
 
+    def _scroll(self, parent, column, padx):
+        box = ttk.Frame(parent)
+        box.grid(row=1, column=column, sticky='nsew', padx=padx)
+        cv = tk.Canvas(box, bg=theme.BG, highlightthickness=0, height=80)
+        sb = ttk.Scrollbar(box, orient='vertical', command=cv.yview)
+        inner = ttk.Frame(cv)
+        item = cv.create_window((0, 0), window=inner, anchor='nw')
+        inner.bind('<Configure>', lambda e: cv.configure(
+            scrollregion=cv.bbox('all')))
+        cv.bind('<Configure>', lambda e: cv.itemconfigure(item, width=e.width))
+        cv.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+        cv.pack(side='left', fill='both', expand=True)
+        inner._canvas = cv
+        return inner
+
+    def _wheel(self, inner, widgets):
+        cv = inner._canvas
+
+        def roll(ev):
+            cv.yview_scroll(-3 if ev.delta > 0 else 3, 'units')
+            return 'break'
+        for w in [cv, inner] + list(widgets):
+            w.bind('<MouseWheel>', roll)
+
     def _put(self, lines):
         self.txt.configure(state='normal')
         self.txt.delete('1.0', 'end')
@@ -656,7 +875,7 @@ class BatchWindow:
         self.txt.configure(state='disabled')
 
     def _progress(self, text):
-        self.status.configure(text=text)
+        self.status.configure(text=text, foreground=theme.MUT)
         try:
             self.win.update()
         except tk.TclError:
@@ -667,43 +886,214 @@ class BatchWindow:
         n = len(b.open_quests())
         ids = len(b.free_quest_ids())
         npcs = len(b.free_npc_ids(1000))
-        lines = [t('mpb.open', n=n), t('mpb.ids', n=ids,
-                                       limit=self.app.index.quest_limit),
-                 t('mpb.npcs', n=npcs)]
-        self.info.configure(text='\n'.join(lines),
-                            foreground=theme.WARN if ids < n else theme.INK)
+        self.info.configure(text='\n'.join([
+            t('mpb.open', n=n),
+            t('mpb.ids', n=ids, limit=self.app.index.quest_limit),
+            t('mpb.npcs', n=npcs)]),
+            foreground=theme.WARN if ids < n else theme.INK)
         if ids < n:
-            self.limit_btn.pack(anchor='w', pady=(4, 0), after=self.info)
+            self.limit_btn.pack(side='left', anchor='n', padx=(20, 0))
         else:
             self.limit_btn.pack_forget()
+        self.roll_btn.state(['!disabled'] if n else ['disabled'])
         if not n:
-            self.roll_btn.state(['disabled'])
             self.status.configure(text=t('mpb.none'))
 
-    def _limit(self):
-        self.app.show_quest_limit()
+    def _changed(self):
+        """Something the roll depends on changed: roll again first."""
+        if self.rolled:
+            self.rolled = False
+            self.take_btn.state(['disabled'])
+            self.status.configure(text=t('mpb.changed'),
+                                  foreground=theme.WARN)
+        self._tile_rows()
 
-    def _ints(self):
+    # -- the tiles ---------------------------------------------------------------
+
+    def _typed_tiles(self):
+        tiles, bad = parse_tiles(self.tiles_text.get())
+        return tiles, bad
+
+    def _quest_tiles(self):
+        """({quest id: [tiles]}, [(quest id, bad token)])."""
+        out, bad = {}, []
+        for qid, var in self.qvars.items():
+            tiles, wrong = parse_tiles(var.get())
+            if tiles:
+                out[qid] = tiles
+            bad += [(qid, w) for w in wrong]
+        return out, bad
+
+    def _shown_tiles(self):
+        if self.rolled:
+            tiles = set(self.batch.tiles) | set(self.batch.empty)
+        else:
+            tiles = set()
+            if self.mode.get() == 'list':
+                tiles |= set(self._typed_tiles()[0])
+            for v in self._quest_tiles()[0].values():
+                tiles |= set(v)
+        return sort_tiles(tiles | set(self.batch.own_maps))
+
+    def _tile_rows(self):
+        box = self.tile_box
+        for w in box.winfo_children():
+            w.destroy()
+        tiles = self._shown_tiles()
+        counts = self.batch.tile_counts() if self.rolled else {}
+        widgets = []
+        if not tiles:
+            lbl = ttk.Label(box, text=t('mpb.tiles.none'),
+                            style='Muted.TLabel', wraplength=420,
+                            justify='left')
+            lbl.pack(anchor='w', pady=4)
+            widgets.append(lbl)
+        for tile in tiles:
+            row = ttk.Frame(box)
+            row.pack(fill='x', pady=1)
+            own = self.batch.own_maps.get(tile)
+            name = ttk.Label(row, text=tile_label(tile), width=5,
+                             font=theme.FONT_BOLD)
+            name.pack(side='left')
+            text = os.path.basename(own) if own else t('mpb.orig')
+            notes = []
+            if self.rolled:
+                notes.append(t('mpb.tile.n', n=counts.get(tile, 0)))
+            if tile in self.batch.empty:
+                notes.append(t('mpb.tile.empty'))
+            if is_edge(tile):
+                notes.append(t('mpb.tile.edge'))
+            src = ttk.Label(row, text=text + ('   ' + ', '.join(notes)
+                                              if notes else ''),
+                            foreground=theme.OK if own else theme.MUT)
+            src.pack(side='left', padx=(6, 0))
+            pick = ttk.Button(row, text=t('mpb.map.pick'), width=8,
+                              command=lambda k=tile: self._pick_map(k))
+            if own:
+                x = ttk.Button(row, text='✕', width=3,
+                               command=lambda k=tile: self._set_map(k, None))
+                x.pack(side='right')
+                theme.Tooltip(x, t('mpb.map.clear'))
+                widgets.append(x)
+            pick.pack(side='right', padx=(0, 4))
+            widgets += [row, name, src, pick]
+        self._wheel(box, widgets)
+
+    def _set_map(self, tile, path):
+        self.batch.set_own_map(tile, path)
+        self._changed()
+
+    def _check_map(self, path):
+        """The tile an own map is for (from its name), None after a
+        message when the name does not tell."""
+        info = editormaps.parse_name(path)
+        if not info or info[0] != info[0].split('_')[0]:
+            messagebox.showwarning(t('mpb.title'), t(
+                'mpb.map.bad', file=os.path.basename(path)), parent=self.win)
+            return None
+        return info[0]
+
+    def _pick_map(self, tile):
+        start = editormaps.EDITOR_LEVELS
+        path = filedialog.askopenfilename(
+            title=t('mpb.map.title', tile=tile_label(tile)), parent=self.win,
+            initialdir=start if os.path.isdir(start) else None,
+            filetypes=[(t('em.filter'), '*.lnd'), (t('em.filter.all'), '*.*')])
+        if not path:
+            return
+        got = self._check_map(path)
+        if got is None:
+            return
+        if got != tile:
+            messagebox.showwarning(t('mpb.title'), t(
+                'mpb.map.other', file=os.path.basename(path),
+                tile=tile_label(got), want=tile_label(tile)), parent=self.win)
+            return
+        self._set_map(tile, path)
+
+    def _many_maps(self):
+        """Several own maps at once, each to the tile its name tells."""
+        start = editormaps.EDITOR_LEVELS
+        paths = filedialog.askopenfilenames(
+            title=t('mpb.maps.many'), parent=self.win,
+            initialdir=start if os.path.isdir(start) else None,
+            filetypes=[(t('em.filter'), '*.lnd'), (t('em.filter.all'), '*.*')])
+        for path in paths or ():
+            tile = self._check_map(path)
+            if tile is not None:
+                self.batch.set_own_map(tile, path)
+        if paths:
+            self._changed()
+
+    # -- the quests --------------------------------------------------------------
+
+    def _quest_rows(self):
+        box = self.quest_box
+        for w in box.winfo_children():
+            w.destroy()
+        idx = self.app.index
+        widgets = []
+        old = {k: v.get() for k, v in self.qvars.items()}
+        self.qvars = {}
+        for qid in self.batch.open_quests():
+            info = idx.quest(qid) or {}
+            row = ttk.Frame(box)
+            row.pack(fill='x', pady=1)
+            var = tk.StringVar(value=old.get(qid, ''))
+            var.trace_add('write', lambda *_: self._changed())
+            ent = ttk.Entry(row, textvariable=var, width=18)
+            ent.pack(side='right', padx=(6, 4))
+            lbl = ttk.Label(row, text=f"Q_{qid}  {info.get('title') or ''}")
+            lbl.pack(side='left', fill='x', expand=True)
+            self.qvars[qid] = var
+            widgets += [row, ent, lbl]
+        if not self.qvars:
+            lbl = ttk.Label(box, text=t('mpb.none'), style='Muted.TLabel')
+            lbl.pack(anchor='w', pady=4)
+            widgets.append(lbl)
+        self._wheel(box, widgets)
+
+    # -- roll and take -----------------------------------------------------------
+
+    def _settings(self):
+        """(n tiles, band, typed tiles or None, quest tiles), None after a
+        message in the status line."""
         try:
             n = max(1, int(self.n_tiles.get()))
             lo, hi = int(self.d_lo.get()), int(self.d_hi.get())
         except ValueError:
+            n = lo = hi = None
+        if n is None or hi <= lo:
+            self.status.configure(text=t('mpb.bad'), foreground=theme.ERR)
             return None
-        if hi <= lo:
+        tiles = None
+        if self.mode.get() == 'list':
+            tiles, bad = self._typed_tiles()
+            if bad or not tiles:
+                self.status.configure(text=t(
+                    'mpb.tiles.bad', bad=', '.join(bad) or '-'),
+                    foreground=theme.ERR)
+                return None
+        quest_tiles, qbad = self._quest_tiles()
+        if qbad:
+            self.status.configure(text=t('mpb.quest.bad', items=', '.join(
+                f'Q_{q}: {w}' for q, w in qbad[:6])), foreground=theme.ERR)
             return None
-        return n, (lo, hi)
+        return n, (lo, hi), tiles, quest_tiles
 
     def roll(self):
-        vals = self._ints()
+        vals = self._settings()
         if vals is None:
-            self.status.configure(text=t('mpb.bad'), foreground=theme.ERR)
             return
-        self.status.configure(foreground=theme.MUT)
+        n, band, tiles, quest_tiles = vals
         self.roll_btn.state(['disabled'])
         self.take_btn.state(['disabled'])
         self.win.configure(cursor='watch')
         try:
-            jobs = self.batch.roll(vals[0], vals[1], progress=self._progress)
+            # tiles with an own map always join the tiles
+            jobs = self.batch.roll(n, band, progress=self._progress,
+                                   tiles=tiles, quest_tiles=quest_tiles,
+                                   with_tiles=sorted(self.batch.own_maps))
         except Exception as e:           # shown, nothing was written
             self.status.configure(text=t('mpb.error', e=e),
                                   foreground=theme.ERR)
@@ -711,29 +1101,37 @@ class BatchWindow:
         finally:
             self.win.configure(cursor='')
             self.roll_btn.state(['!disabled'])
+        self.rolled = True
         self.roll_btn.configure(text=t('mpb.reroll'))
         counts = self.batch.tile_counts()
         lines = [t('mpb.result', n=len(jobs), m=sum(counts.values()),
-                   tiles=len(counts)), '']
-        for tile in self.batch.tiles:
-            lines.append(t('mpb.tile.row', tile=tile, n=counts.get(tile, 0)))
+                   tiles=len(counts))]
+        if self.batch.empty:
+            lines.append(t('mpb.empty', tiles=', '.join(
+                tile_label(k) for k in self.batch.empty)))
+        if self.batch.relaxed:
+            lines.append(t('mpb.relaxed', n=len(self.batch.relaxed),
+                           ids=', '.join(f'Q_{q}' for q in
+                                         self.batch.relaxed[:10])))
         if self.batch.skipped:
-            lines += ['', t('mpb.skipped', n=len(self.batch.skipped))]
-            for qid, key in self.batch.skipped:
+            lines.append(t('mpb.skipped', n=len(self.batch.skipped)))
+            for qid, key in self.batch.skipped[:12]:
                 lines.append(f'  Q_{qid}: ' + t(key))
         lines += ['', t('mpb.examples')]
-        for job in jobs[:8]:
+        for job in jobs[:6]:
             g = job['targets'][0]['placed']
             lines.append(t('mpb.example', old=job['qid'], new=job['new_id'],
                            title=job['src'].title, name=job['name'],
-                           tile=g['tile']))
+                           tile=tile_label(g['tile'])))
         self._put(lines)
-        self.status.configure(text=t('mpb.rolled', seed=self.batch.seed))
+        self._tile_rows()
+        self.status.configure(text=t('mpb.rolled', seed=self.batch.seed),
+                              foreground=theme.MUT)
         if jobs:
             self.take_btn.state(['!disabled'])
 
     def ensure_saved(self):
-        from . import data, editormaps
+        from . import data
         app = self.app
         if editormaps.levels_dir(app.project):
             return True
@@ -744,11 +1142,16 @@ class BatchWindow:
         return True
 
     def take(self):
-        if not self.batch.jobs or not self.ensure_saved():
+        if not self.rolled or not self.batch.jobs or not self.ensure_saved():
             return
-        if not messagebox.askyesno(t('mpb.title'), t(
-                'mpb.take.q', n=len(self.batch.jobs),
-                tiles=len(self.batch.tile_counts())), parent=self.win):
+        own = sorted(k for k in self.batch.tile_counts()
+                     if k in self.batch.own_maps)
+        text = t('mpb.take.q', n=len(self.batch.jobs),
+                 tiles=len(self.batch.tile_counts()))
+        if own:
+            text += '\n\n' + t('mpb.take.own', tiles=', '.join(
+                tile_label(k) for k in own))
+        if not messagebox.askyesno(t('mpb.title'), text, parent=self.win):
             return
         app = self.app
         self.take_btn.state(['disabled'])
@@ -759,6 +1162,7 @@ class BatchWindow:
                                               progress=self._progress)
         except Exception as e:
             self.win.configure(cursor='')
+            self.roll_btn.state(['!disabled'])
             self.status.configure(text=t('mpb.error', e=e),
                                   foreground=theme.ERR)
             return
@@ -774,14 +1178,17 @@ class BatchWindow:
         lines = [t('mpb.done', n=len(quests),
                    first=quests[0].id if quests else '-',
                    last=quests[-1].id if quests else '-')]
+        if own:
+            lines.append(t('mpb.done.own', tiles=', '.join(
+                tile_label(k) for k in own)))
         if clash:
             lines.append(t('mpb.clash', n=len(clash)))
         lines.append(t('mpb.next'))
         self._put(lines)
         self.status.configure(text='', foreground=theme.MUT)
         self.batch.jobs = []
+        self.rolled = False
         self.map_btn.pack(side='left', padx=8)
         self._info()
-
-    def _map(self):
-        self.app.show_map()
+        self._quest_rows()
+        self._tile_rows()

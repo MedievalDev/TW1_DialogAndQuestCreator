@@ -62,6 +62,17 @@ class Tiles(unittest.TestCase):
         self.assertNotIn('E1_1', got)
         self.assertFalse(any(mpbatch.is_edge(k) for k in got))
 
+    def test_typed_tiles(self):
+        p = mpbatch.parse_tiles
+        self.assertEqual(p('f01-f04, g1-g4')[0],
+                         ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3', 'G4'])
+        self.assertEqual(p('F02 f01;f02')[0], ['F1', 'F2'])
+        self.assertEqual(p('f01-g02')[0], ['F1', 'F2', 'G1', 'G2'])
+        self.assertEqual(p('e13 x5 f1_1'), ([], ['e13', 'x5', 'f1_1']))
+        self.assertEqual(p(''), ([], []))
+        self.assertEqual(mpbatch.tile_label('F1'), 'F01')
+        self.assertEqual(mpbatch.tile_label('H10'), 'H10')
+
     def test_groups_of_neighbours(self):
         usable = {f'{c}{r}' for c in mapdata.COLS[1:-1]
                   for r in range(2, mapdata.ROWS)}
@@ -156,6 +167,39 @@ class OneQuest(unittest.TestCase):
             self.assertIn((ref['name'], ref['tile'], ref['num']),
                           {(tg['name'], tg['placed']['tile'],
                             tg['placed']['num']) for tg in targets[1:]})
+
+    def _place(self, allowed, band):
+        src = mp_quest()
+        targets = mpmerge.marker_targets(src, 509, {})
+        grids = {k: mpbatch.TileGrid(k, FakeTerrain())
+                 for k in ('D4', 'E4', 'D5', 'E5')}
+        placer = mpbatch.Placer(grids, random.Random(11))
+        taken = []
+
+        def number_of(tg):
+            p = tg['placed']
+            if p.get('num') is None:
+                p['num'] = placed.free_number(tg['name'], p['tile'], None,
+                                              taken)
+            taken.append({'name': tg['name'], 'tile': p['tile'],
+                          'num': p['num']})
+        got = mpbatch.place_quest(src, targets, placer, number_of,
+                                  lambda tile: False, band, allowed)
+        return got, {tg['placed']['tile'] for tg in targets}
+
+    def test_tiles_of_a_quest(self):
+        """Marco 2026-09-28: every quest can get its own tiles."""
+        got, tiles = self._place({'E5'}, (100, 300))
+        self.assertEqual(got, 'ok')
+        self.assertEqual(tiles, {'E5'})
+        got, tiles = self._place({'D4', 'E4'}, (300, 800))
+        self.assertTrue(got)
+        self.assertTrue(tiles <= {'D4', 'E4'})
+
+    def test_relaxed_when_the_tiles_are_too_few(self):
+        got, tiles = self._place({'E5'}, (2000, 3000))
+        self.assertEqual(got, 'relaxed')
+        self.assertEqual(tiles, {'E5'})
 
     def test_names(self):
         self.assertEqual(len(set(mpbatch.NAMES_M)), len(mpbatch.NAMES_M))

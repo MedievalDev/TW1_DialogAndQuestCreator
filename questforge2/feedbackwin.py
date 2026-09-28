@@ -698,6 +698,8 @@ class IssuesWindow:
 # What every version brings: (id, tour in guide.TOURS or None, chapter of
 # the guide); the texts are news.<id>.title / .text.
 NEWS = {
+    '4.7.0': (('mpbatchown', None, 'quests'),
+              ('markerscript', None, 'markers')),
     '4.6.0': (('mpbatch', None, 'quests'),),
     '4.5.0': (('enemystats', 'enemy', 'enemylevels'),
               ('expcurve', 'enemy', 'enemylevels'),

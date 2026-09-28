@@ -252,6 +252,51 @@ class Build(unittest.TestCase):
         self.assertFalse(placed.marker_exists(None, START, 7))
 
 
+class EditorScript(unittest.TestCase):
+    """Marco 2026-09-28: the markers as a console file for the editor, one
+    per tile, like the scripts of the dungeon creator."""
+
+    PL = [{'name': START, 'num': 12, 'tile': 'F2', 'x': 9000, 'y': 700,
+           'z': 870, 'angle': 64, 'quest': '701'},
+          {'name': OBJ, 'num': 3, 'tile': 'F2', 'x': 5, 'y': 6, 'z': 0,
+           'quest': None},
+          {'name': START, 'num': 11, 'tile': 'F2', 'x': 100, 'y': 200,
+           'z': 900, 'angle': 0, 'quest': 'Q_700'},
+          {'name': START, 'num': 4, 'tile': 'G10', 'x': 1, 'y': 2, 'z': 3,
+           'quest': 'Q_702'}]
+
+    def test_lines(self):
+        text = placed.editor_script('F2', self.PL, ['head', ''])
+        self.assertTrue(text.endswith('\r\n'))
+        lines = text.split('\r\n')[:-1]
+        self.assertEqual(lines, [
+            '// head', '//',
+            f'// {OBJ} 3', f'createEd 5 6 0 0 {OBJ} 3',
+            f'// {START} 11  Q_700', f'createEd 100 200 0 0 {START} 11',
+            f'// {START} 12  Q_701', f'createEd 9000 700 0 64 {START} 12'])
+
+    def test_files(self):
+        tmp = tempfile.mkdtemp(prefix='qf2script_')
+        try:
+            p = Project('My Proj!')
+            p.extra['placed_markers'] = list(self.PL)
+            self.assertEqual(placed.script_name(p, 'F2'),
+                             'QF_MyProj_F02.txt')
+            got = placed.write_editor_scripts(
+                p, tmp, lambda tile, name: [f'{tile} {name}'])
+            self.assertEqual([(g[0], os.path.basename(g[1]), g[2])
+                              for g in got],
+                             [('F2', 'QF_MyProj_F02.txt', 3),
+                              ('G10', 'QF_MyProj_G10.txt', 1)])
+            with open(got[1][1], 'rb') as f:
+                self.assertEqual(f.read(), (
+                    '// G10 QF_MyProj_G10.txt\r\n'
+                    f'// {START} 4  Q_702\r\n'
+                    f'createEd 1 2 0 0 {START} 4\r\n').encode())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class Generate(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix='qf2placed_')

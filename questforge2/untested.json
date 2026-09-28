@@ -511,6 +511,70 @@
         "de": "Der Geber steht auf freiem Boden und spricht; das Ziel liegt 300 bis 800 m entfernt, die Gegner stehen dort, und die Quest laesst sich loesen.",
         "en": "The giver stands on open ground and talks; the target is 300 to 800 m away, the enemies are there, and the quest can be solved."
       }
+    },
+    {
+      "id": "mpbatch-own-maps",
+      "since": "4.7.0",
+      "needs_game": true,
+      "title": {
+        "de": "Alle Multiplayer-Quests mit eigenen Karten: Marker in der eigenen Karte",
+        "en": "All multiplayer quests with own maps: markers in the own map"
+      },
+      "why": {
+        "de": "Seit 4.7.0 kann jede Kachel beim Uebernehmen aller Multiplayer-Quests eine eigene Karte aus dem Editor bekommen. Gemessen ist, dass die Marker in die Karte geschrieben werden; ob deine Aenderungen an der Karte und die Quests im Spiel zusammen funktionieren, hat noch niemand gesehen.",
+        "en": "Since 4.7.0 every tile can get an own map from the editor when taking all multiplayer quests over. It is measured that the markers are written into the map; whether your changes to the map and the quests work together in the game nobody has seen yet."
+      },
+      "steps": {
+        "de": [
+          "Eine eigene Karte im Two Worlds Editor speichern (Map_<Kachel>s.lnd mit der .phx).",
+          "Datei > Neues Projekt, dann Quest > Alle Multiplayer-Quests uebernehmen..., bei \"diese:\" die Kachel der Karte und eine Nachbarkachel eintragen, z. B. f02, f03.",
+          "Links bei der Kachel \"Karte ...\" die eigene .lnd waehlen, \"Wuerfeln\", \"Alle uebernehmen\".",
+          "Datei > Exportieren als Mod, Spiel starten, NEUES Spiel, auf der Kachel einen Geber suchen und ansprechen.",
+          "Pruefen, ob deine Aenderungen an der Karte noch da sind und die Quest sich loesen laesst, dann hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Save an own map in the Two Worlds editor (Map_<tile>s.lnd with its .phx).",
+          "File > New project, then Quest > Take over all multiplayer quests..., at \"these:\" enter the tile of the map and a neighbour, e.g. f02, f03.",
+          "On the left at the tile, \"Map ...\" and pick your .lnd, \"Roll\", \"Take all over\".",
+          "File > Export as mod, start the game, NEW game, find a giver on the tile and talk to him.",
+          "Check that your changes to the map are still there and the quest can be solved, then pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Die Karte zeigt deine Aenderungen, der Geber steht dort und die Quest laesst sich loesen.",
+        "en": "The map shows your changes, the giver stands there and the quest can be solved."
+      }
+    },
+    {
+      "id": "marker-script-editor",
+      "since": "4.7.0",
+      "needs_game": true,
+      "title": {
+        "de": "Marker als Editor-Skript: kommen Marker und Nummern im Two Worlds Editor an?",
+        "en": "Markers as an editor script: do markers and numbers arrive in the Two Worlds editor?"
+      },
+      "why": {
+        "de": "Seit 4.7.0 schreibt das Tool die gesetzten Marker als Konsolenskript mit createEd-Zeilen. Ob der Editor damit Marker anlegt und ob er die Nummer hinter dem Markernamen uebernimmt, hat noch niemand gesehen. Die Quests brauchen genau diese Nummer.",
+        "en": "Since 4.7.0 the tool writes the placed markers as a console script of createEd lines. Whether the editor creates markers from it and keeps the number after the marker name nobody has seen yet. The quests need exactly that number."
+      },
+      "steps": {
+        "de": [
+          "Ein Projekt mit auf der Karte gesetzten Markern oeffnen (z. B. nach Quest > Alle Multiplayer-Quests uebernehmen...).",
+          "Datei > Marker als Editor-Skript exportieren..., als Ordner das Spielverzeichnis waehlen.",
+          "Two Worlds Editor starten, die Karte der Kachel laden (z. B. Map_F02), mit C die Konsole oeffnen und @QF_<Projekt>_F02.txt eintippen.",
+          "Ein paar Marker anklicken und im Markerfenster Art und Nummer mit den Kommentarzeilen im Skript vergleichen, dann hier das Ergebnis waehlen."
+        ],
+        "en": [
+          "Open a project with markers placed on the map (e.g. after Quest > Take over all multiplayer quests...).",
+          "File > Export markers as editor script..., pick the game folder.",
+          "Start the Two Worlds editor, load the map of the tile (e.g. Map_F02), open the console with C and type @QF_<project>_F02.txt.",
+          "Click a few markers and compare kind and number in the marker window with the comment lines in the script, then pick the result here."
+        ]
+      },
+      "expect": {
+        "de": "Die Marker stehen an den Stellen aus dem Tool und tragen die Nummer aus dem Skript.",
+        "en": "The markers stand where the tool put them and carry the number from the script."
+      }
     }
   ]
 }

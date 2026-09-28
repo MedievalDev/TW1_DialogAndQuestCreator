@@ -32,6 +32,7 @@ Project data (``project.extra``, saved with the project):
 """
 
 import os
+import re
 import shutil
 import struct
 import uuid
@@ -39,9 +40,10 @@ import zlib
 
 import tw1_lnd
 
-from . import editormaps, lndmap, mods
+from . import editormaps, lndmap, mapdata, mods
 
 BS = chr(92)
+CRLF = chr(13) + chr(10)
 # the game's own flags for a map (Levels.wd: 0x33); the editor writes 0x31,
 # which loads too (Kira campaign), but the export's metadata check expects
 # what the game has
@@ -483,3 +485,52 @@ def free_number(name, tile, body, placed, skip=None):
     in the map and in the placements (``skip``: a placement being moved)."""
     nums = taken_numbers(name, tile, body, placed, skip)
     return (max(nums) + 1) if nums else 1
+
+
+# -- console script for the Two Worlds editor (4.7.0) ------------------------
+#
+# Marco 2026-09-28: the markers as a file like the ones of the dungeon
+# creator, one per tile, so they can be put into an own map in the editor.
+# ``createEd x y z alpha [beta phi] objectID [meshVariant] [meshScale]``
+# (SDK "Editor console.txt"; z 0 = on the ground) creates any par entry, and
+# the markers are par entries (186 MARKER_*). The editor has no command to
+# give a marker a number: the number goes in as the variant and the lines
+# come in the order the tool numbers (above the highest number), but
+# whether the editor keeps it nobody has seen yet. Lines with // are off in
+# the SDK's own scripts (Game\Edundgr.txt).
+
+def script_name(project, tile):
+    """QF_<project>_<tile>.txt, no spaces: the console runs it as @name."""
+    stem = re.sub(r'[^A-Za-z0-9_-]+', '', project.display_name() or '')
+    return f'QF_{stem or "Project"}_{mapdata.tile_label(tile)}.txt'
+
+
+def editor_script(tile, placed, head=()):
+    """Console script with a createEd line for every marker placed on
+    ``tile``, sorted by type and number; ``head``: comment lines above."""
+    mine = sorted((p for p in placed if p['tile'] == tile),
+                  key=lambda p: (p['name'], int(p['num'])))
+    lines = [f'// {h}' if h else '//' for h in head]
+    for p in mine:
+        q = str(p.get('quest') or '')
+        lines.append(f"// {p['name']} {int(p['num'])}"
+                     + (f"  Q_{q}" if q.isdigit() else f"  {q}" if q else ''))
+        lines.append(f"createEd {int(p['x'])} {int(p['y'])} 0 "
+                     f"{int(p.get('angle') or 0)} {p['name']} {int(p['num'])}")
+    return CRLF.join(lines) + CRLF
+
+
+def write_editor_scripts(project, folder, head=lambda tile, name: ()):
+    """One script per tile with placed markers into ``folder``; returns
+    [(tile, path, markers)]."""
+    placed = placements(project)
+    out = []
+    for tile in sorted({p['tile'] for p in placed}):
+        name = script_name(project, tile)
+        path = os.path.join(folder, name)
+        text = editor_script(tile, placed, head(tile, name))
+        with open(path, 'w', encoding='latin-1', errors='replace',
+                  newline='') as f:
+            f.write(text)
+        out.append((tile, path, sum(1 for p in placed if p['tile'] == tile)))
+    return out

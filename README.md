@@ -597,6 +597,21 @@ Daten liegen neben dem Quelltext bzw. bei der Exe in
   Programm. Vorrang bei gleicher Kachel: lose Datei in `Levels`, dann die
   eingeschaltete Mod, die im Alphabet zuerst kommt, dann das Spiel. Verliert
   eine eigene Karte, meldet das Export-Fenster das.
+- **4.7.0: Eigene Karten bei der Massenübernahme.** Im Fenster "Alle
+  Multiplayer-Quests übernehmen" lassen sich die Kacheln eintippen
+  (`f01-f04, g01-g04`, auch am Rand), jede Kachel bekommt links auf Wunsch
+  eine eigene Karte aus dem Two Worlds Editor (leer = Original-Level), und
+  jede Quest rechts ihre eigenen Kacheln (`f01, f02`). Die begehbaren
+  Stellen kommen aus der eigenen Karte, die Marker werden in sie
+  geschrieben; sie kommt wie "Karten aus dem Editor" ins Projekt, die
+  Datei selbst bleibt unverändert. (Für Smoothness, der seine eigenen
+  Karten nutzen will.)
+- **4.7.0: Marker als Editor-Skript.** Datei > Marker als Editor-Skript
+  exportieren... schreibt alle auf der Karte gesetzten Marker als
+  Konsolenskript für den Two Worlds Editor, eine Datei je Kachel
+  (`QF_<Projekt>_F02.txt`, Zeilen `createEd x y 0 Winkel MARKER_... Nummer`),
+  wie die Skripte des Dungeon-Editors. Im Editor `@Datei` in der Konsole.
+  Ob der Editor die Markernummer übernimmt, ist noch nicht getestet.
 - **4.6.0: Alle Multiplayer-Quests auf einmal.** Quest > **Alle
   Multiplayer-Quests übernehmen** macht aus allen 120 MP-Quests
   Einzelspieler-Quests mit zufälligen Markern: Geber irgendwo auf den

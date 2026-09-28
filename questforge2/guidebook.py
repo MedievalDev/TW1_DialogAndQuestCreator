@@ -281,6 +281,19 @@ wuerfeln** wuerfelt anders, **Alle uebernehmen** baut alle Quests und
 schreibt die Marker in einem Durchgang. Dafuer braucht es die Questgrenze
 600 (mit 400 ist nur eine Nummer frei).
 
+**Eigene Karten und Kacheln je Quest (4.7.0):** Statt "zufaellig" nimmt
+"diese:" die Kacheln, die du eintippst: `f01, f02` einzeln, `f01-f04` eine
+Spalte, `f01-g04` ein Block (auch am Rand der Welt; Wasser bleibt immer
+frei). Links steht jede Kachel mit **Karte ...**: Dort waehlst du deine
+eigene Karte aus dem Two Worlds Editor (`Map_F01.lnd`, die `.phx` daneben
+kommt mit). Bleibt das Feld leer, nimmt das Tool das Original-Level. Die
+begehbaren Stellen kommen dann aus deiner Karte, und "Alle uebernehmen"
+schreibt die Marker in deine Karte (sie kommt wie "Karten aus dem Editor"
+ins Projekt, deine Datei selbst bleibt unveraendert). Rechts steht jede
+Quest mit einem Textfeld fuer ihre Kacheln (`f01, f02`); leer heisst
+irgendwo auf den Kacheln links. Passen 300 bis 800 m nicht auf die Kacheln
+einer Quest, liegt ihr Ziel so nah oder weit, wie sie es zulassen.
+
 Voreingestellt: Der Questgeber spricht den Helden von selbst an, wenn er
 nahe kommt (wie Tago), und die Quest ist ab Spielbeginn da (Stufe 0; das
 Spiel zaehlt beim Start jede Quest einmal hoch). Wer sie erst nach einer
@@ -402,6 +415,19 @@ talk to the hero on their own. **Roll** shows the result and writes
 nothing yet, **Roll again** rolls differently, **Take all over** builds
 every quest and writes the markers in one go. It needs the quest limit 600
 (with 400 there is one free id).
+
+**Own maps and tiles per quest (4.7.0):** instead of "random", "these:"
+takes the tiles you type: `f01, f02` one by one, `f01-f04` a column,
+`f01-g04` a block (also on the edge of the world; water always stays
+free). On the left every tile has **Map ...**: pick your own map from the
+Two Worlds editor there (`Map_F01.lnd`, the `.phx` next to it comes
+along). Left empty, the tool takes the original level. The walkable spots
+then come from your map, and "Take all over" writes the markers into your
+map (it goes into the project like "Maps from the editor", your file
+itself stays unchanged). On the right every quest has a field for its
+tiles (`f01, f02`); empty means anywhere on the tiles on the left. When
+300 to 800 m do not fit on the tiles of a quest, its target is as near or
+far as they allow.
 
 Preset: the giver talks to the hero on his own when he comes near (like
 Tago), and the quest is there from the start of the game (level 0; the game
@@ -1247,6 +1273,20 @@ muss die Zeile mit (die Pruefung warnt). Hoehe und Innenraeume wie beim
 Setzen fuer eine uebernommene Quest. Experimentell, bis es im Spiel
 bestaetigt ist.
 
+**Marker als Editor-Skript (4.7.0):** **Datei > Marker als Editor-Skript
+exportieren...** schreibt alle auf der Karte gesetzten Marker des Projekts
+als Konsolenskript fuer den Two Worlds Editor, eine Datei je Kachel
+(`QF_<Projekt>_F02.txt`), wie die Skripte des Dungeon-Editors. Ins
+Spielverzeichnis legen, im Editor die Karte laden, Konsole mit **C**, dann
+`@QF_<Projekt>_F02.txt`. Jede Zeile ist `createEd x y 0 Winkel MARKER_...
+Nummer` (z 0 = auf den Boden), darueber ein Kommentar mit Nummer und Quest.
+So kommen die Marker in deine eigene Karte, und du arbeitest im Editor
+weiter. Sonst aendert sich nichts: das Tool schreibt die Kacheln wie immer.
+Noch nicht im Editor getestet ist, ob der Editor die Nummer uebernimmt; fuer
+Marker gibt es keinen eigenen Befehl dafuer. Die Zeilen stehen je Art in der
+Reihenfolge der Nummern, die das Tool vergibt (eins ueber der hoechsten).
+Nach dem Ausfuehren im Markerfenster pruefen, ob die Nummern stimmen.
+
 Die Marker-Typen kommen aus den Abschnitten von `PEnums.ech` (Quest-, Einheiten-,
 Stadt-, Wachen-, Arbeits- und sonstige Marker), `TwoWorldsEnemies16.ec`
 (`MARKER_ENEMY_*`, Fallen) und `TwoWorldsTeleports.ec`; Namen, die dort nicht
@@ -1315,6 +1355,20 @@ Then put tile and ID into the quest line, or pick the marker with the
 another tile or giving it another ID needs the line changed too (the check
 warns). Height and interiors as when placing for a taken over quest.
 Experimental until it is confirmed in the game.
+
+**Markers as an editor script (4.7.0):** **File > Export markers as editor
+script...** writes every marker of the project placed on the map as a
+console script for the Two Worlds editor, one file per tile
+(`QF_<project>_F02.txt`), like the scripts of the dungeon editor. Put them
+into the game folder, load the map in the editor, open the console with
+**C**, then `@QF_<project>_F02.txt`. Every line is `createEd x y 0 angle
+MARKER_... number` (z 0 = on the ground), with a comment above it naming
+number and quest. That puts the markers into your own map and you keep
+working in the editor. Nothing else changes: the tool writes the tiles as
+always. Not tested in the editor yet is whether the editor keeps the
+number; there is no command of its own for it for markers. Per kind the
+lines come in the order of the numbers the tool gives out (one above the
+highest). After running it, check the numbers in the marker window.
 
 The marker types come from the sections of `PEnums.ech` (quest, unit, town,
 guard, worker and other markers), `TwoWorldsEnemies16.ec` (`MARKER_ENEMY_*`,

@@ -191,6 +191,11 @@ class App:
         m.add_command(label=t('file.exportfiles'),
                       command=lambda: self.export_ui(files_only=True),
                       state=can)
+        from . import placed
+        m.add_command(label=t('file.markerscript'),
+                      command=self.export_marker_scripts,
+                      state=self._state(bool(
+                          self.project and placed.placements(self.project))))
         m.add_command(label=t('file.voices.pack'),
                       command=self.install_voice_pack_ui,
                       state=self._state(bool(self.cfg.get('game_dir'))))
@@ -199,6 +204,40 @@ class App:
                       state=self._state(bool(self.cfg.get('game_dir'))))
         m.add_separator()
         m.add_command(label=t('file.quit'), command=self.quit)
+
+    def export_marker_scripts(self, folder=None):
+        """The markers placed on the map as console scripts for the Two
+        Worlds editor, one per tile (4.7.0, placed.py); the rest of the
+        project stays as it is."""
+        from . import mapdata, placed
+        title = t('mscript.title')
+        if not self.project or not placed.placements(self.project):
+            messagebox.showinfo(title, t('mscript.none'), parent=self.root)
+            return
+        game = self.cfg.get('game_dir')
+        if folder is None:
+            folder = filedialog.askdirectory(
+                title=t('mscript.folder'), parent=self.root,
+                initialdir=game or None, mustexist=True)
+            if not folder:
+                return
+        name = self.project.display_name()
+
+        def head(tile, fname):
+            return t('mscript.head', version=VERSION, project=name,
+                     map='Map_' + mapdata.tile_label(tile), file=fname).split(NL)
+        try:
+            done = placed.write_editor_scripts(self.project, folder, head)
+        except OSError as e:
+            messagebox.showerror(title, str(e), parent=self.root)
+            return
+        files = NL.join(f'  {os.path.basename(path)}  ({n})'
+                        for _tile, path, n in done)
+        text = t('mscript.done', folder=folder, files=files,
+                 first=os.path.basename(done[0][1]))
+        if game and os.path.normcase(os.path.abspath(folder)) !=                 os.path.normcase(os.path.abspath(game)):
+            text += NL + NL + t('mscript.notgame')
+        messagebox.showinfo(title, text, parent=self.root)
 
     def install_voice_pack_ui(self, path=None):
         """Put the voice pack of a mod someone sent into the game (4.5.0)."""

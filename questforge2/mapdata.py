@@ -135,6 +135,12 @@ def split_tile(tile):
     return COLS.index(m.group(1)), int(m.group(2)), m.group(3) or ''
 
 
+def tile_label(tile):
+    """F1 -> F01, as the maps are named."""
+    s = split_tile(tile)
+    return f'{COLS[s[0]]}{s[1]:02d}' if s else tile
+
+
 def world_to_map(tile, x, y, px=512):
     """Pixel of a world position in the whole map at ``px`` per tile."""
     s = split_tile(tile)

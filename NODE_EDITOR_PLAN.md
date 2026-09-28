@@ -2229,6 +2229,40 @@ Offen:
       1,5 s gebaut, 0 Fehler in der Pruefung, Karten 13 MB. Im Spiel noch
       nicht gesehen.
 
+95. Eigene Karten bei der Massenuebernahme (Version 4.7.0, Marco
+    2026-09-28 per FoxRemote: Smoothness will seine eigenen Karten fuer die
+    Marker nutzen; "eine Liste, wo er jedes Level waehlen kann ... wenn er
+    nur 4 hat, die anderen leer lassen, da werden dann Original-Level
+    genommen ... bei jeder Quest ein Textfeld, da schreibt man f01, f02").
+    - mpbatch.parse_tiles ("f01-f04", "f01-g04", einzeln); getippte Kacheln
+      gelten auch am Rand, Wasser bleibt aus. Batch.own_maps {tile: .lnd}:
+      Raster aus der eigenen Karte, bei "Alle uebernehmen" import_maps wie
+      "Karten aus dem Editor" (Original bleibt in _levels_base). Kacheln je
+      Quest -> Placer(allowed); passt das Band nicht, "relaxed" (Ziel so
+      nah/weit wie moeglich).
+    - Probelauf: f01-f04 mit eigenen Karten, g01-g04 Original, Quest mit
+      f02 nur auf F2, mit g03/g04 nur dort; 120 Quests, 8 Karten, eigene
+      Dateien unveraendert in _levels_base.
+
+96. Marker als Editor-Skript (Version 4.7.0, Marco 2026-09-28: "die marker
+    als datei ... wie die vom dungeon creator ... die datei kann man dann in
+    den editor laden und der platziert die marker"; per FoxRemote "Trotzdem
+    bauen", ohne Editortest).
+    - placed.write_editor_scripts: je Kachel QF_<Projekt>_<F02>.txt, CRLF,
+      Kommentar (//, so im SDK-Skript Game\Edundgr.txt) mit Nummer und
+      Quest, dann `createEd x y 0 winkel MARKER_... nummer`; je Art nach
+      Nummer sortiert. Menue Datei, Standardordner Spielverzeichnis.
+    - Gemessen: Marker sind par-Eintraege (186 MARKER_*), createEd legt
+      par-Eintraege an (SDK "Editor console.txt"). Die Befehlsnamen des
+      Editors sind in der Exe verschluesselt; die Liste
+      TwStuff\TwoWorldsEditorCommands.txt (zur Laufzeit gelesen) kennt
+      keinen Befehl, der einem Marker eine Nummer gibt, nur
+      Editor.DeleteMarker <Art> <von> <bis> und
+      Editor.SetMissingObjectMarkersNumbers. Offen: ob die Nummer als
+      Variante ankommt.
+    - Probelauf: 120 MP-Quests auf f01-f04, 355 Platzierungen = 355
+      createEd-Zeilen, Nummern gleich denen in der geschriebenen Map_F02.
+
 ## Anhang A: Gespraechsverlauf der Planungssession (2026-09-13)
 
 Vollstaendiger Verlauf zwischen Marco und Claude, aus dem dieser Plan
